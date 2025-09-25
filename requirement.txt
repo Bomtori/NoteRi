@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+psycopg2-binary
+SQLAlchemy
+redis
+aioredis
+python-dotenv
+authlib
+httpx
+itsdangerous
+alembic
+python-jose[cryptography]
+passlib[bcrypt]

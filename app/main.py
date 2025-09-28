@@ -4,12 +4,13 @@ import os
 from dotenv import load_dotenv
 from fastapi.responses import JSONResponse
 from fastapi.requests import Request
+from fastapi.staticfiles import StaticFiles
 import traceback
 from app.user.login import router as login_router  # ✅ login.py에서 라우터 import
 from app.user.userInfo import router as userinfo_router
 import sys
+from app.board import board as board_router
 
-print("DEBUG >>> main.py loaded")
 load_dotenv()
 
 app = FastAPI()
@@ -20,6 +21,11 @@ app.add_middleware(SessionMiddleware, secret_key=os.getenv("APP_SECRET_KEY"))
 # 라우터 등록
 app.include_router(login_router, prefix="", tags=["auth"])
 app.include_router(userinfo_router, prefix="", tags=["users"])
+app.include_router(board_router.router)
+
+# static 디렉토리 생성 후 mount
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 
 @app.get("/")
 async def root():

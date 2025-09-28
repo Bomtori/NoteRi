@@ -11,3 +11,5 @@ itsdangerous
 alembic
 python-jose[cryptography]
 passlib[bcrypt]
+crud
+schemas

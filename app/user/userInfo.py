@@ -1,13 +1,13 @@
-from fastapi import APIRouter, Depends, Header, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime, UTC
 from pydantic import BaseModel
 
 from app.db import SessionLocal
 from app.model import User
-from app.auth import verify_token
+from app.util.auth import verify_token
 
-import os, uuid
+import os
 
 router = APIRouter()
 

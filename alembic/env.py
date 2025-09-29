@@ -3,14 +3,14 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-
 import os
 from dotenv import load_dotenv
 
 # ✅ DB와 모델 불러오기
-from app.db import Base
-from app.model import User  # 모든 모델 import (여러 개면 다 추가)
+# from app.db import Base
+from app.model import Base # 모든 모델 import (여러 개면 다 추가)
 
+target_metadata = Base.metadata
 # 환경 변수 로드
 load_dotenv()
 

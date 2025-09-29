@@ -12,4 +12,7 @@ alembic
 python-jose[cryptography]
 passlib[bcrypt]
 crud
-schemas
+requests
+pybase64
+apscheduler
+pytest

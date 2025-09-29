@@ -22,7 +22,7 @@ def create_board(db: Session, user_id: int, board: schemas.BoardCreate):
 def get_boards(db: Session, user_id: int, skip: int = 0, limit: int = 10):
     return (
         db.query(model.Board)
-        .filter(and_(model.Board.owner_id == user_id, model.Board.is_active == True))  # ✅ and_ 사용
+        .filter(and_(model.Board.owner_id == user_id))  # ✅ and_ 사용
         .offset(skip)
         .limit(limit)
         .all()

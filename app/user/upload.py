@@ -8,7 +8,7 @@ ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 router = APIRouter()
 BASE_URL = os.getenv("APP_BASE_URL", "http://127.0.0.1:8001")
 
-@router.post("/upload")
+@router.post("/upload") # 사진 업로드
 async def upload_picture(file: UploadFile = File(...)):
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:

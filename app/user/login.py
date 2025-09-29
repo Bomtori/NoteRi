@@ -6,10 +6,11 @@ import os
 import traceback
 from authlib.integrations.starlette_client import OAuth
 from dotenv import load_dotenv
+from datetime import date, timedelta
 
 from app.db import SessionLocal
-from app.model import User
-from app.auth import create_access_token, verify_token
+from app.model import User, Subscription, PlanType
+from app.util.auth import create_access_token, verify_token
 import logging
 logging.basicConfig(level=logging.DEBUG)
 
@@ -39,7 +40,7 @@ except Exception as e:
     print("ERROR in oauth.register:", e)
     traceback.print_exc()
 
-@router.get("/login/google")
+@router.get("/login/google") # 로그인
 async def login_google(request: Request):
     try:
         redirect_uri = request.url_for("auth_google_callback")
@@ -81,6 +82,19 @@ async def auth_google_callback(request: Request, db: Session = Depends(get_db)):
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
+
+        # ✅ 무료 구독 자동 생성
+        free_sub = Subscription(
+            user_id=db_user.id,
+            plan=PlanType.free,
+            start_date=date.today(),
+            end_date=date.today() + timedelta(days=365 * 100),  # 사실상 무제한
+            is_active=True,
+            payment_info={"type": "auto", "note": "free plan on signup"},
+            created_at=datetime.now(UTC)
+        )
+        db.add(free_sub)
+        db.commit()
     else:
         db_user.updated_at = datetime.now(UTC)
         db.commit()
@@ -95,14 +109,38 @@ async def auth_google_callback(request: Request, db: Session = Depends(get_db)):
             "id": db_user.id,
             "email": db_user.email,
             "name": db_user.name,
-            "role": db_user.role
+            "role": db_user.role,
+            "nickname" : db_user.nickname,
+            "picture": db_user.picture,
         }
     })
 
-@router.get("/me")
+@router.get("/me") # 유저 정보 가져오기
 async def get_current_user(authorization: str = Header(...)):
     token = authorization.split(" ")[1]
     payload = verify_token(token)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     return {"user": payload}
+
+
+@router.post("/logout") # 로그아웃
+async def logout():
+    # 실제로는 서버에서 할 일이 없음
+    return {"message": "Successfully logged out. Please remove token on client side."}
+
+# 클라이언트(React)에서 짤 코드
+# // 로그아웃 버튼 클릭 시
+# localStorage.removeItem("access_token");   // 토큰 삭제
+# // 또는 sessionStorage.removeItem("access_token");
+#
+# // 로그인 페이지로 이동
+# window.location.href = "/login";
+
+# ✅ 구글 세션까지 끊는 로그아웃
+@router.get("/logout/google")
+async def google_logout():
+    """
+    구글 계정 로그아웃까지 실행.
+    """
+    return RedirectResponse(url="https://accounts.google.com/Logout")

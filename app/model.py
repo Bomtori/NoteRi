@@ -41,7 +41,7 @@ class User(Base):
     boards = relationship("Board", back_populates="owner")
     memos = relationship("Memo", back_populates="user")
     notifications = relationship("Notification", back_populates="user")
-
+    recoding_usage = relationship("RecodingUsage", back_populates="user")
 
 # Subscriptions
 class Subscription(Base):
@@ -51,13 +51,28 @@ class Subscription(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     plan = Column(Enum(PlanType), nullable=False, default=PlanType.free)
     start_date = Column(Date, nullable=False)
-    end_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=True)
     is_active = Column(Boolean, default=True)
     payment_info = Column(JSON)
     created_at = Column(TIMESTAMP)
 
+    recoding_usage = relationship("RecodingUsage", back_populates="subscription")
     user = relationship("User", back_populates="subscriptions")
 
+# 구독 기간 중 녹음 시간
+class RecodingUsage(Base):
+    __tablename__ = "recoding_usage"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    subscription_id = Column(Integer, ForeignKey("subscriptions.id", ondelete="CASCADE"), nullable=False)
+    allocated_minutes = Column(Integer)
+    used_minutes = Column(Integer, default=0)
+    period_start = Column(Date, nullable=False)
+    period_end = Column(Date, nullable=True)
+    created_at = Column(TIMESTAMP)
+
+    user = relationship("User", back_populates="recoding_usage")
+    subscription = relationship("Subscription", back_populates="recoding_usage")
 
 # Folders
 class Folder(Base):
@@ -81,15 +96,21 @@ class Board(Base):
     owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     title = Column(String, nullable=False)
     description = Column(Text)
-    invite_token = Column(String)
+    invite_token = Column(String, nullable=True)
     invite_role = Column(String, default="editor")
-    invite_expires_at = Column(TIMESTAMP)
+    invite_expires_at = Column(TIMESTAMP, nullable=True)
     created_at = Column(TIMESTAMP)
     updated_at = Column(TIMESTAMP)
 
     owner = relationship("User", back_populates="boards")
-    audios = relationship("AudioData", back_populates="board")
-    memos = relationship("Memo", back_populates="board")
+
+    # ✅ Board 직속 소유 데이터들
+    audios = relationship("AudioData", back_populates="board", cascade="all, delete-orphan")
+    memos = relationship("Memo", back_populates="board", cascade="all, delete-orphan")
+    transcripts = relationship("Transcript", back_populates="board", cascade="all, delete-orphan")
+    summaries = relationship("Summary", back_populates="board", cascade="all, delete-orphan")
+
+    # 기존 recording_sessions 유지
     recording_sessions = relationship("RecordingSession", back_populates="board")
 
 
@@ -145,6 +166,7 @@ class Transcript(Base):
 
     id = Column(Integer, primary_key=True)
     result_id = Column(Integer, ForeignKey("recording_results.id", ondelete="CASCADE"), nullable=False)
+    board_id = Column(Integer, ForeignKey("boards.id", ondelete="CASCADE"), nullable=False)  # ✅ 새 연결
     speaker_label = Column(String)
     start_time = Column(Float)
     end_time = Column(Float)
@@ -152,6 +174,7 @@ class Transcript(Base):
     created_at = Column(TIMESTAMP)
 
     result = relationship("RecordingResult", back_populates="transcripts")
+    board = relationship("Board", back_populates="transcripts")  # ✅ 추가
     summaries = relationship("Summary", back_populates="transcript")
 
 
@@ -175,12 +198,14 @@ class Summary(Base):
 
     id = Column(Integer, primary_key=True)
     transcript_id = Column(Integer, ForeignKey("transcripts.id", ondelete="CASCADE"), nullable=False)
+    board_id = Column(Integer, ForeignKey("boards.id", ondelete="CASCADE"), nullable=False)  # ✅ 새 연결
     summary_type = Column(String)
     content = Column(Text, nullable=False)
-    rating = Column(Boolean)  # 좋아요/싫어요
+    rating = Column(Boolean)
     created_at = Column(TIMESTAMP)
 
     transcript = relationship("Transcript", back_populates="summaries")
+    board = relationship("Board", back_populates="summaries")  # ✅ 추가
 
 
 # Notifications

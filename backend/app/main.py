@@ -1,24 +1,18 @@
 from fastapi import FastAPI
 from starlette.middleware.sessions import SessionMiddleware
 import os
-import sys
 from dotenv import load_dotenv
-from fastapi.responses import JSONResponse
-from fastapi.requests import Request
 from fastapi.staticfiles import StaticFiles
-import traceback
 from app.tasks.scheduler import start_scheduler
 from fastapi.middleware.cors import CORSMiddleware
-from app.user.google_auth import router as google_auth_router  # ✅ login.py에서 라우터 import
-from app.user.kakao_auth import router as kakao_auth_router
-from app.user.naver_auth import router as naver_auth_router
-from app.user.userInfo import router as userinfo_router
-from app.board import board as board_router
-from app.user.upload import router as upload_router
-from app.folder import folder as folder_router
-from app.subscription import subscription as subscription_router
-from app.subscription.payment import router as subscription_payment_router
-from app.notion.notion_auth import router as notion_auth_router
+from app.routers.user.google_auth_router import router as google_auth_router  # ✅ login.py에서 라우터 import
+from app.routers.user.kakao_auth_router import router as kakao_auth_router
+from app.routers.user.naver_auth_router import router as naver_auth_router
+from app.routers.user.userInfo_router import router as userinfo_router
+from app.routers import board_router as board_router, folder_router as folder_router, subscription_router as subscription_router
+from app.routers.user.profile_upload_router import router as upload_router
+from app.routers.payment_router import router as subscription_payment_router
+from app.routers.notion_auth_router import router as notion_auth_router
 
 load_dotenv()
 

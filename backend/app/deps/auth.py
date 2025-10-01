@@ -1,19 +1,12 @@
-# deps/auth.py
+# deps/auth_crud.py
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from app.db import SessionLocal
+from app.db import get_db
 from app.model import User
 from app.util.auth import verify_token  # 네가 만든 verify_token 함수 import
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 def get_current_user(
     token: str = Depends(oauth2_scheme),

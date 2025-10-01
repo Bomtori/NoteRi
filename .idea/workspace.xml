@@ -1,44 +1,37 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
   <component name="ChangeListManager">
-    <list default="true" id="9bbd2504-1dd4-4b0d-b983-f99e21f1d35a" name="변경" comment="">
-      <change beforePath="$PROJECT_DIR$/.env" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+    <list default="true" id="9bbd2504-1dd4-4b0d-b983-f99e21f1d35a" name="변경" comment="commit">
+      <change afterPath="$PROJECT_DIR$/.idea/IntelliLang.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/noteleeProject.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/noteleeProject.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/alembic.ini" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/alembic/README" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/alembic/env.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/alembic/script.py.mako" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/alembic/versions/2a0ea2b61229_update_all_tables.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/alembic/versions/7e2f25f710e6_create_users_table.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/alembic/versions/a00be96e64d7_fix_end_date_nullable.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/alembic/versions/ae5421bd61f4_create_users_table.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/alembic/versions/cb8064bb5d82_add_users_table.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/alembic/versions/e7a252783abc_create_users_table.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/board/board.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/board/crud.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/board/schemas.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/db.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/deps/auth.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/folder/crud.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/folder/folder.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/folder/schemas.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/main.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/model.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/subscription/payment.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/subscription/schemas.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/subscription/subscription.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/tasks/scheduler.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/user/login.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/user/upload.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/user/userInfo.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/util/auth.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/app/util/recoding_usage.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/requirement.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/server_debug.log" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/audio/audio.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/audio/crud.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/audio/schemas.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/board/board.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/board/crud.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/board/schemas.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/db.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/db.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/deps/auth.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/deps/auth.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/folder/crud.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/folder/folder.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/folder/schemas.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/notion/crud.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/notion/notion_auth.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/subscription/payment.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/subscription/schemas.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/subscription/subscription.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/tasks/scheduler.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/tasks/scheduler.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/user/common.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/user/google_auth.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/user/kakao_auth.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/user/naver_auth.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/user/upload.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/user/userInfo.py" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -72,10 +65,16 @@
   "keyToString": {
     "ModuleVcsDetector.initialDetectionPerformed": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
     "RunOnceActivity.git.unshallow": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
     "git-widget-placeholder": "main",
+    "kotlin-language-version-configured": "true",
     "last_opened_file_path": "C:/Users/tj/Desktop/advancedProject/noteleeProject",
     "nodejs_package_manager_path": "npm",
+    "project.structure.last.edited": "모듈",
+    "project.structure.proportion": "0.0",
+    "project.structure.side.proportion": "0.0",
     "settings.editor.selected.configurable": "preferences.lookFeel",
     "vue.rearranger.settings.migration": "true"
   }
@@ -83,8 +82,7 @@
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-js-predefined-d6986cc7102b-6a121458b545-JavaScript-PY-251.25410.159" />
-        <option value="bundled-python-sdk-e0ed3721d81e-36ea0e71a18c-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-251.25410.159" />
+        <option value="bundled-jdk-9823dce3aa75-bf35d07a577b-intellij.indexing.shared.core-IU-252.23892.409" />
       </set>
     </attachedChunks>
   </component>
@@ -96,10 +94,35 @@
       <option name="presentableId" value="Default" />
       <updated>1759193566624</updated>
       <workItem from="1759193581537" duration="88000" />
+      <workItem from="1759280540975" duration="1644000" />
     </task>
+    <task id="LOCAL-00001" summary="commit">
+      <option name="closed" value="true" />
+      <created>1759279962625</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1759279962625</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="commit" />
+    <option name="LAST_COMMIT_MESSAGE" value="commit" />
   </component>
 </project>

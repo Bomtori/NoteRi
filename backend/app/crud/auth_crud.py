@@ -1,21 +1,39 @@
 from sqlalchemy.orm import Session
 from datetime import datetime, UTC, date, timedelta
 from fastapi.responses import JSONResponse
-
+from fastapi import status
 from app.model import User, Subscription, PlanType
 from app.util.auth import create_access_token
 
 
-def get_or_create_user(db: Session, provider: str, sub: str, email: str, name: str, nickname: str, picture: str):
+def get_or_create_user(
+    db: Session,
+    provider: str,
+    sub: str,
+    email: str,
+    name: str,
+    nickname: str,
+    picture: str,
+):
     """
     공통: OAuth 로그인한 유저 DB에 등록 (없으면 생성)
+    - 탈퇴(is_active=False) 계정이 있으면 재활성화
     """
+    # 1) provider + sub 기준으로 기존 유저 찾기
     db_user = db.query(User).filter(
         User.oauth_provider == provider,
         User.oauth_sub == sub
     ).first()
 
+    # 2) 없는 경우 (처음 로그인)
     if not db_user:
+        # 혹시 같은 email인데 탈퇴 상태(is_active=False)인지 확인
+        user = db.query(User).filter(
+            User.email == email,
+            User.oauth_provider == provider
+        ).first()
+
+        # ✅ 완전히 새 계정 생성
         db_user = User(
             email=email,
             name=name,
@@ -44,10 +62,12 @@ def get_or_create_user(db: Session, provider: str, sub: str, email: str, name: s
         )
         db.add(free_sub)
         db.commit()
-    else:
-        db_user.updated_at = datetime.now(UTC)
-        db.commit()
+        return db_user
 
+    # 3) 기존 유저 있으면 로그인 처리 (updated_at 갱신)
+    db_user.updated_at = datetime.now(UTC)
+    db.commit()
+    db.refresh(db_user)
     return db_user
 
 

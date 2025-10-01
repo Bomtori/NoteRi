@@ -4,11 +4,11 @@ from app.schemas import folder_schema as schemas
 
 
 # Create
-def create_folder(db: Session, folder: schemas.FolderCreate, user_id: int):
+def create_folder(db: Session, folder: schemas.FolderCreate, current_user: model.User):
     new_folder = model.Folder(
         name=folder.name,
         parent_id=folder.parent_id,
-        user_id=user_id
+        user_id=current_user.id
     )
     db.add(new_folder)
     db.commit()
@@ -16,10 +16,10 @@ def create_folder(db: Session, folder: schemas.FolderCreate, user_id: int):
     return new_folder
 
 # Read one
-def get_folder(db: Session, folder_id: int, user_id: int):
+def get_folder(db: Session, folder_id: int, current_user: model.User):
     return (
         db.query(model.Folder)
-        .filter(model.Folder.id == folder_id, model.Folder.user_id == user_id)
+        .filter(model.Folder.id == folder_id, model.Folder.user_id == current_user.id)
         .first()
     )
 
@@ -34,22 +34,21 @@ def get_folders(db: Session, user_id: int, skip: int = 0, limit: int = 10):
     )
 
 # ✅ 폴더별 보드 목록
-def get_boards_by_folder(db: Session, folder_id: int, user_id: int):
+def get_boards_by_folder(db: Session, folder_id: int):
     return (
         db.query(model.Board)
         .join(model.Folder, model.Board.folder_id == model.Folder.id)
         .filter(
-            model.Board.folder_id == folder_id,
-            model.Folder.user_id == user_id
+            model.Board.folder_id == folder_id
         )
         .all()
     )
 
 # Update
-def update_folder(db: Session, folder_id: int, folder_update: schemas.FolderUpdate, user_id: int):
+def update_folder(db: Session, folder_id: int, folder_update: schemas.FolderUpdate, current_user: model.User):
     folder = (
         db.query(model.Folder)
-        .filter(model.Folder.id == folder_id, model.Folder.user_id == user_id)
+        .filter(model.Folder.id == folder_id, model.Folder.user_id == current_user.id)
         .first()
     )
     if not folder:
@@ -65,10 +64,10 @@ def update_folder(db: Session, folder_id: int, folder_update: schemas.FolderUpda
     return folder
 
 # Delete
-def delete_folder(db: Session, folder_id: int, user_id: int):
+def delete_folder(db: Session, folder_id: int, current_user: model.User):
     folder = (
         db.query(model.Folder)
-        .filter(model.Folder.id == folder_id, model.Folder.user_id == user_id)
+        .filter(model.Folder.id == folder_id, model.Folder.user_id == current_user.id)
         .first()
     )
     if not folder:

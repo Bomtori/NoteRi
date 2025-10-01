@@ -41,8 +41,9 @@ class User(Base):
     subscriptions = relationship("Subscription", back_populates="user")
     boards = relationship("Board", back_populates="owner")
     memos = relationship("Memo", back_populates="user")
+    folders = relationship("Folder", back_populates="owner")
     notifications = relationship("Notification", back_populates="user")
-    recoding_usage = relationship("RecodingUsage", back_populates="user")
+    recording_usage = relationship("RecordingUsage", back_populates="user")
 
 # Subscriptions
 class Subscription(Base):
@@ -57,12 +58,12 @@ class Subscription(Base):
     payment_info = Column(JSON)
     created_at = Column(TIMESTAMP)
 
-    recoding_usage = relationship("RecodingUsage", back_populates="subscription")
+    recording_usage = relationship("RecordingUsage", back_populates="subscription")
     user = relationship("User", back_populates="subscriptions")
 
 # 구독 기간 중 녹음 시간
-class RecodingUsage(Base):
-    __tablename__ = "recoding_usage"
+class RecordingUsage(Base):
+    __tablename__ = "recording_usage"
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     subscription_id = Column(Integer, ForeignKey("subscriptions.id", ondelete="CASCADE"), nullable=False)
@@ -72,8 +73,8 @@ class RecodingUsage(Base):
     period_end = Column(Date, nullable=True)
     created_at = Column(TIMESTAMP)
 
-    user = relationship("User", back_populates="recoding_usage")
-    subscription = relationship("Subscription", back_populates="recoding_usage")
+    user = relationship("User", back_populates="recording_usage")
+    subscription = relationship("Subscription", back_populates="recording_usage")
 
 # Folders
 class Folder(Base):
@@ -84,8 +85,11 @@ class Folder(Base):
     name = Column(String, nullable=False)
     created_at = Column(TIMESTAMP)
     updated_at = Column(TIMESTAMP)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
 
-    children = relationship("Folder")
+    owner = relationship("User", back_populates="folders")
+    boards = relationship("Board", back_populates="folder")
+    children = relationship("Folder", backref="parent", remote_side="Folder.id")
 
 
 # Boards
@@ -104,6 +108,7 @@ class Board(Base):
     updated_at = Column(TIMESTAMP)
 
     owner = relationship("User", back_populates="boards")
+    folder = relationship("Folder", back_populates="boards")
 
     # ✅ Board 직속 소유 데이터들
     audios = relationship("AudioData", back_populates="board", cascade="all, delete-orphan")

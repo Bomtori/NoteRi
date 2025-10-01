@@ -46,7 +46,12 @@ async def delete_user(
 ):
     current_user.is_active = False
     current_user.updated_at = datetime.now(UTC)
+    for board in current_user.boards:
+        db.delete(board)
     db.commit()
+
+
+
     return {"message": "User deactivated"}
 
 UPLOAD_DIR = "static/uploads"

@@ -7,7 +7,7 @@ function PaymentButton() {
     const orderId = "order_" + Date.now();
     const amount = 10000; // 테스트 금액
     const plan = "pro";
-    const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJka2VsNDUxMkBnbWFpbC5jb20iLCJleHAiOjE3NTkyMDIyMzl9.eBwgSnl7NZI1daKcGD44UT24aXmNRA0f3eKhgsAKGOU"
+    const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZW1haWwiOiJka2VsNDUxMkBnbWFpbC5jb20iLCJleHAiOjE3NTkzMTMzODd9.zO4lMlhTtc24KMAwq8psNpT7uTzYpTh1tOVGB5FMxl4"
     // 1. 백엔드에 결제 요청 → tossPayments.checkout 페이지 URL 받음
    const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/payments/request`, {
       method: "POST",

@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime, date, time
+from datetime import datetime
 
 # -----------------------------
 # AudioData
@@ -72,12 +72,10 @@ class BoardCreate(BaseModel):
 
 
 class BoardUpdate(BaseModel):
-    user_id: int
     title: Optional[str] = None
     description: Optional[str] = None
     invite_role: Optional[str] = None
     invite_expires_at: Optional[datetime] = None
-
 
 
 # -----------------------------
@@ -95,7 +93,6 @@ class BoardResponse(BaseModel):
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
 
-
     # ✅ Relationships
     audios: List[AudioResponse] = []
     memos: List[MemoResponse] = []
@@ -112,6 +109,6 @@ class BoardResponse(BaseModel):
 class BoardListResponse(BaseModel):
     boards: List[BoardResponse]
 
+
 class BoardMove(BaseModel):
     folder_id: int
-    user_id: int

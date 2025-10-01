@@ -4,34 +4,22 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="9bbd2504-1dd4-4b0d-b983-f99e21f1d35a" name="변경" comment="commit">
-      <change afterPath="$PROJECT_DIR$/.idea/IntelliLang.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/noteleeProject.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/noteleeProject.iml" afterDir="false" />
+    <list default="true" id="9bbd2504-1dd4-4b0d-b983-f99e21f1d35a" name="변경" comment="folder 구조 변경">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/audio/audio.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/audio/crud.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/audio/schemas.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/board/board.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/board/crud.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/board/schemas.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/db.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/db.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/crud/auth_crud.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/crud/auth_crud.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/crud/board_crud.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/crud/board_crud.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/crud/folder_crud.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/crud/folder_crud.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/app/deps/auth.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/deps/auth.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/folder/crud.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/folder/folder.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/folder/schemas.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/app/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/notion/crud.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/notion/notion_auth.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/subscription/payment.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/subscription/schemas.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/subscription/subscription.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/tasks/scheduler.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/tasks/scheduler.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/user/common.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/user/google_auth.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/user/kakao_auth.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/user/naver_auth.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/user/upload.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/user/userInfo.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/model.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/model.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/routers/board_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/board_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/routers/folder_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/folder_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/routers/subscription_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/subscription_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/routers/user/google_auth_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/user/google_auth_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/routers/user/userInfo_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/user/userInfo_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/schemas/board_schema.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/schemas/board_schema.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/util/recoding_usage.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/folder_structure_utf8.txt" beforeDir="false" afterPath="$PROJECT_DIR$/backend/folder_structure_utf8.txt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -94,7 +82,7 @@
       <option name="presentableId" value="Default" />
       <updated>1759193566624</updated>
       <workItem from="1759193581537" duration="88000" />
-      <workItem from="1759280540975" duration="1644000" />
+      <workItem from="1759280540975" duration="3860000" />
     </task>
     <task id="LOCAL-00001" summary="commit">
       <option name="closed" value="true" />
@@ -104,7 +92,31 @@
       <option name="project" value="LOCAL" />
       <updated>1759279962625</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="folder 구조 변경">
+      <option name="closed" value="true" />
+      <created>1759283809035</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1759283809035</updated>
+    </task>
+    <task id="LOCAL-00003" summary="folder 구조 변경">
+      <option name="closed" value="true" />
+      <created>1759283895074</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1759283895074</updated>
+    </task>
+    <task id="LOCAL-00004" summary="folder 구조 변경">
+      <option name="closed" value="true" />
+      <created>1759283919320</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1759283919320</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -123,6 +135,7 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="commit" />
-    <option name="LAST_COMMIT_MESSAGE" value="commit" />
+    <MESSAGE value="folder 구조 변경" />
+    <option name="LAST_COMMIT_MESSAGE" value="folder 구조 변경" />
   </component>
 </project>

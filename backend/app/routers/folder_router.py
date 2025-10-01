@@ -17,7 +17,7 @@ def create_folder(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return crud.create_folder(db, folder, user_id=current_user.id)
+    return crud.create_folder(db, folder, current_user)
 
 # Read all
 @router.get("/", response_model=schemas.FolderListResponse)
@@ -37,7 +37,7 @@ def read_folder(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    folder = crud.get_folder(db, folder_id, user_id=current_user.id)
+    folder = crud.get_folder(db, folder_id, current_user)
     if not folder:
         raise HTTPException(status_code=404, detail="Folder not found")
     return folder
@@ -49,7 +49,7 @@ def read_boards_by_folder(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    boards = crud.get_boards_by_folder(db, folder_id, user_id=current_user.id)
+    boards = crud.get_boards_by_folder(db, folder_id)
     return boards
 
 # Update
@@ -60,7 +60,7 @@ def update_folder(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    folder = crud.update_folder(db, folder_id, folder_update, user_id=current_user.id)
+    folder = crud.update_folder(db, folder_id, folder_update, current_user)
     if not folder:
         raise HTTPException(status_code=404, detail="Folder not found or no permission")
     return folder
@@ -72,7 +72,7 @@ def delete_folder(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    folder = crud.delete_folder(db, folder_id, user_id=current_user.id)
+    folder = crud.delete_folder(db, folder_id, current_user)
     if not folder:
         raise HTTPException(status_code=404, detail="Folder not found or no permission")
     return folder

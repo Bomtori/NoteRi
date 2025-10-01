@@ -5,7 +5,7 @@ from app.db import get_db
 from app.model import Subscription, PlanType, User
 from app.schemas.subscription_schema import SubscriptionResponse, SubscriptionUpdate
 from app.deps.auth import get_current_user
-from app.util.recoding_usage import update_recoding_usage
+from app.util.recording_usage import update_recording_usage
 from datetime import date, timedelta
 
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
@@ -83,7 +83,7 @@ def update_subscription(
             sub.end_date = date.today() + timedelta(days=30)
 
         # ✅ 녹음 사용량 갱신
-        update_recoding_usage(db, current_user.id, sub)
+        update_recording_usage(db, current_user.id, sub)
 
     db.commit()
     db.refresh(sub)

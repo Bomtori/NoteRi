@@ -13,6 +13,7 @@ from app.routers import board_router as board_router, folder_router as folder_ro
 from app.routers.user.profile_upload_router import router as upload_router
 from app.routers.payment_router import router as subscription_payment_router
 from app.routers.notion_auth_router import router as notion_auth_router
+from app.routers.memo_router import router as memo_router
 
 load_dotenv()
 
@@ -32,6 +33,7 @@ app.include_router(folder_router.router)
 app.include_router(subscription_router.router)
 app.include_router(subscription_payment_router)
 app.include_router(notion_auth_router)
+app.include_router(memo_router)
 
 # static 디렉토리 생성 후 mount
 app.mount("/static", StaticFiles(directory="static"), name="static")

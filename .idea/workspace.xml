@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="9bbd2504-1dd4-4b0d-b983-f99e21f1d35a" name="변경" comment="">
+      <change beforePath="$PROJECT_DIR$/.env" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/noteleeProject.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/noteleeProject.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/alembic.ini" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/alembic/README" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/alembic/env.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/alembic/script.py.mako" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/alembic/versions/2a0ea2b61229_update_all_tables.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/alembic/versions/7e2f25f710e6_create_users_table.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/alembic/versions/a00be96e64d7_fix_end_date_nullable.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/alembic/versions/ae5421bd61f4_create_users_table.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/alembic/versions/cb8064bb5d82_add_users_table.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/alembic/versions/e7a252783abc_create_users_table.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/board/board.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/board/crud.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/board/schemas.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/db.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/deps/auth.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/folder/crud.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/folder/folder.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/folder/schemas.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/main.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/model.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/subscription/payment.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/subscription/schemas.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/subscription/subscription.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/tasks/scheduler.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/user/login.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/user/upload.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/user/userInfo.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/util/auth.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/util/recoding_usage.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/requirement.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/server_debug.log" beforeDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;dkel4578&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/dkel4578/noteleeProject.git&quot;,
+    &quot;accountId&quot;: &quot;2d77e22c-ef68-4621-a973-c089c4b02b0f&quot;
+  }
+}</component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 4
+}</component>
+  <component name="ProjectId" id="33OgWmUBh7ASpd6dMOWJXzAgylD" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "git-widget-placeholder": "main",
+    "last_opened_file_path": "C:/Users/tj/Desktop/advancedProject/noteleeProject",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "preferences.lookFeel",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-6a121458b545-JavaScript-PY-251.25410.159" />
+        <option value="bundled-python-sdk-e0ed3721d81e-36ea0e71a18c-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-251.25410.159" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="디폴트 작업">
+      <changelist id="9bbd2504-1dd4-4b0d-b983-f99e21f1d35a" name="변경" comment="" />
+      <created>1759193566624</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1759193566624</updated>
+      <workItem from="1759193581537" duration="88000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+</project>

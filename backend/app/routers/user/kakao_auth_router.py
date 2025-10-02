@@ -5,6 +5,7 @@ import os
 from app.deps.auth import get_current_user
 from datetime import datetime, UTC
 from starlette.responses import JSONResponse
+from fastapi.responses import RedirectResponse
 from app.model import User
 from app.crud.auth_crud import get_or_create_user, generate_login_response
 from app.util.auth import create_access_token
@@ -94,3 +95,7 @@ def kakao_rejoin(db: Session = Depends(get_db), current_user: User = Depends(get
             "picture": current_user.picture,
         }
     })
+
+@router.get("/logout")
+async def kakao_logout():
+    return RedirectResponse("https://kauth.kakao.com/oauth/logout?client_id=YOUR_KAKAO_REST_API_KEY&logout_redirect_uri=http://localhost:3000/login")

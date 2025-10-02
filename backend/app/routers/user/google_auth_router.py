@@ -2,6 +2,7 @@ from fastapi import APIRouter, Request, Depends, status
 from sqlalchemy.orm import Session
 from authlib.integrations.starlette_client import OAuth
 import os
+from fastapi.responses import RedirectResponse
 from datetime import datetime, UTC
 from starlette.responses import JSONResponse
 from app.deps.auth import get_current_user
@@ -89,3 +90,7 @@ def google_rejoin(db: Session = Depends(get_db), current_user: User = Depends(ge
             "picture": current_user.picture,
         }
     })
+
+@router.get("/logout")
+async def google_logout():
+    return RedirectResponse("https://accounts.google.com/Logout")

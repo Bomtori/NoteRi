@@ -12,6 +12,22 @@ router = APIRouter()
 
 # 📌 Pydantic 모델 정의
 
+# ✅ 사용자 정보 조회 (GET)
+@router.get("/users/me", response_model=user_schema.UserResponse)
+async def get_user_me(
+    current_user: User = Depends(get_current_user)
+):
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "name": current_user.name,
+        "nickname": current_user.nickname,
+        "picture": current_user.picture,
+        "is_active": current_user.is_active,
+        "created_at": current_user.created_at,
+        "updated_at": current_user.updated_at,
+    }
+
 
 # ✅ 사용자 정보 수정 (PATCH)
 @router.patch("/users/me")

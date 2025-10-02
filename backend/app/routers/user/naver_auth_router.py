@@ -101,3 +101,10 @@ def naver_rejoin(db: Session = Depends(get_db), current_user: User = Depends(get
             "picture": current_user.picture,
         }
     })
+
+# naver logout 은 react에서 해야함!
+# 다른 google과 kakao도 같은 과정 거쳐야함
+#const handleLogout = () => {
+#   localStorage.removeItem("access_token"); // 토큰 삭제
+#   window.location.href = "/login"; // 로그인 페이지로 이동
+# };

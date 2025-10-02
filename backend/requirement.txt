@@ -1,19 +1,59 @@
-fastapi
-uvicorn[standard]
+# Web framework
+fastapi==0.117.1
+uvicorn[standard]==0.37.0
+starlette==0.48.0
+
+# Database & ORM
 psycopg2-binary
 SQLAlchemy
-redis
-aioredis
+alembic
+
+# Auth & Security
 python-dotenv
 authlib
 httpx
 itsdangerous
-alembic
 python-jose[cryptography]
 passlib[bcrypt]
-crud
-requests
 pybase64
+
+# Redis & Scheduler
+redis
+aioredis
 apscheduler
+
+# STT
+faster-whisper==1.2.0
+ctranslate2==4.6.0
+onnxruntime==1.23.0
+numpy==2.3.3
+ffmpeg-python==0.2.0
+
+# VAD
+torch==2.6.0
+torchaudio==2.6.0
+torchvision==0.21.0
+silero-vad==6.0.0
+
+# Summarizer / NLP
+transformers==4.56.2
+huggingface-hub==0.35.1
+tokenizers==0.22.1
+safetensors==0.6.2
+sentencepiece  # (자동 설치 안 될 때를 대비해 명시 추천)
+
+# Data handling
+pandas==2.3.2
+python-multipart==0.0.20
+PyYAML==6.0.2
+
+# Utils
+tqdm==4.67.1
+regex==2025.9.18
+requests==2.32.5
+
+# Testing
 pytest
-python-multipart
+
+# Custom (직접 만든 crud 모듈이라면 requirements에 불필요할 수 있음)
+crud

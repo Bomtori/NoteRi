@@ -1,8 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, Query
 from starlette.middleware.sessions import SessionMiddleware
 import os
 from dotenv import load_dotenv
 from fastapi.staticfiles import StaticFiles
+from backend.services.stt_pipeline import STTPipeline
+from backend.services.diarization import DiarizationService
 from app.tasks.scheduler import start_scheduler
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers.user.google_auth_router import router as google_auth_router  # ✅ login.py에서 라우터 import
@@ -46,6 +48,54 @@ app.add_middleware(
     allow_methods=["*"],   # 모든 메서드 허용 (GET, POST, OPTIONS 등)
     allow_headers=["*"],   # 모든 헤더 허용
 )
+
+pipeline = STTPipeline()
+diarizer = DiarizationService()
+
+@app.websocket("/ws/stt")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    print("✅ connection open")
+
+    try:
+        while True:
+            data = await websocket.receive_bytes()
+            await pipeline.feed(data, websocket)
+
+    except Exception as e:
+        # 클라이언트가 정상적으로 닫아도 여기로 들어옴
+        print(f"❌ 오류 발생: {e}")
+    finally:
+        # ✅ WebSocket 종료 → 원본 오디오 저장
+        result = pipeline.save_raw_audio()
+        if result:
+            filepath = result["filepath"]
+            duration = result["duration"]
+            print(f"🎵 Audio saved at: {filepath} (duration={duration:.2f}s)")
+        else:
+            print("⚠️ 저장할 오디오 데이터 없음")
+
+        print("🔌 connection closed")
+
+
+# === 수동 저장 API (옵션) ===
+@app.post("/save-audio")
+def save_audio():
+    result = pipeline.save_raw_audio()
+    if result:
+        return {"status": "ok", **result}
+    return {"status": "error", "message": "No audio data"}
+
+
+# === 최신 저장 파일 확인 API ===
+@app.get("/diarize/latest")
+def diarize_latest(num_speakers: int | None = Query(default=None, ge=1, le=10)):
+    if not pipeline.last_saved_file:
+        return {"error": "No file saved yet"}
+    filepath = pipeline.last_saved_file
+    diarization_result = diarizer.diarize(filepath, num_speakers=num_speakers)
+    return {"file": filepath, "diarization": diarization_result}
+
 
 
 @app.get("/")

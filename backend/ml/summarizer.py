@@ -1,11 +1,11 @@
-##
+## backend/ml/summarizer.py
 
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
 from ..config import SUMMARIZER_PROMPT, SUMMARIZER_MAX_LENGTH, SUMMARIZER_MIN_LENGTH
 
 class ThreeLineSummarizer:
-    def __init__(self, model_name="eenzeenee/t5-small-korean-summarization", device="cuda"):
+    def __init__(self, model_name="eenzeenee/t5-base-korean-summarization", device="cuda"):
         print(f"🚀 한국어 요약 모델 로딩 중... ({model_name})")
         self.device = device if torch.cuda.is_available() else "cpu"
 

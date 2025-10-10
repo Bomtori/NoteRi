@@ -59,6 +59,9 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("✅ connection open")
 
+    # 🔹 시작 버튼 즉시 1분 타이머 켜기 (오디오 유무 무관)
+    await pipeline.begin_session(websocket)
+
     try:
         while True:
             data = await websocket.receive_bytes()
@@ -68,6 +71,9 @@ async def websocket_endpoint(websocket: WebSocket):
         # 클라이언트가 정상적으로 닫아도 여기로 들어옴
         print(f"❌ 오류 발생: {e}")
     finally:
+        # 🔹 남은 내용 구간 요약 강제 flush + 타이머 종료
+        await pipeline.end_session()   # 내부에서 flush & stop
+        
         # ✅ WebSocket 종료 → 원본 오디오 저장
         result = pipeline.save_raw_audio()
         if result:

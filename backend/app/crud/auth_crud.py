@@ -2,8 +2,8 @@ from sqlalchemy.orm import Session
 from datetime import datetime, UTC, date, timedelta
 from fastapi.responses import JSONResponse
 from fastapi import status
-from app.model import User, Subscription, PlanType
-from app.util.auth import create_access_token
+from backend.app.model import User, Subscription, PlanType
+from backend.app.util.auth import create_access_token
 
 
 def get_or_create_user(

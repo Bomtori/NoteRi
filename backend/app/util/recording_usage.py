@@ -1,6 +1,6 @@
 from datetime import date, timedelta, datetime, UTC
 from sqlalchemy.orm import Session
-from app.model import Subscription, RecordingUsage, PlanType
+from backend.app.model import Subscription, RecordingUsage, PlanType
 
 
 def get_plan_minutes(plan: PlanType) -> int | None:

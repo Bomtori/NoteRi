@@ -3,23 +3,23 @@ from starlette.middleware.sessions import SessionMiddleware
 import os
 from dotenv import load_dotenv
 from fastapi.staticfiles import StaticFiles
-from services.stt_pipeline import STTPipeline
-from services.diarization import DiarizationService
-from app.tasks.scheduler import start_scheduler
+from backend.services.stt_pipeline import STTPipeline
+from backend.services.diarization import DiarizationService
+from backend.app.tasks.scheduler import start_scheduler
 from fastapi.middleware.cors import CORSMiddleware
 from db import get_db, SessionLocal
 from seed.paln_seed import seed_plans
-from app.routers.user.google_auth_router import router as google_auth_router  # ✅ login.py에서 라우터 import
-from app.routers.user.kakao_auth_router import router as kakao_auth_router
-from app.routers.user.naver_auth_router import router as naver_auth_router
-from app.routers.user.userInfo_router import router as userinfo_router
-from app.routers import board_router as board_router, folder_router as folder_router, subscription_router as subscription_router
-from app.routers.user.profile_upload_router import router as upload_router
-from app.routers.payment_router import router as subscription_payment_router
-from app.routers.notion_auth_router import router as notion_auth_router
-from app.routers.memo_router import router as memo_router
-from app.routers.audio_router import router as audio_router
-from app.routers.user.user_router import router as user_router
+from backend.app.routers.user.google_auth_router import router as google_auth_router  # ✅ login.py에서 라우터 import
+from backend.app.routers.user.kakao_auth_router import router as kakao_auth_router
+from backend.app.routers.user.naver_auth_router import router as naver_auth_router
+from backend.app.routers.user.userInfo_router import router as userinfo_router
+from backend.app.routers import board_router as board_router, folder_router as folder_router, subscription_router as subscription_router
+from backend.app.routers.user.profile_upload_router import router as upload_router
+from backend.app.routers.payment_router import router as subscription_payment_router
+from backend.app.routers.notion_auth_router import router as notion_auth_router
+from backend.app.routers.memo_router import router as memo_router
+from backend.app.routers.audio_router import router as audio_router
+from backend.app.routers.user.user_router import router as user_router
 
 load_dotenv()
 
@@ -63,6 +63,9 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("✅ connection open")
 
+    # 🔹 시작 버튼 즉시 1분 타이머 켜기 (오디오 유무 무관)
+    await pipeline.begin_session(websocket)
+
     try:
         while True:
             data = await websocket.receive_bytes()
@@ -72,6 +75,9 @@ async def websocket_endpoint(websocket: WebSocket):
         # 클라이언트가 정상적으로 닫아도 여기로 들어옴
         print(f"❌ 오류 발생: {e}")
     finally:
+        # 🔹 남은 내용 구간 요약 강제 flush + 타이머 종료
+        await pipeline.end_session()   # 내부에서 flush & stop
+
         # ✅ WebSocket 종료 → 원본 오디오 저장
         result = pipeline.save_raw_audio()
         if result:

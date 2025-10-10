@@ -5,10 +5,56 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="9bbd2504-1dd4-4b0d-b983-f99e21f1d35a" name="변경" comment="model 변경 (plan, payment)">
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/noteleeProject.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/noteleeProject.iml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/app/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/app/crud/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/app/deps/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/app/routers/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/app/routers/user/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/app/tasks/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/requirements.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/backend/services/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/frontend/src/pages/MeetingPage.jsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/scripts/cuda_test.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/.env" beforeDir="false" afterPath="$PROJECT_DIR$/backend/.env" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/alembic/env.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/alembic/env.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/crud/audio_crud.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/crud/audio_crud.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/crud/auth_crud.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/crud/auth_crud.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/crud/board_crud.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/crud/board_crud.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/crud/folder_crud.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/crud/folder_crud.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/crud/memo_crud.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/crud/memo_crud.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/crud/notion_crud.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/crud/notion_crud.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/db.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/db.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/deps/auth.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/deps/auth.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/app/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/routers/audio_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/audio_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/routers/board_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/board_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/routers/folder_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/folder_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/routers/memo_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/memo_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/routers/notion_auth_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/notion_auth_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/routers/payment_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/payment_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/routers/subscription_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/subscription_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/routers/user/google_auth_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/user/google_auth_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/routers/user/kakao_auth_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/user/kakao_auth_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/routers/user/naver_auth_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/user/naver_auth_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/routers/user/userInfo_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/user/userInfo_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/schemas/subscription_schema.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/schemas/subscription_schema.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/tasks/scheduler.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/tasks/scheduler.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/util/recording_usage.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/util/recording_usage.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/folder_structure.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/folder_structure_utf8.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/ml/postprocess/silence_segmenter.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/ml/postprocess/silence_segmenter.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/ml/stt_model.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/ml/stt_model.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/ml/summarizer.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/ml/summarizer.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/ml/vad.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/ml/vad.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/requirement.txt" beforeDir="false" afterPath="$PROJECT_DIR$/backend/requirement.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/server_debug.log" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/services/stt_pipeline.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/services/stt_pipeline.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/.env" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/.env" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/package-lock.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/package.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/main.jsx" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/main.jsx" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -46,28 +92,28 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;khj&quot;,
-    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
-    &quot;last_opened_file_path&quot;: &quot;C:/Users/tj/Desktop/advancedProject/noteleeProject&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;project.structure.last.edited&quot;: &quot;모듈&quot;,
-    &quot;project.structure.proportion&quot;: &quot;0.0&quot;,
-    &quot;project.structure.side.proportion&quot;: &quot;0.0&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "git-widget-placeholder": "khj 병합 중",
+    "kotlin-language-version-configured": "true",
+    "last_opened_file_path": "C:/Users/tj/Desktop/advancedProject/noteleeProject",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "project.structure.last.edited": "모듈",
+    "project.structure.proportion": "0.0",
+    "project.structure.side.proportion": "0.0",
+    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
       <recent name="C:\Users\tj\Desktop\advancedProject\noteleeProject\backend" />
@@ -96,7 +142,7 @@
       <workItem from="1760074171451" duration="517000" />
       <workItem from="1760075122627" duration="882000" />
       <workItem from="1760076177236" duration="1457000" />
-      <workItem from="1760077785470" duration="1252000" />
+      <workItem from="1760077785470" duration="3880000" />
     </task>
     <task id="LOCAL-00001" summary="commit">
       <option name="closed" value="true" />

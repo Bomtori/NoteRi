@@ -1,3 +1,5 @@
+# backend/ml/vad.py
+
 import torch
 import numpy as np
 from ..config import VAD_THRESHOLD, VAD_SAMPLE_RATE

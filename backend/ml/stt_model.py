@@ -1,4 +1,5 @@
-# whisper/backend/ml/stt_model.py
+# backend/ml/stt_model.py
+
 from faster_whisper import WhisperModel
 import io
 import wave

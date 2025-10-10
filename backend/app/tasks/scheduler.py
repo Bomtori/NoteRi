@@ -1,8 +1,8 @@
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy.orm import Session
 from datetime import date
-from app.db import SessionLocal
-from app.model import Subscription, PlanType
+from backend.app.db import SessionLocal
+from backend.app.model import Subscription, PlanType
 
 
 def expire_subscriptions():

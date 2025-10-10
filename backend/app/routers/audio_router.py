@@ -1,9 +1,9 @@
 import os, uuid
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from sqlalchemy.orm import Session
-from app.schemas import audio_schema as schemas
-from app.db import get_db
-from app.crud import audio_crud as crud
+from backend.app.schemas import audio_schema as schemas
+from backend.app.db import get_db
+from backend.app.crud import audio_crud as crud
 
 router = APIRouter(prefix="/audio", tags=["audio"])
 UPLOAD_DIR = "static/audio"

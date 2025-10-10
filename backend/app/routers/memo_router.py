@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-from app.db import get_db
-from app.schemas import memo_schema as schemas
-from app.crud import memo_crud as crud
-from app.deps.auth import get_current_user
-from app.model import User
+from backend.app.db import get_db
+from backend.app.schemas import memo_schema as schemas
+from backend.app.crud import memo_crud as crud
+from backend.app.deps.auth import get_current_user
+from backend.app.model import User
 
 router = APIRouter(prefix="/boards/{board_id}/memos", tags=["memos"])
 

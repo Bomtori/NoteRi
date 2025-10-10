@@ -1,6 +1,6 @@
 # app/crud/notion_auth_router.py
 from sqlalchemy.orm import Session
-from app.model import NotionAuth
+from backend.app.model import NotionAuth
 
 def save_user_notion_token(db: Session, user_id: int, access_token: str, refresh_token: str = None,
                            workspace_id: str = None, workspace_name: str = None):

@@ -2,14 +2,14 @@ from fastapi import APIRouter, Request, Depends, status
 from sqlalchemy.orm import Session
 from authlib.integrations.starlette_client import OAuth
 import os
-from app.deps.auth import get_current_user
+from backend.app.deps.auth import get_current_user
 from datetime import datetime, UTC
 from starlette.responses import JSONResponse
 from fastapi.responses import RedirectResponse
-from app.model import User
-from app.crud.auth_crud import get_or_create_user, generate_login_response
-from app.util.auth import create_access_token
-from app.db import get_db
+from backend.app.model import User
+from backend.app.crud.auth_crud import get_or_create_user, generate_login_response
+from backend.app.util.auth import create_access_token
+from backend.app.db import get_db
 
 router = APIRouter(prefix="/auth/kakao", tags=["KakaoAuth"])
 

@@ -2,9 +2,9 @@ import os
 from sqlalchemy.orm import Session
 from datetime import datetime
 from pydub import AudioSegment
-from app.model import AudioData
 from datetime import datetime, UTC
-import app.schemas.audio_schema as schemas
+from backend.app.model import AudioData
+import backend.app.schemas.audio_schema as schemas
 
 def create_audio(db: Session, audio: schemas.AudioCreate):
     db_audio = AudioData(

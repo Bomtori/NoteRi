@@ -1,8 +1,8 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from datetime import datetime, UTC
-import app.model as model
-from app.schemas import memo_schema as schemas
+import backend.app.model as model
+from backend.app.schemas import memo_schema as schemas
 
 
 # ✅ 보드 생성 시 자동 메모 생성

@@ -1,60 +1,79 @@
-# Web framework
-fastapi==0.117.1
-uvicorn[standard]==0.37.0
-starlette==0.48.0
+############
+# Web API  #
+############
+fastapi==0.117.1              # 웹 서버 프레임워크
+uvicorn[standard]==0.37.0     # ASGI 서버 (개발/배포 겸용)
+starlette==0.48.0             # FastAPI 내부 의존 (미들웨어 등)
+python-multipart==0.0.20      # 파일 업로드(FormData) 처리
+python-dotenv==1.1.1          # .env 로드
 
-# Database & ORM
-psycopg2-binary
-SQLAlchemy
-alembic
+######################
+# DB / Migration     #
+######################
+SQLAlchemy==2.0.43            # ORM
+alembic==1.16.5               # 마이그레이션
+psycopg2-binary==2.9.10       # PostgreSQL 드라이버
 
-# Auth & Security
-python-dotenv
-authlib
-httpx
-itsdangerous
-python-jose[cryptography]
-passlib[bcrypt]
-pybase64
+######################
+# Auth / Security    #
+######################
+Authlib==1.6.5                # OAuth(OIDC) 클라이언트
+httpx==0.28.1                 # OAuth 등 외부 HTTP 호출
+itsdangerous==2.2.0           # 세션/서명 유틸
+python-jose[cryptography]==3.5.0  # JWT 발급/검증
+passlib[bcrypt]==1.7.4        # 비밀번호 해시
+pybase64==1.4.2               # 경량 base64 유틸(선택적)
 
-# Redis & Scheduler
-redis
-aioredis
-apscheduler
+#############################
+# Scheduler / Background    #
+#############################
+APScheduler==3.11.0           # 구독 만료 등 배치 잡 스케줄링
 
-# STT
-faster-whisper==1.2.0
-ctranslate2==4.6.0
-onnxruntime==1.23.0
-numpy==2.3.3
-ffmpeg-python==0.2.0
+###############
+# STT (ASR)   #
+###############
+faster-whisper==1.2.0         # Whisper 추론 (CT2 백엔드)
+ctranslate2==4.6.0            # Faster-Whisper 백엔드
+onnxruntime-gpu==1.23.0       # 일부 모델/옵션에서 ONNX 가속
+numpy==2.3.3                  # 수치 연산
+ffmpeg-python==0.2.0          # ffmpeg 파이썬 래퍼(인코딩 보조)
 
-# VAD
-torch==2.6.0
-torchaudio==2.6.0
-torchvision==0.21.0
-silero-vad==6.0.0
+#########
+# VAD   #
+#########
+torch==2.6.0+cu124            # PyTorch(CUDA 12.4)
+torchaudio==2.6.0+cu124       # 오디오 I/O
+torchvision==0.21.0+cu124     # 일부 metric/의존성에서 참조
+silero-vad==6.0.0             # 무음 감지 VAD
 
-# Summarizer / NLP
-transformers==4.56.2
-huggingface-hub==0.35.1
-tokenizers==0.22.1
-safetensors==0.6.2
-sentencepiece  # (자동 설치 안 될 때를 대비해 명시 추천)
+#########################
+# Diarization (화자분리)#
+#########################
+pyannote.audio==4.0.0         # 화자 분리 파이프라인(토큰 필요)
+soundfile==0.13.1             # WAV/FLAC 읽기 (libsndfile)
+librosa==0.11.0               # 신호처리 보조(필요시)
+soxr==1.0.0                   # 리샘플러(속도/정확도)
 
-# Data handling
-pandas==2.3.2
-python-multipart==0.0.20
-PyYAML==6.0.2
+#########################
+# Summarization / NLP   #
+#########################
+transformers==4.56.2          # T5 한국어 요약 등
+huggingface-hub==0.35.1       # 모델 다운로드
+tokenizers==0.22.1            # 토크나이저 가속
+safetensors==0.6.2            # 안전한 가중치 포맷
+sentencepiece==0.2.1          # T5/BERT류 토크나이저
 
-# Utils
-tqdm==4.67.1
-regex==2025.9.18
-requests==2.32.5
+###############
+# Utilities   #
+###############
+pandas==2.3.2                 # (선택) 데이터 후처리/디버깅
+PyYAML==6.0.2                 # 설정 파일 파싱
+tqdm==4.67.1                  # 진행바
+regex==2025.9.18              # 고급 정규식
+requests==2.32.5              # 간단 HTTP 요청
 pydub
 
-# Testing
-pytest
-
-# Custom (직접 만든 crud 모듈이라면 requirements에 불필요할 수 있음)
-crud
+##############
+# Testing    #
+##############
+pytest==8.4.2                 # 유닛 테스트

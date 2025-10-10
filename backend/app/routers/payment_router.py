@@ -1,3 +1,4 @@
+# routers/payment_router.py
 import os
 import uuid
 import httpx
@@ -5,13 +6,13 @@ import base64
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from backend.app.deps.auth import get_current_user
+from backend.app.model import User
+from backend.app.db import get_db
+from backend.app.model import Subscription, PlanType, Plan, Payment
 from datetime import date, timedelta
-
-from app.deps.auth import get_current_user
-from app.model import User, Plan, Subscription, Payment
-from app.db import get_db
-from app.crud import recording_usage_crud
-from app.crud.payment_crud import (
+from backend.app.crud import recording_usage_crud
+from backend.app.crud.payment_crud import (
     get_payment_today_by_plan,
     get_payment_last_7_days_by_plan,
     get_payment_last_5_weeks_by_plan,
@@ -19,6 +20,8 @@ from app.crud.payment_crud import (
     get_payment_last_5_years_by_plan,
 )
 
+class PaymentRequest(BaseModel):
+    plan: PlanType
 
 router = APIRouter(prefix="/payments", tags=["payments"])
 
@@ -64,6 +67,7 @@ def request_payment(
     }
 
 
+
 # ✅ 2️⃣ 결제 승인 API (토스 결제 완료 후 호출)
 @router.post("/confirm")
 async def confirm_payment(
@@ -73,6 +77,7 @@ async def confirm_payment(
 ):
     # ----- ① 토스 결제 승인 -----
     url = "https://api.tosspayments.com/v1/payments/confirm"
+
     encoded_secret = base64.b64encode(f"{TOSS_SECRET_KEY}:".encode()).decode()
     headers = {"Authorization": f"Basic {encoded_secret}", "Content-Type": "application/json"}
     data = {"paymentKey": req.paymentKey, "orderId": req.orderId, "amount": req.amount}
@@ -96,7 +101,7 @@ async def confirm_payment(
         plan_id=plan.id,
         start_date=date.today(),
         end_date=date.today() + timedelta(days=plan.duration_days),
-        is_active=True,
+        is_active=True
     )
     db.add(new_sub)
     db.commit()

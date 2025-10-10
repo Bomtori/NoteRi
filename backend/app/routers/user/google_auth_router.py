@@ -5,11 +5,11 @@ import os
 from fastapi.responses import RedirectResponse
 from datetime import datetime, UTC
 from starlette.responses import JSONResponse
-from app.deps.auth import get_current_user
-from app.crud.auth_crud import get_or_create_user, generate_login_response
-from app.util.auth import create_access_token
-from app.db import get_db
-from app.model import User
+from backend.app.deps.auth import get_current_user
+from backend.app.crud.auth_crud import get_or_create_user, generate_login_response
+from backend.app.util.auth import create_access_token
+from backend.app.db import get_db
+from backend.app.model import User
 
 router = APIRouter(prefix="/auth/google", tags=["GoogleAuth"])
 

@@ -1,4 +1,5 @@
-# whisper/backend/ml/postprocess/silence_segmenter.py (간단화 버전)
+# backend/ml/postprocess/silence_segmenter.py
+
 from .text_cleaner import TextCleaner
 
 class SilenceSegmenter:

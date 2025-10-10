@@ -114,7 +114,7 @@ def startup_event():
     db = SessionLocal()
     try: seed_plans(db)
     finally: db.close()
-#
+
 # @app.get("/ping")
 # def ping():
 #     return {"message": "pong"}

@@ -115,6 +115,3 @@ def startup_event():
     try: seed_plans(db)
     finally: db.close()
 
-# @app.get("/ping")
-# def ping():
-#     return {"message": "pong"}

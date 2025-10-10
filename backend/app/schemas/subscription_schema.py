@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from datetime import date
-from app.model import PlanType
+from backend.app.model import PlanType
 from typing import Optional
 
 

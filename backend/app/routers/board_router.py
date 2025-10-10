@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
-from app.schemas import board_schema as schemas
-from app.db import get_db
-from app.crud import board_crud as crud
-from app.deps.auth import get_current_user
-from app.model import User
+from backend.app.schemas import board_schema as schemas
+from backend.app.db import get_db
+from backend.app.crud import board_crud as crud
+from backend.app.deps.auth import get_current_user
+from backend.app.model import User
 
 router = APIRouter(prefix="/boards", tags=["boards"])
 

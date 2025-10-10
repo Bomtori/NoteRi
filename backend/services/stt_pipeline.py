@@ -119,12 +119,17 @@ class STTPipeline:
         self.paragraph_buffer = []
         print("🔄 STT Pipeline 상태 초기화 완료")
 
-    def save_raw_audio(self, folder="backend/recordings", filename=None):
+    def save_raw_audio(self, folder=None, filename=None):
         """원본 오디오를 WAV 파일로 저장"""
         if not self.raw_audio_buffer:
             logger.warning("No audio data to save.")
             return None
 
+        # ✅ backend/services 기준으로 recordings 폴더 경로 설정
+        if folder is None:
+            base_dir = os.path.dirname(os.path.abspath(__file__))  # backend/services/
+            folder = os.path.join(base_dir, "..", "recordings")    # backend/recordings
+            folder = os.path.normpath(folder)  # 경로 정규화 (../ 처리)
         os.makedirs(folder, exist_ok=True)
 
         if filename is None:
@@ -146,11 +151,9 @@ class STTPipeline:
 
         logger.info(f"Audio saved at: {filepath} (duration={duration:.2f}s)")
 
-        # ✅ 마지막 저장 파일 경로 & duration 저장
         self.last_saved_file = filepath
         self.last_saved_duration = duration
-
-        # ✅ 저장 후 상태 초기화
         self.reset()
 
         return {"filepath": filepath, "duration": duration}
+

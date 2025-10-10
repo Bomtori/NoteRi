@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.schemas import folder_schema as schemas
-from app.crud import folder_crud as crud
-from app.db import get_db
-from app.schemas.board_schema import BoardResponse
-from app.deps.auth import get_current_user
-from app.model import User  # 타입 힌트용
+from backend.app.schemas import folder_schema as schemas
+from backend.app.crud import folder_crud as crud
+from backend.app.db import get_db
+from backend.app.schemas.board_schema import BoardResponse
+from backend.app.deps.auth import get_current_user
+from backend.app.model import User  # 타입 힌트용
 
 router = APIRouter(prefix="/folders", tags=["folders"])
 

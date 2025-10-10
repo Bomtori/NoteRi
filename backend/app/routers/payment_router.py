@@ -6,10 +6,10 @@ import base64
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.deps.auth import get_current_user
-from app.model import User
-from app.db import get_db
-from app.model import Subscription, PlanType
+from backend.app.deps.auth import get_current_user
+from backend.app.model import User
+from backend.app.db import get_db
+from backend.app.model import Subscription, PlanType
 from datetime import date, timedelta
 
 class PaymentRequest(BaseModel):

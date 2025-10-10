@@ -1,11 +1,11 @@
 # routers/subscription_router.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.db import get_db
-from app.model import Subscription, PlanType, User
-from app.schemas.subscription_schema import SubscriptionResponse, SubscriptionUpdate
-from app.deps.auth import get_current_user
-from app.util.recording_usage import update_recording_usage
+from backend.app.db import get_db
+from backend.app.model import Subscription, PlanType, User
+from backend.app.schemas.subscription_schema import SubscriptionResponse, SubscriptionUpdate
+from backend.app.deps.auth import get_current_user
+from backend.app.util.recording_usage import update_recording_usage
 from datetime import date, timedelta
 
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])

@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from datetime import datetime
-import app.model as model
-import app.schemas.audio_schema as schemas
+import backend.app.model as model
+import backend.app.schemas.audio_schema as schemas
 
 def create_audio(db: Session, audio: schemas.AudioCreate):
     db_audio = model.AudioData(

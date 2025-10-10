@@ -1,11 +1,11 @@
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
-import app.model as model
+import backend.app.model as model
 from datetime import datetime, UTC
-from app.schemas import board_schema as schemas
-from app.crud import memo_crud
-from app.deps.auth import get_current_user
+from backend.app.schemas import board_schema as schemas
+from backend.app.crud import memo_crud
+from backend.app.deps.auth import get_current_user
 
 def create_board(db: Session, user_id: int, board: schemas.BoardCreate):
     new_board = model.Board(

@@ -5,17 +5,17 @@ from dotenv import load_dotenv
 from fastapi.staticfiles import StaticFiles
 from backend.services.stt_pipeline import STTPipeline
 from backend.services.diarization import DiarizationService
-from app.tasks.scheduler import start_scheduler
+from backend.app.tasks.scheduler import start_scheduler
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers.user.google_auth_router import router as google_auth_router  # ✅ login.py에서 라우터 import
-from app.routers.user.kakao_auth_router import router as kakao_auth_router
-from app.routers.user.naver_auth_router import router as naver_auth_router
-from app.routers.user.userInfo_router import router as userinfo_router
-from app.routers import board_router as board_router, folder_router as folder_router, subscription_router as subscription_router
-from app.routers.user.profile_upload_router import router as upload_router
-from app.routers.payment_router import router as subscription_payment_router
-from app.routers.notion_auth_router import router as notion_auth_router
-from app.routers.memo_router import router as memo_router
+from backend.app.routers.user.google_auth_router import router as google_auth_router  # ✅ login.py에서 라우터 import
+from backend.app.routers.user.kakao_auth_router import router as kakao_auth_router
+from backend.app.routers.user.naver_auth_router import router as naver_auth_router
+from backend.app.routers.user.userInfo_router import router as userinfo_router
+from backend.app.routers import board_router as board_router, folder_router as folder_router, subscription_router as subscription_router
+from backend.app.routers.user.profile_upload_router import router as upload_router
+from backend.app.routers.payment_router import router as subscription_payment_router
+from backend.app.routers.notion_auth_router import router as notion_auth_router
+from backend.app.routers.memo_router import router as memo_router
 
 load_dotenv()
 

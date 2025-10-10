@@ -4,10 +4,10 @@ import base64, requests
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
-from app.db import get_db
-from app.model import User
-from app.deps.auth import get_current_user
-import app.crud.notion_crud as crud
+from backend.app.db import get_db
+from backend.app.model import User
+from backend.app.deps.auth import get_current_user
+import backend.app.crud.notion_crud as crud
 import logging
 logger = logging.getLogger("uvicorn")
 

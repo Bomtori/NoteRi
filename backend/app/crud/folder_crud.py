@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
-from app import model
-from app.schemas import folder_schema as schemas
+from backend.app import model
+from backend.app.schemas import folder_schema as schemas
 
 
 # Create

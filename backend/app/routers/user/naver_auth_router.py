@@ -4,11 +4,11 @@ from authlib.integrations.starlette_client import OAuth
 import os
 from datetime import datetime, UTC
 from starlette.responses import JSONResponse
-from app.deps.auth import get_current_user
-from app.crud.auth_crud import get_or_create_user, generate_login_response
-from app.db import get_db
-from app.util.auth import create_access_token
-from app.model import User
+from backend.app.deps.auth import get_current_user
+from backend.app.crud.auth_crud import get_or_create_user, generate_login_response
+from backend.app.db import get_db
+from backend.app.util.auth import create_access_token
+from backend.app.model import User
 router = APIRouter(prefix="/auth/naver", tags=["NaverAuth"])
 
 oauth = OAuth()

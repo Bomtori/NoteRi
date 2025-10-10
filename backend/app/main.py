@@ -1,3 +1,5 @@
+# backend/app/main.py
+
 from fastapi import FastAPI, WebSocket, Query
 from starlette.middleware.sessions import SessionMiddleware
 import os

@@ -2,7 +2,7 @@
 from datetime import date, timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from app.model import Payment, Subscription, Plan, PlanType
+from backend.app.model import Payment, Subscription, Plan, PlanType
 
 def _bucket_range(g, start, end):
     if g=="day":

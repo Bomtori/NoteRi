@@ -1,0 +1,132 @@
+Index: .idea/workspace.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<project version=\"4\">\r\n  <component name=\"AutoImportSettings\">\r\n    <option name=\"autoReloadType\" value=\"SELECTIVE\" />\r\n  </component>\r\n  <component name=\"ChangeListManager\">\r\n    <list default=\"true\" id=\"9bbd2504-1dd4-4b0d-b983-f99e21f1d35a\" name=\"변경\" comment=\"git 합치기\">\r\n      <change beforePath=\"$PROJECT_DIR$/.idea/workspace.xml\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/.idea/workspace.xml\" afterDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/backend/app/crud/audio_crud.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/backend/app/crud/audio_crud.py\" afterDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/backend/app/main.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/backend/app/main.py\" afterDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/backend/app/model.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/backend/app/model.py\" afterDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/backend/app/routers/audio_router.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/backend/app/routers/audio_router.py\" afterDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/backend/app/routers/payment_router.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/backend/app/routers/payment_router.py\" afterDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/backend/app/routers/subscription_router.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/backend/app/routers/subscription_router.py\" afterDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/backend/app/routers/user/userInfo_router.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/backend/app/routers/user/userInfo_router.py\" afterDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/backend/app/schemas/subscription_schema.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/backend/app/schemas/subscription_schema.py\" afterDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/backend/app/schemas/user_schema.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/backend/app/schemas/user_schema.py\" afterDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/backend/requirement.txt\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/backend/requirement.txt\" afterDir=\"false\" />\r\n    </list>\r\n    <option name=\"SHOW_DIALOG\" value=\"false\" />\r\n    <option name=\"HIGHLIGHT_CONFLICTS\" value=\"true\" />\r\n    <option name=\"HIGHLIGHT_NON_ACTIVE_CHANGELIST\" value=\"false\" />\r\n    <option name=\"LAST_RESOLUTION\" value=\"IGNORE\" />\r\n  </component>\r\n  <component name=\"Git.Settings\">\r\n    <option name=\"RECENT_GIT_ROOT_PATH\" value=\"$PROJECT_DIR$\" />\r\n  </component>\r\n  <component name=\"GitHubPullRequestSearchHistory\">{\r\n  &quot;lastFilter&quot;: {\r\n    &quot;state&quot;: &quot;OPEN&quot;,\r\n    &quot;assignee&quot;: &quot;dkel4578&quot;\r\n  }\r\n}</component>\r\n  <component name=\"GithubPullRequestsUISettings\">{\r\n  &quot;selectedUrlAndAccountId&quot;: {\r\n    &quot;url&quot;: &quot;https://github.com/dkel4578/noteleeProject.git&quot;,\r\n    &quot;accountId&quot;: &quot;2d77e22c-ef68-4621-a973-c089c4b02b0f&quot;\r\n  }\r\n}</component>\r\n  <component name=\"ProjectColorInfo\">{\r\n  &quot;associatedIndex&quot;: 4\r\n}</component>\r\n  <component name=\"ProjectId\" id=\"33OgWmUBh7ASpd6dMOWJXzAgylD\" />\r\n  <component name=\"ProjectLevelVcsManager\">\r\n    <ConfirmationsSetting value=\"2\" id=\"Add\" />\r\n  </component>\r\n  <component name=\"ProjectViewState\">\r\n    <option name=\"hideEmptyMiddlePackages\" value=\"true\" />\r\n    <option name=\"showLibraryContents\" value=\"true\" />\r\n  </component>\r\n  <component name=\"PropertiesComponent\">{\r\n  &quot;keyToString&quot;: {\r\n    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,\r\n    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,\r\n    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,\r\n    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,\r\n    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,\r\n    &quot;git-widget-placeholder&quot;: &quot;main&quot;,\r\n    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,\r\n    &quot;last_opened_file_path&quot;: &quot;C:/Users/tj/Desktop/advancedProject/noteleeProject&quot;,\r\n    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,\r\n    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,\r\n    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,\r\n    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,\r\n    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,\r\n    &quot;project.structure.last.edited&quot;: &quot;모듈&quot;,\r\n    &quot;project.structure.proportion&quot;: &quot;0.0&quot;,\r\n    &quot;project.structure.side.proportion&quot;: &quot;0.0&quot;,\r\n    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.lookFeel&quot;,\r\n    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;\r\n  }\r\n}</component>\r\n  <component name=\"RecentsManager\">\r\n    <key name=\"MoveFile.RECENT_KEYS\">\r\n      <recent name=\"C:\\Users\\tj\\Desktop\\advancedProject\\noteleeProject\\backend\" />\r\n      <recent name=\"C:\\Users\\tj\\Desktop\\advancedProject\\noteleeProject\" />\r\n    </key>\r\n  </component>\r\n  <component name=\"SharedIndexes\">\r\n    <attachedChunks>\r\n      <set>\r\n        <option value=\"bundled-jdk-9823dce3aa75-bf35d07a577b-intellij.indexing.shared.core-IU-252.23892.409\" />\r\n        <option value=\"bundled-js-predefined-d6986cc7102b-e03c56caf84a-JavaScript-IU-252.23892.409\" />\r\n      </set>\r\n    </attachedChunks>\r\n  </component>\r\n  <component name=\"TaskManager\">\r\n    <task active=\"true\" id=\"Default\" summary=\"디폴트 작업\">\r\n      <changelist id=\"9bbd2504-1dd4-4b0d-b983-f99e21f1d35a\" name=\"변경\" comment=\"\" />\r\n      <created>1759193566624</created>\r\n      <option name=\"number\" value=\"Default\" />\r\n      <option name=\"presentableId\" value=\"Default\" />\r\n      <updated>1759193566624</updated>\r\n      <workItem from=\"1759193581537\" duration=\"88000\" />\r\n      <workItem from=\"1759280540975\" duration=\"4508000\" />\r\n      <workItem from=\"1759367107784\" duration=\"3449000\" />\r\n      <workItem from=\"1759394344590\" duration=\"885000\" />\r\n      <workItem from=\"1760074171451\" duration=\"517000\" />\r\n    </task>\r\n    <task id=\"LOCAL-00001\" summary=\"commit\">\r\n      <option name=\"closed\" value=\"true\" />\r\n      <created>1759279962625</created>\r\n      <option name=\"number\" value=\"00001\" />\r\n      <option name=\"presentableId\" value=\"LOCAL-00001\" />\r\n      <option name=\"project\" value=\"LOCAL\" />\r\n      <updated>1759279962625</updated>\r\n    </task>\r\n    <task id=\"LOCAL-00002\" summary=\"folder 구조 변경\">\r\n      <option name=\"closed\" value=\"true\" />\r\n      <created>1759283809035</created>\r\n      <option name=\"number\" value=\"00002\" />\r\n      <option name=\"presentableId\" value=\"LOCAL-00002\" />\r\n      <option name=\"project\" value=\"LOCAL\" />\r\n      <updated>1759283809035</updated>\r\n    </task>\r\n    <task id=\"LOCAL-00003\" summary=\"folder 구조 변경\">\r\n      <option name=\"closed\" value=\"true\" />\r\n      <created>1759283895074</created>\r\n      <option name=\"number\" value=\"00003\" />\r\n      <option name=\"presentableId\" value=\"LOCAL-00003\" />\r\n      <option name=\"project\" value=\"LOCAL\" />\r\n      <updated>1759283895074</updated>\r\n    </task>\r\n    <task id=\"LOCAL-00004\" summary=\"folder 구조 변경\">\r\n      <option name=\"closed\" value=\"true\" />\r\n      <created>1759283919320</created>\r\n      <option name=\"number\" value=\"00004\" />\r\n      <option name=\"presentableId\" value=\"LOCAL-00004\" />\r\n      <option name=\"project\" value=\"LOCAL\" />\r\n      <updated>1759283919320</updated>\r\n    </task>\r\n    <task id=\"LOCAL-00005\" summary=\"folder 오류 수정\">\r\n      <option name=\"closed\" value=\"true\" />\r\n      <created>1759309919999</created>\r\n      <option name=\"number\" value=\"00005\" />\r\n      <option name=\"presentableId\" value=\"LOCAL-00005\" />\r\n      <option name=\"project\" value=\"LOCAL\" />\r\n      <updated>1759309919999</updated>\r\n    </task>\r\n    <task id=\"LOCAL-00006\" summary=\"user get 수정\">\r\n      <option name=\"closed\" value=\"true\" />\r\n      <created>1759367189291</created>\r\n      <option name=\"number\" value=\"00006\" />\r\n      <option name=\"presentableId\" value=\"LOCAL-00006\" />\r\n      <option name=\"project\" value=\"LOCAL\" />\r\n      <updated>1759367189291</updated>\r\n    </task>\r\n    <task id=\"LOCAL-00007\" summary=\"user logout 추가\">\r\n      <option name=\"closed\" value=\"true\" />\r\n      <created>1759372083878</created>\r\n      <option name=\"number\" value=\"00007\" />\r\n      <option name=\"presentableId\" value=\"LOCAL-00007\" />\r\n      <option name=\"project\" value=\"LOCAL\" />\r\n      <updated>1759372083878</updated>\r\n    </task>\r\n    <task id=\"LOCAL-00008\" summary=\"git 합치기\">\r\n      <option name=\"closed\" value=\"true\" />\r\n      <created>1759395113117</created>\r\n      <option name=\"number\" value=\"00008\" />\r\n      <option name=\"presentableId\" value=\"LOCAL-00008\" />\r\n      <option name=\"project\" value=\"LOCAL\" />\r\n      <updated>1759395113117</updated>\r\n    </task>\r\n    <option name=\"localTasksCounter\" value=\"9\" />\r\n    <servers />\r\n  </component>\r\n  <component name=\"TypeScriptGeneratedFilesManager\">\r\n    <option name=\"version\" value=\"3\" />\r\n  </component>\r\n  <component name=\"Vcs.Log.Tabs.Properties\">\r\n    <option name=\"TAB_STATES\">\r\n      <map>\r\n        <entry key=\"MAIN\">\r\n          <value>\r\n            <State />\r\n          </value>\r\n        </entry>\r\n      </map>\r\n    </option>\r\n  </component>\r\n  <component name=\"VcsManagerConfiguration\">\r\n    <MESSAGE value=\"commit\" />\r\n    <MESSAGE value=\"folder 구조 변경\" />\r\n    <MESSAGE value=\"folder 오류 수정\" />\r\n    <MESSAGE value=\"user get 수정\" />\r\n    <MESSAGE value=\"user logout 추가\" />\r\n    <MESSAGE value=\"git 합치기\" />\r\n    <option name=\"LAST_COMMIT_MESSAGE\" value=\"git 합치기\" />\r\n  </component>\r\n</project>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/workspace.xml b/.idea/workspace.xml
+--- a/.idea/workspace.xml	(revision 77d5a137830cb8f9ab2898ed40a9d6e080ff26bd)
++++ b/.idea/workspace.xml	(date 1760076502617)
+@@ -4,18 +4,8 @@
+     <option name="autoReloadType" value="SELECTIVE" />
+   </component>
+   <component name="ChangeListManager">
+-    <list default="true" id="9bbd2504-1dd4-4b0d-b983-f99e21f1d35a" name="변경" comment="git 합치기">
++    <list default="true" id="9bbd2504-1dd4-4b0d-b983-f99e21f1d35a" name="변경" comment="model 변경 (plan, payment)">
+       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/backend/app/crud/audio_crud.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/crud/audio_crud.py" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/backend/app/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/main.py" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/backend/app/model.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/model.py" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/backend/app/routers/audio_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/audio_router.py" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/backend/app/routers/payment_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/payment_router.py" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/backend/app/routers/subscription_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/subscription_router.py" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/backend/app/routers/user/userInfo_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/user/userInfo_router.py" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/backend/app/schemas/subscription_schema.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/schemas/subscription_schema.py" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/backend/app/schemas/user_schema.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/schemas/user_schema.py" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/backend/requirement.txt" beforeDir="false" afterPath="$PROJECT_DIR$/backend/requirement.txt" afterDir="false" />
+     </list>
+     <option name="SHOW_DIALOG" value="false" />
+     <option name="HIGHLIGHT_CONFLICTS" value="true" />
+@@ -48,28 +38,28 @@
+     <option name="hideEmptyMiddlePackages" value="true" />
+     <option name="showLibraryContents" value="true" />
+   </component>
+-  <component name="PropertiesComponent">{
+-  &quot;keyToString&quot;: {
+-    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+-    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+-    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+-    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
+-    &quot;last_opened_file_path&quot;: &quot;C:/Users/tj/Desktop/advancedProject/noteleeProject&quot;,
+-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+-    &quot;project.structure.last.edited&quot;: &quot;모듈&quot;,
+-    &quot;project.structure.proportion&quot;: &quot;0.0&quot;,
+-    &quot;project.structure.side.proportion&quot;: &quot;0.0&quot;,
+-    &quot;settings.editor.selected.configurable&quot;: &quot;preferences.lookFeel&quot;,
+-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
++  <component name="PropertiesComponent"><![CDATA[{
++  "keyToString": {
++    "ModuleVcsDetector.initialDetectionPerformed": "true",
++    "RunOnceActivity.ShowReadmeOnStart": "true",
++    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
++    "RunOnceActivity.git.unshallow": "true",
++    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
++    "git-widget-placeholder": "main",
++    "kotlin-language-version-configured": "true",
++    "last_opened_file_path": "C:/Users/tj/Desktop/advancedProject/noteleeProject",
++    "node.js.detected.package.eslint": "true",
++    "node.js.detected.package.tslint": "true",
++    "node.js.selected.package.eslint": "(autodetect)",
++    "node.js.selected.package.tslint": "(autodetect)",
++    "nodejs_package_manager_path": "npm",
++    "project.structure.last.edited": "모듈",
++    "project.structure.proportion": "0.0",
++    "project.structure.side.proportion": "0.0",
++    "settings.editor.selected.configurable": "preferences.pluginManager",
++    "vue.rearranger.settings.migration": "true"
+   }
+-}</component>
++}]]></component>
+   <component name="RecentsManager">
+     <key name="MoveFile.RECENT_KEYS">
+       <recent name="C:\Users\tj\Desktop\advancedProject\noteleeProject\backend" />
+@@ -96,6 +86,8 @@
+       <workItem from="1759367107784" duration="3449000" />
+       <workItem from="1759394344590" duration="885000" />
+       <workItem from="1760074171451" duration="517000" />
++      <workItem from="1760075122627" duration="882000" />
++      <workItem from="1760076177236" duration="320000" />
+     </task>
+     <task id="LOCAL-00001" summary="commit">
+       <option name="closed" value="true" />
+@@ -161,12 +153,31 @@
+       <option name="project" value="LOCAL" />
+       <updated>1759395113117</updated>
+     </task>
+-    <option name="localTasksCounter" value="9" />
++    <task id="LOCAL-00009" summary="model 변경 (plan, payment)">
++      <option name="closed" value="true" />
++      <created>1760075411201</created>
++      <option name="number" value="00009" />
++      <option name="presentableId" value="LOCAL-00009" />
++      <option name="project" value="LOCAL" />
++      <updated>1760075411201</updated>
++    </task>
++    <task id="LOCAL-00010" summary="model 변경 (plan, payment)">
++      <option name="closed" value="true" />
++      <created>1760075415842</created>
++      <option name="number" value="00010" />
++      <option name="presentableId" value="LOCAL-00010" />
++      <option name="project" value="LOCAL" />
++      <updated>1760075415842</updated>
++    </task>
++    <option name="localTasksCounter" value="11" />
+     <servers />
+   </component>
+   <component name="TypeScriptGeneratedFilesManager">
+     <option name="version" value="3" />
+   </component>
++  <component name="UnknownFeatures">
++    <option featureType="com.intellij.fileTypeFactory" implementationName="*.py" />
++  </component>
+   <component name="Vcs.Log.Tabs.Properties">
+     <option name="TAB_STATES">
+       <map>
+@@ -185,6 +196,7 @@
+     <MESSAGE value="user get 수정" />
+     <MESSAGE value="user logout 추가" />
+     <MESSAGE value="git 합치기" />
+-    <option name="LAST_COMMIT_MESSAGE" value="git 합치기" />
++    <MESSAGE value="model 변경 (plan, payment)" />
++    <option name="LAST_COMMIT_MESSAGE" value="model 변경 (plan, payment)" />
+   </component>
+ </project>
+\ No newline at end of file

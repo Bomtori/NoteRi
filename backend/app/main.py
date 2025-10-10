@@ -7,8 +7,8 @@ from services.stt_pipeline import STTPipeline
 from services.diarization import DiarizationService
 from app.tasks.scheduler import start_scheduler
 from fastapi.middleware.cors import CORSMiddleware
-from app.db import get_db, SessionLocal
-from app.seed.paln_seed import seed_plans
+from db import get_db, SessionLocal
+from seed.paln_seed import seed_plans
 from app.routers.user.google_auth_router import router as google_auth_router  # ✅ login.py에서 라우터 import
 from app.routers.user.kakao_auth_router import router as kakao_auth_router
 from app.routers.user.naver_auth_router import router as naver_auth_router

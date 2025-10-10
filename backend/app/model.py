@@ -1,6 +1,6 @@
 from sqlalchemy import (
     Column, Integer, String, Date, Text, Boolean,
-    ForeignKey, Enum, Float, JSON, TIMESTAMP
+    ForeignKey, Enum, Float, JSON, TIMESTAMP, Numeric
 )
 from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy.sql import func
@@ -22,6 +22,9 @@ class RecordingType(enum.Enum):
     saved = "saved"
 
 
+
+
+
 # Users
 class User(Base):
     __tablename__ = "users"
@@ -39,27 +42,67 @@ class User(Base):
     updated_at = Column(TIMESTAMP)
 
     subscriptions = relationship("Subscription", back_populates="user")
+    payments = relationship("Payment", back_populates="user")
     boards = relationship("Board", back_populates="owner")
     memos = relationship("Memo", back_populates="user")
     folders = relationship("Folder", back_populates="owner")
     notifications = relationship("Notification", back_populates="user")
     recording_usage = relationship("RecordingUsage", back_populates="user")
 
-# Subscriptions
 class Subscription(Base):
     __tablename__ = "subscriptions"
 
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    plan = Column(Enum(PlanType), nullable=False, default=PlanType.free)
+    plan_id = Column(Integer, ForeignKey("plans.id", ondelete="SET NULL"))
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=True)
     is_active = Column(Boolean, default=True)
-    payment_info = Column(JSON)
-    created_at = Column(TIMESTAMP)
+    created_at = Column(TIMESTAMP, server_default=func.now())
 
-    recording_usage = relationship("RecordingUsage", back_populates="subscription")
     user = relationship("User", back_populates="subscriptions")
+    plan = relationship("Plan", back_populates="subscriptions")
+    recording_usage = relationship("RecordingUsage", back_populates="subscription")
+    payments = relationship("Payment", back_populates="subscription", cascade="all, delete")
+
+
+# ✅ 플랜 정보 (가격, 시간 등)
+class Plan(Base):
+    __tablename__ = "plans"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(Enum(PlanType), unique=True, nullable=False)  # free, pro, enterprise
+    price = Column(Numeric(10, 2), nullable=False, default=0.00)  # ex) 0, 10000, 30000
+    duration_days = Column(Integer, nullable=False, default=30)   # 구독 기간 (ex. 30일)
+    allocated_minutes = Column(Integer, nullable=False, default=300)  # 녹음 시간
+    description = Column(Text)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP, onupdate=func.now())
+
+    subscriptions = relationship("Subscription", back_populates="plan", cascade="all, delete")
+
+# ✅ 결제 내역 (토스페이먼츠 대응)
+class Payment(Base):
+    __tablename__ = "payments"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    subscription_id = Column(Integer, ForeignKey("subscriptions.id", ondelete="CASCADE"), nullable=True)
+
+    order_id = Column(String, unique=True, nullable=False)  # 토스에서 생성한 주문 ID
+    amount = Column(Numeric(10, 2), nullable=False)
+    method = Column(String)  # 카드, 계좌이체 등
+    status = Column(String, nullable=False)  # SUCCESS, FAIL, PENDING 등
+    transaction_key = Column(String, unique=True)  # 토스 트랜잭션 키
+    approved_at = Column(TIMESTAMP)  # 결제 승인 시간
+    canceled_at = Column(TIMESTAMP)
+    fail_reason = Column(Text)
+    raw_response = Column(JSON)  # 전체 응답 JSON 보관
+
+    created_at = Column(TIMESTAMP, server_default=func.now())
+
+    user = relationship("User", back_populates="payments")
+    subscription = relationship("Subscription", back_populates="payments")
 
 # 구독 기간 중 녹음 시간
 class RecordingUsage(Base):

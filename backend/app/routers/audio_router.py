@@ -5,41 +5,33 @@ from app.schemas import audio_schema as schemas
 from app.db import get_db
 from app.crud import audio_crud as crud
 
-router = APIRouter()
+router = APIRouter(prefix="/audio", tags=["audio"])
 UPLOAD_DIR = "static/audio"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 BASE_URL = os.getenv("APP_BASE_URL", "http://127.0.0.1:8001")
 ALLOWED_EXTENSIONS = {".mp3", ".wav", ".m4a"}
 
+# app/routers/audio_router.py
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from app.db import get_db
+from app.crud.audio_crud import import_audio_files
 
-@router.post("/audio/upload", response_model=schemas.AudioResponse)
-async def upload_audio(
+@router.post("/import/{board_id}")
+def import_audio_from_folder(
     board_id: int,
-    file: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
-    # 확장자 체크
-    ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail="Only mp3, wav, m4a files are allowed.")
+    """
+    이미 존재하는 오디오 폴더의 파일들을 스캔하여 DB에 등록
+    """
+    try:
+        count = import_audio_files(db, board_id)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
-    # 파일명 unique 처리
-    new_filename = f"{uuid.uuid4().hex}{ext}"
-    file_path = os.path.join("audio", new_filename)  # 상대 경로 저장 / DB
-    save_path = os.path.join(UPLOAD_DIR, new_filename) # 절대 경로 저장 / 실제 저장 경로
+    return {"message": f"{count}개의 오디오 파일이 DB에 등록되었습니다."}
 
-    with open(save_path, "wb") as f:
-        content = await file.read()
-        f.write(content)
-
-    # DB 저장
-    audio_in = schemas.AudioCreate(board_id=board_id, file_path=file_path)
-    audio = crud.create_audio(db, audio_in)
-
-    return {
-        "url" : f"{BASE_URL}{save_path}",
-        "path" : file_path
-    }
 
 # ✅ 특정 오디오 조회
 @router.get("/{audio_id}", response_model=schemas.AudioResponse)

@@ -4,14 +4,17 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="9bbd2504-1dd4-4b0d-b983-f99e21f1d35a" name="변경" comment="user logout 추가">
-      <change afterPath="$PROJECT_DIR$/Start-Service ssh-agent" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/Start-Service ssh-agent.pub" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/backend/config.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/whisper.iml" afterDir="false" />
+    <list default="true" id="9bbd2504-1dd4-4b0d-b983-f99e21f1d35a" name="변경" comment="git 합치기">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/crud/audio_crud.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/crud/audio_crud.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/app/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/routers/user/naver_auth_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/user/naver_auth_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/model.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/model.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/routers/audio_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/audio_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/routers/payment_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/payment_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/routers/subscription_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/subscription_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/routers/user/userInfo_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/user/userInfo_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/schemas/subscription_schema.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/schemas/subscription_schema.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/schemas/user_schema.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/schemas/user_schema.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/requirement.txt" beforeDir="false" afterPath="$PROJECT_DIR$/backend/requirement.txt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -91,7 +94,8 @@
       <workItem from="1759193581537" duration="88000" />
       <workItem from="1759280540975" duration="4508000" />
       <workItem from="1759367107784" duration="3449000" />
-      <workItem from="1759394344590" duration="569000" />
+      <workItem from="1759394344590" duration="885000" />
+      <workItem from="1760074171451" duration="517000" />
     </task>
     <task id="LOCAL-00001" summary="commit">
       <option name="closed" value="true" />
@@ -149,7 +153,15 @@
       <option name="project" value="LOCAL" />
       <updated>1759372083878</updated>
     </task>
-    <option name="localTasksCounter" value="8" />
+    <task id="LOCAL-00008" summary="git 합치기">
+      <option name="closed" value="true" />
+      <created>1759395113117</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1759395113117</updated>
+    </task>
+    <option name="localTasksCounter" value="9" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -172,6 +184,7 @@
     <MESSAGE value="folder 오류 수정" />
     <MESSAGE value="user get 수정" />
     <MESSAGE value="user logout 추가" />
-    <option name="LAST_COMMIT_MESSAGE" value="user logout 추가" />
+    <MESSAGE value="git 합치기" />
+    <option name="LAST_COMMIT_MESSAGE" value="git 합치기" />
   </component>
 </project>

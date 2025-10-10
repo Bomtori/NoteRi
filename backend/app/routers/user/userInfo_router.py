@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from datetime import datetime, UTC
 
+
 from app.deps.auth import get_current_user
 from app.model import User
 from app.db import get_db
@@ -66,9 +67,8 @@ async def delete_user(
         db.delete(board)
     db.commit()
 
-
-
     return {"message": "User deactivated"}
 
 UPLOAD_DIR = "static/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+

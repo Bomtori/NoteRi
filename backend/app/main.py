@@ -3,10 +3,12 @@ from starlette.middleware.sessions import SessionMiddleware
 import os
 from dotenv import load_dotenv
 from fastapi.staticfiles import StaticFiles
-from backend.services.stt_pipeline import STTPipeline
-from backend.services.diarization import DiarizationService
+from services.stt_pipeline import STTPipeline
+from services.diarization import DiarizationService
 from app.tasks.scheduler import start_scheduler
 from fastapi.middleware.cors import CORSMiddleware
+from app.db import get_db, SessionLocal
+from app.seed.paln_seed import seed_plans
 from app.routers.user.google_auth_router import router as google_auth_router  # ✅ login.py에서 라우터 import
 from app.routers.user.kakao_auth_router import router as kakao_auth_router
 from app.routers.user.naver_auth_router import router as naver_auth_router
@@ -16,6 +18,8 @@ from app.routers.user.profile_upload_router import router as upload_router
 from app.routers.payment_router import router as subscription_payment_router
 from app.routers.notion_auth_router import router as notion_auth_router
 from app.routers.memo_router import router as memo_router
+from app.routers.audio_router import router as audio_router
+from app.routers.user.user_router import router as user_router
 
 load_dotenv()
 
@@ -29,6 +33,7 @@ app.include_router(google_auth_router, prefix="", tags=["auth"])
 app.include_router(kakao_auth_router, prefix="", tags=["auth"])
 app.include_router(naver_auth_router, prefix="", tags=["auth"])
 app.include_router(userinfo_router, prefix="", tags=["users"])
+app.include_router(user_router)
 app.include_router(board_router.router)
 app.include_router(upload_router, prefix="", tags=["upload"])
 app.include_router(folder_router.router)
@@ -36,6 +41,7 @@ app.include_router(subscription_router.router)
 app.include_router(subscription_payment_router)
 app.include_router(notion_auth_router)
 app.include_router(memo_router)
+app.include_router(audio_router)
 
 # static 디렉토리 생성 후 mount
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -105,6 +111,9 @@ async def root():
 @app.on_event("startup")
 def startup_event():
     start_scheduler()
+    db = SessionLocal()
+    try: seed_plans(db)
+    finally: db.close()
 #
 # @app.get("/ping")
 # def ping():

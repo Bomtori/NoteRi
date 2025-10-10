@@ -115,3 +115,4 @@ def startup_event():
     try: seed_plans(db)
     finally: db.close()
 
+print("hello")

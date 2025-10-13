@@ -13,6 +13,7 @@ class UserResponse(BaseModel):
     name: Optional[str] = None
     nickname: Optional[str] = None
     picture: Optional[str] = None
+    oauth_provider: Optional[str] = None
     is_active: bool
     created_at: datetime
     updated_at: datetime

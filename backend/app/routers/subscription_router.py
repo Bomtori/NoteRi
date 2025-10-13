@@ -1,8 +1,9 @@
 # routers/subscription_router.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from typing import List
 from backend.app.db import get_db
-from backend.app.model import Subscription, PlanType, User
+from backend.app.model import Subscription, Plan, User
 from backend.app.schemas.subscription_schema import SubscriptionResponse, SubscriptionUpdate
 from backend.app.deps.auth import get_current_user
 from backend.app.util.recording_usage import update_recording_usage
@@ -10,49 +11,60 @@ from datetime import date, timedelta
 
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 
-# 구독 생성 쓸 곳 없음
-# @router.post("/", response_model=SubscriptionResponse)
-# def create_subscription(
-#     sub: SubscriptionCreate,
-#     db: Session = Depends(get_db),
-#     current_user: User = Depends(get_current_user)
-# ):
-#     new_sub = Subscription(
-#         user_id=current_user.id,
-#         plan=sub.plan,
-#         start_date=sub.start_date,
-#         end_date=sub.end_date
-#     )
-#     db.add(new_sub)
-#     db.commit()
-#     db.refresh(new_sub)
-#     return new_sub
 
-# 구독 목록 조회
-@router.get("/", response_model=list[SubscriptionResponse])
+# ✅ 구독 목록 조회
+@router.get("/", response_model=List[SubscriptionResponse])
 def list_subscriptions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return db.query(Subscription).filter(Subscription.user_id == current_user.id).all()
+    subs = (
+        db.query(Subscription)
+        .filter(Subscription.user_id == current_user.id)
+        .all()
+    )
+    return [
+        SubscriptionResponse(
+            id=s.id,
+            user_id=s.user_id,
+            plan_name=s.plan.name if s.plan else "unknown",
+            start_date=s.start_date,
+            end_date=s.end_date,
+            is_active=s.is_active,
+        )
+        for s in subs
+    ]
 
 
-# 구독 단건 조회
+# ✅ 구독 단건 조회
 @router.get("/{sub_id}", response_model=SubscriptionResponse)
 def get_subscription(
     sub_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    sub = db.query(Subscription).filter(
-        Subscription.id == sub_id,
-        Subscription.user_id == current_user.id
-    ).first()
+    sub = (
+        db.query(Subscription)
+        .filter(
+            Subscription.id == sub_id,
+            Subscription.user_id == current_user.id
+        )
+        .first()
+    )
     if not sub:
         raise HTTPException(status_code=404, detail="Subscription not found")
-    return sub
 
-# 구독 수정
+    return SubscriptionResponse(
+        id=sub.id,
+        user_id=sub.user_id,
+        plan_name=sub.plan.name if sub.plan else "unknown",
+        start_date=sub.start_date,
+        end_date=sub.end_date,
+        is_active=sub.is_active,
+    )
+
+
+# ✅ 구독 수정
 @router.patch("/{sub_id}", response_model=SubscriptionResponse)
 def update_subscription(
     sub_id: int,
@@ -60,67 +72,81 @@ def update_subscription(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    sub = db.query(Subscription).filter(
-        Subscription.id == sub_id,
-        Subscription.user_id == current_user.id
-    ).first()
+    sub = (
+        db.query(Subscription)
+        .filter(
+            Subscription.id == sub_id,
+            Subscription.user_id == current_user.id
+        )
+        .first()
+    )
     if not sub:
         raise HTTPException(status_code=404, detail="Subscription not found")
 
-    # 업데이트 가능한 필드만 적용
     update_data = update.dict(exclude_unset=True)
-    for field, value in update_data.items():
-        if field in {"payment_info", "user_id", "created_at"}:
-            continue
-        setattr(sub, field, value)
 
-    # ✅ 플랜 변경 시 30일 새 기간 부여
-    if "plan" in update_data:
+    # 플랜 변경 시 새 기간 및 plan_id 갱신
+    if "plan_name" in update_data:
+        new_plan = db.query(Plan).filter(Plan.name == update_data["plan_name"]).first()
+        if not new_plan:
+            raise HTTPException(status_code=404, detail="Invalid plan selected")
+
+        sub.plan_id = new_plan.id
         sub.start_date = date.today()
-        if sub.plan == PlanType.free:
-            sub.end_date = None  # ✅ free는 무제한
-        else:
-            sub.end_date = date.today() + timedelta(days=30)
+        sub.end_date = date.today() + timedelta(days=new_plan.duration_days)
 
-        # ✅ 녹음 사용량 갱신
-        update_recording_usage(db, current_user.id, sub)
+    # 활성 상태 변경
+    if "is_active" in update_data:
+        sub.is_active = update_data["is_active"]
 
     db.commit()
     db.refresh(sub)
-    return sub
 
-# 구독 취소
+    return SubscriptionResponse(
+        id=sub.id,
+        user_id=sub.user_id,
+        plan_name=sub.plan.name if sub.plan else "unknown",
+        start_date=sub.start_date,
+        end_date=sub.end_date,
+        is_active=sub.is_active,
+    )
+
+
+# ✅ 구독 취소
 @router.patch("/{sub_id}/cancel", response_model=SubscriptionResponse)
 def cancel_subscription(
     sub_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    sub = db.query(Subscription).filter(
-        Subscription.id == sub_id,
-        Subscription.user_id == current_user.id
-    ).first()
+    sub = (
+        db.query(Subscription)
+        .filter(
+            Subscription.id == sub_id,
+            Subscription.user_id == current_user.id
+        )
+        .first()
+    )
     if not sub:
         raise HTTPException(status_code=404, detail="Subscription not found")
 
     if not sub.is_active:
-        return {"message": "Already cancelled or expired", "subscription": sub}
+        raise HTTPException(status_code=400, detail="Subscription already inactive")
 
-    # ✅ 자동 갱신만 끊고 end_date까지는 유효
+    # ✅ 자동 갱신만 끊고, end_date까지는 유지
     sub.is_active = False
     db.commit()
     db.refresh(sub)
 
-    return {
-        "message": f"Subscription will remain active until {sub.end_date}, but won't renew afterwards.",
-        "subscription": sub
-    }
+    return SubscriptionResponse(
+        id=sub.id,
+        user_id=sub.user_id,
+        plan_name=sub.plan.name if sub.plan else "unknown",
+        start_date=sub.start_date,
+        end_date=sub.end_date,
+        is_active=sub.is_active,
+    )
 
-    # today = date.today()
-    # valid_subscription = (
-    #                              sub.is_active is True and sub.end_date >= today
-    #                      ) or (
-    #                              sub.is_active is False and sub.end_date >= today
-    #                      )
-    # 서비스 접근 시 체크 로직
-
+@router.get("/count/plan")
+def get_count_by_plan(db: Session = Depends(get_db)):
+    return subscription_crud.get_subscription_count_by_plan(db)

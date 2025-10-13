@@ -1,5 +1,3 @@
-# backend/app/main.py
-
 from fastapi import FastAPI, WebSocket, Query
 from starlette.middleware.sessions import SessionMiddleware
 import os
@@ -9,6 +7,8 @@ from backend.services.stt_pipeline import STTPipeline
 from backend.services.diarization import DiarizationService
 from backend.app.tasks.scheduler import start_scheduler
 from fastapi.middleware.cors import CORSMiddleware
+from backend.app.db import get_db, SessionLocal
+from backend.app.seed.paln_seed import seed_plans
 from backend.app.routers.user.google_auth_router import router as google_auth_router  # ✅ login.py에서 라우터 import
 from backend.app.routers.user.kakao_auth_router import router as kakao_auth_router
 from backend.app.routers.user.naver_auth_router import router as naver_auth_router
@@ -18,6 +18,8 @@ from backend.app.routers.user.profile_upload_router import router as upload_rout
 from backend.app.routers.payment_router import router as subscription_payment_router
 from backend.app.routers.notion_auth_router import router as notion_auth_router
 from backend.app.routers.memo_router import router as memo_router
+from backend.app.routers.audio_router import router as audio_router
+from backend.app.routers.user.user_router import router as user_router
 
 load_dotenv()
 
@@ -31,6 +33,7 @@ app.include_router(google_auth_router, prefix="", tags=["auth"])
 app.include_router(kakao_auth_router, prefix="", tags=["auth"])
 app.include_router(naver_auth_router, prefix="", tags=["auth"])
 app.include_router(userinfo_router, prefix="", tags=["users"])
+app.include_router(user_router)
 app.include_router(board_router.router)
 app.include_router(upload_router, prefix="", tags=["upload"])
 app.include_router(folder_router.router)
@@ -38,6 +41,7 @@ app.include_router(subscription_router.router)
 app.include_router(subscription_payment_router)
 app.include_router(notion_auth_router)
 app.include_router(memo_router)
+app.include_router(audio_router)
 
 # static 디렉토리 생성 후 mount
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -73,7 +77,7 @@ async def websocket_endpoint(websocket: WebSocket):
     finally:
         # 🔹 남은 내용 구간 요약 강제 flush + 타이머 종료
         await pipeline.end_session()   # 내부에서 flush & stop
-        
+
         # ✅ WebSocket 종료 → 원본 오디오 저장
         result = pipeline.save_raw_audio()
         if result:
@@ -113,7 +117,8 @@ async def root():
 @app.on_event("startup")
 def startup_event():
     start_scheduler()
-#
-# @app.get("/ping")
-# def ping():
-#     return {"message": "pong"}
+    db = SessionLocal()
+    try: seed_plans(db)
+    finally: db.close()
+
+print("hello")

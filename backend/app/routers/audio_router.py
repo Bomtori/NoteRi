@@ -14,8 +14,8 @@ ALLOWED_EXTENSIONS = {".mp3", ".wav", ".m4a"}
 # app/routers/audio_router.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.db import get_db
-from app.crud.audio_crud import import_audio_files
+from backend.app.db import get_db
+from backend.app.crud.audio_crud import import_audio_files
 
 @router.post("/import/{board_id}")
 def import_audio_from_folder(

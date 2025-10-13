@@ -1,6 +1,6 @@
 # app/seed/plan_seed.py
 from sqlalchemy.orm import Session
-from app.model import Plan
+from backend.app.model import Plan
 
 def seed_plans(db: Session):
     """기본 플랜 데이터가 없을 경우 생성"""

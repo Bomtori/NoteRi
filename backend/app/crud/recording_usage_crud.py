@@ -1,6 +1,6 @@
 from datetime import date, datetime, timedelta, UTC
 from sqlalchemy.orm import Session
-from app.model import RecordingUsage, Subscription
+from backend.app.model import RecordingUsage, Subscription
 
 
 def create_or_update_usage(db: Session, user_id: int, subscription: Subscription):

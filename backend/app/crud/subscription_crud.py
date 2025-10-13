@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract, text
-from app.model import Subscription, Plan
+from backend.app.model import Subscription, Plan
 
 def get_subscription_count_by_plan(db: Session):
     result = (

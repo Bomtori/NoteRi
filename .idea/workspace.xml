@@ -4,12 +4,17 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="9bbd2504-1dd4-4b0d-b983-f99e21f1d35a" name="변경" comment="model 변경 (plan, payment)">
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/noteleeProject.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/noteleeProject.iml" afterDir="false" />
+    <list default="true" id="9bbd2504-1dd4-4b0d-b983-f99e21f1d35a" name="변경" comment="수정은 완료 했으나 돌아가질 않음 ;">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/alembic/env.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/alembic/env.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/app/crud/payment_crud.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/crud/payment_crud.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/backend/requirements.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/crud/recording_usage_crud.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/crud/recording_usage_crud.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/crud/subscription_crud.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/crud/subscription_crud.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/crud/user_crud.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/crud/user_crud.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/routers/audio_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/audio_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/routers/user/user_router.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/routers/user/user_router.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/seed/paln_seed.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/seed/paln_seed.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -99,7 +104,8 @@
       <workItem from="1760075122627" duration="882000" />
       <workItem from="1760076177236" duration="1457000" />
       <workItem from="1760077785470" duration="5538000" />
-      <workItem from="1760084287706" duration="3223000" />
+      <workItem from="1760084287706" duration="3671000" />
+      <workItem from="1760315393533" duration="8806000" />
     </task>
     <task id="LOCAL-00001" summary="commit">
       <option name="closed" value="true" />
@@ -181,7 +187,15 @@
       <option name="project" value="LOCAL" />
       <updated>1760075415842</updated>
     </task>
-    <option name="localTasksCounter" value="11" />
+    <task id="LOCAL-00011" summary="수정은 완료 했으나 돌아가질 않음 ;">
+      <option name="closed" value="true" />
+      <created>1760087998157</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1760087998157</updated>
+    </task>
+    <option name="localTasksCounter" value="12" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -209,7 +223,8 @@
     <MESSAGE value="user logout 추가" />
     <MESSAGE value="git 합치기" />
     <MESSAGE value="model 변경 (plan, payment)" />
-    <option name="LAST_COMMIT_MESSAGE" value="model 변경 (plan, payment)" />
+    <MESSAGE value="수정은 완료 했으나 돌아가질 않음 ;" />
+    <option name="LAST_COMMIT_MESSAGE" value="수정은 완료 했으나 돌아가질 않음 ;" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/noteleeProject$cuda_test.coverage" NAME="cuda_test 커버리지 결과" MODIFIED="1760082615262" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/scripts" />

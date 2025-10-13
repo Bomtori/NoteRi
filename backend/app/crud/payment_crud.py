@@ -67,7 +67,7 @@ def _trend_by_plan(db: Session, start: date, end: date, g: str):
     return {"range":{"start":start.isoformat(),"end":end.isoformat()},
             "granularity": g, "totals":{"pro":tot_pro,"enterprise":tot_ent}, "data": data}
 
-# ---- 공개 함수 (짧게) ----
+# ---- 추이선 그래프용 함수 ----
 def get_payment_today_by_plan(db: Session):
     t=date.today(); return _trend_by_plan(db, t, t, "day")
 

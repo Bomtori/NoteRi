@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 # ✅ DB와 모델 불러오기
 # from app.db import Base
-from backend.app.model import Base # 모든 모델 import (여러 개면 다 추가)
+from app.model import Base # 모든 모델 import (여러 개면 다 추가)
 
 target_metadata = Base.metadata
 # 환경 변수 로드

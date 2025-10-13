@@ -8,7 +8,7 @@ from backend.app.crud import audio_crud as crud
 router = APIRouter(prefix="/audio", tags=["audio"])
 UPLOAD_DIR = "static/audio"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-BASE_URL = os.getenv("APP_BASE_URL", "http://127.0.0.1:8001")
+BASE_URL = os.getenv("APP_BASE_URL", "http://127.0.0.1:8000")
 ALLOWED_EXTENSIONS = {".mp3", ".wav", ".m4a"}
 
 # app/routers/audio_router.py

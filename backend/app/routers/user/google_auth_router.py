@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Request, Depends, status
+from urllib.parse import quote
 from sqlalchemy.orm import Session
 from authlib.integrations.starlette_client import OAuth
 import os
@@ -22,6 +23,9 @@ oauth.register(
     client_kwargs={"scope": "openid email profile"},
 )
 
+COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN", None)
+ACCESS_TOKEN_MAX_AGE = 3600  # 초
+FRONTEND_URL = os.getenv("FRONTEND_URL")
 @router.get("/login")
 async def login_google(request: Request):
     redirect_uri = request.url_for("google_callback")
@@ -33,7 +37,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
     token = await oauth.google.authorize_access_token(request)
     user_info = token.get("userinfo")
     if not user_info:
-        return {"error": "Google login failed"}
+        return JSONResponse(status_code=400, content={"error": "Google login failed"})
 
     db_user = get_or_create_user(
         db=db,
@@ -43,17 +47,20 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
         name=user_info.get("name"),
         nickname=user_info.get("given_name"),
         picture=user_info.get("picture"),
-
     )
+
     if db_user and not db_user.is_active:
         return JSONResponse(
             status_code=status.HTTP_403_FORBIDDEN,
-            content={
-                "detail": "이미 탈퇴된 계정입니다. 다시 가입하시겠습니까?"
-            }
+            content={"detail": "이미 탈퇴된 계정입니다. 다시 가입하시겠습니까?"}
         )
 
-    return generate_login_response(db_user)
+    access_token = create_access_token({"sub": str(db_user.id), "email": db_user.email})
+
+    # ✅ 쿼리파라미터로 토큰 전달
+    redirect_to = f"{FRONTEND_URL}/auth/callback?access_token={quote(access_token)}"
+    print("[GOOGLE_CALLBACK redirect_to]", redirect_to)   # <— 로그 확인용
+    return RedirectResponse(redirect_to)  # 기본 307 OK
 
 @router.post("/rejoin")
 def google_rejoin(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

@@ -122,6 +122,7 @@ def generate_text(prompt: str, *, temperature: float = 0.3, max_output_tokens: i
 
     # 1) Responses API
     try:
+        # noinspection PyUnresolvedReferences
         r1 = client.responses.generate(model=model, input=prompt, config=cfg)
         t1 = _extract_text_responses(r1).strip()
         if t1:

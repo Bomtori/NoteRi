@@ -1,109 +1,157 @@
-// frontend/src/components/ChatBox.jsx
-import React, { useState } from "react";
+// src/pages/GeminiChatBox.jsx
+// src/pages/GeminiChatBox.jsx
+import React, { useState, useEffect } from "react";
+const API_BASE = "http://localhost:8000";
 
-const BASE_URL = "http://localhost:8000";
+function getToken() {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("access_token");
+}
 
-export default function ChatBox() {
+export default function GeminiChatBox() {
   const [prompt, setPrompt] = useState("");
-  const [answer, setAnswer] = useState("");
-  const [meta, setMeta] = useState(null);
-  const [ping, setPing] = useState("");
+  const [response, setResponse] = useState("");
+  const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const requestChat = async (p, { debug = false } = {}) => {
-    const url = new URL(`${BASE_URL}/ai/chat`);
-    if (debug) url.searchParams.set("debug", "true");
-    const res = await fetch(url.toString(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: p, temperature: 0.2, max_output_tokens: 64 }),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return res.json(); // { text, meta, empty }
-  };
+  useEffect(() => { fetchHistory(); }, []);
 
-  const handleSend = async () => {
-    if (!prompt.trim()) return;
-    setLoading(true);
-    setAnswer("");
-    setMeta(null);
+  const fetchHistory = async () => {
+    const token = getToken();
+    if (!token) { setError("로그인이 필요합니다."); return; }
     try {
-      // 1차 시도
-      let data = await requestChat(prompt);
-      setMeta(data.meta || null);
-
-      // 빈 응답이면 debug 모드로 1회 재시도(서버 힌트/폴백 후 메타 확인)
-      if (data.empty) {
-        const data2 = await requestChat(prompt, { debug: true });
-        data = data2; // 덮어쓰기
+      const res = await fetch(`${API_BASE}/gemini/history`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 401) {
+        localStorage.removeItem("access_token");
+        setError("세션이 만료되었습니다. 다시 로그인해주세요.");
+        return;
       }
-
-      setAnswer((data.text && data.text.trim()) ? data.text : "(empty response)");
-      setMeta(data.meta || null);
-    } catch (err) {
-      setAnswer(`❌ Error: ${err.message}`);
-    } finally {
-      setLoading(false);
+      const data = await res.json();
+      setHistory(data.items || []);
+    } catch {
+      setError("히스토리를 불러올 수 없습니다.");
     }
   };
 
-  const handlePing = async () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const token = getToken();
+    if (!token) { setError("로그인이 필요합니다."); return; }
+
     try {
-      const res = await fetch(`${BASE_URL}/ai/ping`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setLoading(true); setResponse(""); setError(null);
+      const res = await fetch(`${API_BASE}/gemini/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ prompt }),
+      });
+      if (res.status === 401) {
+        localStorage.removeItem("access_token");
+        setError("세션이 만료되었습니다. 다시 로그인해주세요.");
+        return;
+      }
       const data = await res.json();
-      setPing(data.ok ? `✅ pong (${data.text})` : `❌ failed (${data.text})`);
-    } catch (err) {
-      setPing(`❌ error: ${err.message}`);
-    }
+      setResponse(data.text || "(응답 없음)");
+      setHistory((prev) => [{
+        id: Date.now(),
+        prompt_text: prompt,
+        response_text: data.text,
+        created_at: new Date().toISOString(),
+      }, ...prev]);
+      setPrompt("");
+    } catch {
+      setError("응답 생성 실패");
+    } finally { setLoading(false); }
   };
 
   return (
-    <div style={styles.container}>
-      <h2 style={styles.title}>💬 Gemini Chat (via FastAPI)</h2>
+    <div style={{ maxWidth: 700, margin: "40px auto", padding: 20 }}>
+      <h2>Gemini Chat</h2>
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <textarea rows={3} value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+        <button type="submit" disabled={loading}>{loading ? "생성 중..." : "보내기"}</button>
+      </form>
 
-      <div style={styles.inputRow}>
-        <input
-          type="text"
-          value={prompt}
-          placeholder="Type your prompt..."
-          onChange={(e) => setPrompt(e.target.value)}
-          style={styles.input}
-        />
-        <button onClick={handleSend} disabled={loading} style={{ ...styles.button, background: "#0078ff" }}>
-          {loading ? "Thinking..." : "Send"}
-        </button>
-        <button onClick={handlePing} style={{ ...styles.button, background: "#0a0" }}>
-          Ping
-        </button>
-      </div>
+      {error && <p style={{ color: "crimson" }}>{error}</p>}
 
-      <div style={styles.resultBox}>
-        <div style={styles.label}>Response</div>
-        <pre style={styles.answer}>{answer}</pre>
-        {meta && (
-          <div style={styles.meta}>
-            <div>model: <b>{meta.model}</b></div>
-            <div>api: <b>{meta.api}</b></div>
-            {meta.error && <div>error: <code>{meta.error}</code></div>}
-          </div>
+      {response && (
+        <div style={{ marginTop: 16, padding: 12, background: "#f6f7f9", borderRadius: 8 }}>
+          <strong>응답</strong>
+          <div>{response}</div>
+        </div>
+      )}
+
+      <div style={{ marginTop: 24 }}>
+        <h3>이전 대화</h3>
+        {history.length === 0 ? (
+          <div style={{ color: "#666" }}>기록 없음</div>
+        ) : (
+          history.map((item) => (
+            <div key={item.id} style={{ borderTop: "1px solid #eee", padding: "8px 0" }}>
+              <div><b>Q:</b> {item.prompt_text}</div>
+              <div><b>A:</b> {item.response_text || "(빈 응답)"}</div>
+              <div style={{ fontSize: 12, color: "#888" }}>{new Date(item.created_at).toLocaleString()}</div>
+            </div>
+          ))
         )}
       </div>
-
-      <div style={styles.ping}>Ping: {ping}</div>
     </div>
   );
 }
 
+
 const styles = {
-  container: { fontFamily: "system-ui, sans-serif", maxWidth: 700, margin: "60px auto", padding: 20, border: "1px solid #ddd", borderRadius: 12, background: "#fafafa" },
-  title: { textAlign: "center", marginBottom: 24 },
-  inputRow: { display: "flex", gap: 8, marginBottom: 16 },
-  input: { flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid #ccc", fontSize: 15 },
-  button: { color: "white", border: "none", borderRadius: 8, padding: "10px 14px", cursor: "pointer", fontWeight: 600 },
-  resultBox: { background: "#fff", border: "1px solid #ddd", borderRadius: 8, padding: 12 },
-  label: { fontWeight: 600, marginBottom: 6 },
-  answer: { whiteSpace: "pre-wrap", wordBreak: "break-word", fontSize: 15 },
-  meta: { marginTop: 8, paddingTop: 8, borderTop: "1px dashed #ddd", color: "#555", fontSize: 13 },
-  ping: { marginTop: 10, color: "#555", fontSize: 14 },
+  container: {
+    maxWidth: "700px",
+    margin: "40px auto",
+    padding: "20px",
+    border: "1px solid #ddd",
+    borderRadius: "12px",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+    fontFamily: "Inter, sans-serif",
+  },
+  header: { textAlign: "center" },
+  logoutBtn: {
+    float: "right",
+    background: "#ef4444",
+    color: "white",
+    border: "none",
+    padding: "6px 12px",
+    borderRadius: 6,
+    cursor: "pointer",
+  },
+  form: { display: "flex", flexDirection: "column", gap: "10px" },
+  textarea: {
+    width: "100%",
+    padding: "10px",
+    borderRadius: "8px",
+    border: "1px solid #ccc",
+    resize: "vertical",
+    fontSize: "14px",
+  },
+  button: {
+    alignSelf: "flex-end",
+    padding: "8px 16px",
+    borderRadius: "8px",
+    backgroundColor: "#2563eb",
+    color: "#fff",
+    border: "none",
+    cursor: "pointer",
+  },
+  error: { color: "red", marginTop: "10px" },
+  responseBox: {
+    backgroundColor: "#f8fafc",
+    borderRadius: "8px",
+    padding: "12px",
+    marginTop: "20px",
+    border: "1px solid #e2e8f0",
+  },
+  historyBox: { marginTop: "30px" },
+  historyItem: { borderTop: "1px solid #eee", padding: "10px 0" },
+  prompt: { fontWeight: "bold", color: "#111" },
+  answer: { color: "#333", marginTop: "4px" },
+  time: { color: "#999", fontSize: "12px", marginTop: "4px" },
 };

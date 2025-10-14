@@ -174,8 +174,6 @@ def last_6_months(db: Session = Depends(get_db) ):
 def last_5_years(db: Session = Depends(get_db) ):
     return get_payment_last_5_years_by_plan(db )
 
-
-
 @router.get("/me/payments", response_model=PaymentListResponse)
 def list_my_payments(
     db: Session = Depends(get_db),

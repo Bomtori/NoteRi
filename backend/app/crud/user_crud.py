@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func, extract, text
-from backend.app.model import User
+from sqlalchemy import func, extract, text, case
+from backend.app.model import User, Plan, Subscription
 from datetime import datetime, timedelta, date
 from typing import Dict, Any, List
 

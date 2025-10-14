@@ -1,6 +1,6 @@
 from typing import Optional, Tuple, List  # ✅ 확인
 from datetime import date, timedelta
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 from backend.app.model import Payment, Subscription, Plan, PlanType
 
@@ -133,3 +133,5 @@ def get_my_payment_detail(
     if p:
         p.plan_name = p.subscription.plan.name if (p.subscription and p.subscription.plan) else None
     return p
+
+# 최근 7일간 매출 합계

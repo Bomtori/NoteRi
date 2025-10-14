@@ -9,12 +9,14 @@ import MeetingPage from "./pages/MeetingPage.jsx";
 import PaymentButton from "./PaymentButton.jsx";
 import PaymentSuccess from "./PaymentSuccess.jsx";
 import PaymentFail from "./PaymentFail.jsx";
+import ChatBox from "./test/ChatBox.jsx";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter>
       <Routes>
         {/* 기본 경로를 /meeting 으로 리다이렉트 */}
+          <Route path="/test" element={<ChatBox/>}/>
         <Route path="/" element={<Navigate to="/meeting" replace />} />
         <Route path="/meeting" element={<MeetingPage />} />
         <Route path="/pay" element={<PaymentButton />} />

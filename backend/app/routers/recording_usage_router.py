@@ -1,8 +1,8 @@
 # backend/app/routers/recording_router.py
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from datetime import date
-from typing import Optional
+from typing import Optional, Literal
 
 from backend.app.db import get_db
 # 권장: auth_crud 버전 사용 (토큰 검증 통일)
@@ -12,7 +12,6 @@ from backend.app.schemas.recording_usage_schema import (
     RecordingUseRequest,
     RecordingUseResponse,
 )
-
 from backend.app.crud import recording_usage_crud
 
 router = APIRouter(prefix="/recordings/usage", tags=["recordings"])
@@ -103,3 +102,18 @@ def get_current_usage(
         allocated_minutes=usage.allocated_minutes,
         period_end=usage.period_end,
     )
+
+RangeType = Literal["week", "month", "custom"]
+
+@router.get("/recordings/summary")
+def get_recording_summary(
+    db: Session = Depends(get_db),
+    range: RangeType = Query("week"),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+):
+    return recording_usage_crud.get_summary(db, range, start_date, end_date)
+
+#GET /admin/analytics/recordings/summary?range=week
+#GET /admin/analytics/recordings/summary?range=month
+#GET /admin/analytics/recordings/users?range=custom&start_date=2025-10-01&end_date=2025-10-14

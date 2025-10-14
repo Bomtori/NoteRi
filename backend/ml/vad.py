@@ -5,7 +5,16 @@ import numpy as np
 from ..config import VAD_THRESHOLD, VAD_SAMPLE_RATE
 
 class VADFilter:
-    def __init__(self, threshold=VAD_THRESHOLD, sampling_rate=VAD_SAMPLE_RATE):
+    def __init__(
+        self,
+        threshold=VAD_THRESHOLD,
+        sampling_rate=VAD_SAMPLE_RATE,
+        # ★ 실전 파라미터(앞/뒤 잘림 방지에 핵심)
+        min_speech_duration_ms: int = 250,     # 너무 짧은 픽업 제거
+        min_silence_duration_ms: int = 900,    # 끝 판단 지연(말끝 끊김 방지)
+        speech_pad_ms: int = 250,              # 앞/뒤 패딩
+        max_speech_duration_s: float = 20.0    # 너무 긴 발화는 안전하게 컷
+    ):
         """
         Silero VAD를 활용한 음성 감지 필터
         - threshold: 감지 민감도 (낮으면 더 민감하게 탐지)

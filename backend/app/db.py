@@ -6,18 +6,20 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 from dotenv import load_dotenv
 
 # --- .env 로딩: 여러 후보 경로를 순차 시도 ---
-HERE = os.path.dirname(os.path.abspath(__file__))          # .../backend/app
-BACKEND_DIR = os.path.dirname(HERE)                        # .../backend
-PROJECT_ROOT = os.path.dirname(BACKEND_DIR)                # .../test1 (uvicorn cwd)
+HERE = os.path.dirname(os.path.abspath(__file__))           # .../backend/app
+BACKEND_DIR = os.path.dirname(HERE)                         # .../backend
+PROJECT_ROOT = os.path.dirname(BACKEND_DIR)                 # .../test1 (uvicorn cwd)
 CANDIDATES = [
-    os.path.join(PROJECT_ROOT, ".env"),                    # test1/.env
-    os.path.join(BACKEND_DIR, ".env"),                     # backend/.env  ✅ 너의 위치
-    os.path.join(os.getcwd(), ".env"),                     # 현재 CWD
+    os.path.join(PROJECT_ROOT, ".env"),                     # test1/.env
+    os.path.join(BACKEND_DIR, ".env"),                      # backend/.env  ✅ 너의 위치
+    os.path.join(os.getcwd(), ".env"),                      # 현재 CWD
 ]
 
 for p in CANDIDATES:
     if os.path.exists(p):
-        load_dotenv(p, override=False)
+        load_dotenv(p, encoding="utf-8", override=True)     #인코딩 강제로 utf-8 (박범철)  
+
+os.environ["PGCLIENTENCODING"] = "UTF8"                     #인코딩 강제로 utf-8 (박범철)
 
 def _env(*names: str, default: Optional[str] = None) -> Optional[str]:
     """여러 이름을 순서대로 조회(POSTGRES_* 우선, 없으면 DB_* 사용)."""

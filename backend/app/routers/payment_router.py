@@ -1,15 +1,18 @@
 # routers/payment_router.py
 import os
 import uuid
+from typing import Optional
+
 import httpx
 import base64
 from pydantic import BaseModel
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from backend.app.deps.auth import get_current_user
 from backend.app.model import User
 from backend.app.db import get_db
 from backend.app.model import Subscription, PlanType, Plan, Payment
+from backend.app.schemas.payment_schema import PaymentListResponse, PaymentItem
 from datetime import date, timedelta
 from backend.app.crud import recording_usage_crud
 from backend.app.crud.payment_crud import (
@@ -18,6 +21,8 @@ from backend.app.crud.payment_crud import (
     get_payment_last_5_weeks_by_plan,
     get_payment_last_6_months_by_plan,
     get_payment_last_5_years_by_plan,
+    get_my_payments,
+    get_my_payment_detail
 )
 
 class PaymentRequest(BaseModel):
@@ -148,7 +153,7 @@ async def confirm_payment(
             "status": new_payment.status,
         },
     }
-
+# 추이 그래프
 @router.get("/today")
 def today(db: Session = Depends(get_db)):
     return get_payment_today_by_plan(db)
@@ -168,3 +173,65 @@ def last_6_months(db: Session = Depends(get_db) ):
 @router.get("/last-5-years")
 def last_5_years(db: Session = Depends(get_db) ):
     return get_payment_last_5_years_by_plan(db )
+
+
+
+@router.get("/me/payments", response_model=PaymentListResponse)
+def list_my_payments(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+    date_from: Optional[date] = Query(None),
+    date_to: Optional[date] = Query(None),
+    status: Optional[str] = Query("SUCCESS", description="SUCCESS|PENDING|FAIL|CANCELED 등"),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    total, items = get_my_payments(
+        db,
+        user_id=current_user.id,
+        date_from=date_from,
+        date_to=date_to,
+        status=status,
+        limit=limit,
+        offset=offset,
+    )
+    # Pydantic 변환: PaymentItem(orm_mode=True) 사용
+    payload_items = [
+        PaymentItem(
+            id=p.id,
+            order_id=p.order_id,
+            amount=p.amount,
+            method=p.method,
+            status=p.status,
+            transaction_key=p.transaction_key,
+            approved_at=p.approved_at,
+            canceled_at=p.canceled_at,
+            subscription_id=p.subscription_id,
+            plan_name=getattr(p, "plan_name", None),
+        )
+        for p in items
+    ]
+    return {"total": total, "items": payload_items}
+
+
+@router.get("/{payment_id}", response_model=PaymentItem)
+def get_my_payment(
+    payment_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    p = get_my_payment_detail(db, current_user.id, payment_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    return PaymentItem(
+        id=p.id,
+        order_id=p.order_id,
+        amount=p.amount,
+        method=p.method,
+        status=p.status,
+        transaction_key=p.transaction_key,
+        approved_at=p.approved_at,
+        canceled_at=p.canceled_at,
+        subscription_id=p.subscription_id,
+        plan_name=getattr(p, "plan_name", None),
+    )

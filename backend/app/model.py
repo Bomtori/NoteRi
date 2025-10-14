@@ -48,6 +48,7 @@ class User(Base):
     folders = relationship("Folder", back_populates="owner")
     notifications = relationship("Notification", back_populates="user")
     recording_usage = relationship("RecordingUsage", back_populates="user")
+    ai_gemini = relationship("AIGemini", back_populates="user")
 
 class Subscription(Base):
     __tablename__ = "subscriptions"
@@ -282,3 +283,29 @@ class NotionAuth(Base):
     owner_json = Column(JSON)  # 필요하면 전체 owner 객체 저장
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), onupdate=func.now())
+
+class AIGemini(Base):
+    __tablename__ = "ai_gemini"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True)
+    request_id = Column(String(64), index=True)  # uuid4 hex 등
+    model = Column(String(100), nullable=False)
+    api_path = Column(String(32), nullable=False)  # responses/models/rest
+    status = Column(String(16), nullable=False, default="ok")  # ok/error
+    latency_ms = Column(Integer)
+
+    # 본문은 길 수 있으니 Text. 필요시 길이 제한/요약 저장 권장
+    prompt_text = Column(Text)        # 마스킹/트렁케이트 적용
+    response_text = Column(Text)      # 너무 길면 앞뒤만 저장
+
+    input_tokens = Column(Integer)
+    output_tokens = Column(Integer)
+    finish_reason = Column(String(64))
+    safety = Column(JSON)             # {"blocked": false, "categories": [...]} 등
+    meta = Column(JSON)               # {"http_status":200, "note":"..."} 등
+    is_sampled = Column(Boolean, default=True)
+
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), index=True)
+
+    user = relationship("User", lazy="joined")

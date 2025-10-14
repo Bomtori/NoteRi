@@ -20,6 +20,8 @@ from backend.app.routers.notion_auth_router import router as notion_auth_router
 from backend.app.routers.memo_router import router as memo_router
 from backend.app.routers.audio_router import router as audio_router
 from backend.app.routers.user.user_router import router as user_router
+from backend.app.routers.recording_usage_router import router as recording_usage_router
+from backend.app.routers.gemini_router import router as gemini_router
 
 load_dotenv()
 
@@ -42,6 +44,8 @@ app.include_router(subscription_payment_router)
 app.include_router(notion_auth_router)
 app.include_router(memo_router)
 app.include_router(audio_router)
+app.include_router(recording_usage_router)
+app.include_router(gemini_router)
 
 # static 디렉토리 생성 후 mount
 app.mount("/static", StaticFiles(directory="static"), name="static")

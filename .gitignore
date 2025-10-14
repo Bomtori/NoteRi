@@ -20,3 +20,12 @@ Thumbs.db
 node_modules/
 dist/
 build/
+
+# Alembic (migration versions - auto-generated)
+backend/alembic/versions/
+
+# Recordings (audio files etc.)
+backend/recordings/
+
+# Environment variables
+backend/.env

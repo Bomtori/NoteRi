@@ -5,7 +5,16 @@ import numpy as np
 from ..config import VAD_THRESHOLD, VAD_SAMPLE_RATE
 
 class VADFilter:
-    def __init__(self, threshold=VAD_THRESHOLD, sampling_rate=VAD_SAMPLE_RATE):
+    def __init__(
+        self,
+        threshold=VAD_THRESHOLD,
+        sampling_rate=VAD_SAMPLE_RATE,
+        # ★ 실전 파라미터(앞/뒤 잘림 방지에 핵심)
+        min_speech_duration_ms: int = 250,     # 너무 짧은 픽업 제거
+        min_silence_duration_ms: int = 900,    # 끝 판단 지연(말끝 끊김 방지)
+        speech_pad_ms: int = 250,              # 앞/뒤 패딩
+        max_speech_duration_s: float = 20.0    # 너무 긴 발화는 안전하게 컷
+    ):
         """
         Silero VAD를 활용한 음성 감지 필터
         - threshold: 감지 민감도 (낮으면 더 민감하게 탐지)
@@ -25,13 +34,25 @@ class VADFilter:
          self.collect_chunks) = self.utils
 
         self.sampling_rate = sampling_rate
-        self.threshold = threshold
+        self.threshold = float(threshold)
         self.device = "cpu"
-        print(f"✅ VAD (CPU) 로딩 완료! threshold={self.threshold}, sr={self.sampling_rate}")
+
+        # ★ 파라미터 저장
+        self.min_speech_duration_ms = int(min_speech_duration_ms)
+        self.min_silence_duration_ms = int(min_silence_duration_ms)
+        self.speech_pad_ms = int(speech_pad_ms)
+        self.max_speech_duration_s = float(max_speech_duration_s)
+
+        print(
+            f"✅ VAD (CPU) 로딩 완료! "
+            f"threshold={self.threshold}, sr={self.sampling_rate}, "
+            f"min_sil={self.min_silence_duration_ms}ms, pad={self.speech_pad_ms}ms"
+        )
 
     def has_speech(self, pcm_bytes: bytes) -> bool:
         """
         입력 PCM 데이터에서 음성이 포함돼 있는지 확인
+        (실시간 스트림에 적합: 패딩/끝 판단 지연 적용)
         """
         if not pcm_bytes:
             return False
@@ -43,10 +64,17 @@ class VADFilter:
         pcm_tensor = torch.from_numpy(pcm_array).to(self.device)
 
         try:
+            # ★ 핵심: pad/지연/최대길이 파라미터 적용
             speech_timestamps = self.get_speech_timestamps(
                 pcm_tensor,
                 self.model,
-                sampling_rate=self.sampling_rate
+                sampling_rate=self.sampling_rate,
+                threshold=self.threshold,
+                min_speech_duration_ms=self.min_speech_duration_ms,
+                min_silence_duration_ms=self.min_silence_duration_ms,
+                speech_pad_ms=self.speech_pad_ms,
+                return_seconds=False,
+                max_speech_duration_s=self.max_speech_duration_s,
             )
             return len(speech_timestamps) > 0
         except Exception as e:

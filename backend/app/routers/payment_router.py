@@ -22,7 +22,7 @@ from backend.app.crud.payment_crud import (
     get_payment_last_6_months_by_plan,
     get_payment_last_5_years_by_plan,
     get_my_payments,
-    get_my_payment_detail
+    get_my_payment_detail, get_total_revenue_by_plan
 )
 
 class PaymentRequest(BaseModel):
@@ -233,3 +233,8 @@ def get_my_payment(
         subscription_id=p.subscription_id,
         plan_name=getattr(p, "plan_name", None),
     )
+
+# 플랜 별 총 매출
+@router.get("/revenue/plan")
+def read_revenue_by_plan(db: Session = Depends(get_db)):
+    return get_total_revenue_by_plan(db)

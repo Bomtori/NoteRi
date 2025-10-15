@@ -134,4 +134,21 @@ def get_my_payment_detail(
         p.plan_name = p.subscription.plan.name if (p.subscription and p.subscription.plan) else None
     return p
 
-# 최근 7일간 매출 합계
+# 플랜별 총 매출
+
+def get_total_revenue_by_plan(db: Session):
+    results = (
+        db.query(Plan.name.label("plan_name"), func.sum(Payment.amount).label("total_revenue"))
+        .join(Subscription, Payment.subscription_id == Subscription.id)
+        .join(Plan, Subscription.plan_id == Plan.id)
+        .filter(Payment.status == "SUCCESS")
+        .group_by(Plan.name)
+        .all()
+    )
+
+    revenue_dict = {plan.value: float(total or 0) for plan, total in results}
+
+    for plan in PlanType:
+        revenue_dict.setdefault(plan.value, 0.0)
+
+    return revenue_dict

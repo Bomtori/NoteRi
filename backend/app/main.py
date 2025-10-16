@@ -1,29 +1,59 @@
 from fastapi import FastAPI, WebSocket, Query
-from starlette.middleware.sessions import SessionMiddleware
+# ============================================
+# 🌐 기본 라이브러리 & 환경 설정
+# ============================================
 import os
 from dotenv import load_dotenv
-from fastapi import WebSocket
-from starlette.websockets import WebSocketState, WebSocketDisconnect
+
+# ============================================
+# ⚙️ FastAPI / Starlette
+# ============================================
+from fastapi import FastAPI, WebSocket, Query
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.websockets import WebSocketState, WebSocketDisconnect
+
+# ============================================
+# 🧠 Services (STT, Diarization)
+# ============================================
 from backend.services.stt_pipeline import STTPipeline
 from backend.services.diarization import DiarizationService
+
+# ============================================
+# 🗓 Scheduler & DB 초기화
+# ============================================
 from backend.app.tasks.scheduler import start_scheduler
-from fastapi.middleware.cors import CORSMiddleware
 from backend.app.db import get_db, SessionLocal
 from backend.app.seed.plan_seed import seed_plans
-from backend.app.routers.user.google_auth_router import router as google_auth_router  # ✅ login.py에서 라우터 import
+
+# ============================================
+# 🧩 Routers
+# ============================================
+from backend.app.routers.user.google_auth_router import router as google_auth_router
 from backend.app.routers.user.kakao_auth_router import router as kakao_auth_router
 from backend.app.routers.user.naver_auth_router import router as naver_auth_router
 from backend.app.routers.user.userInfo_router import router as userinfo_router
-from backend.app.routers import board_router as board_router, folder_router as folder_router, subscription_router as subscription_router
 from backend.app.routers.user.profile_upload_router import router as upload_router
+from backend.app.routers.user.user_router import router as user_router
+
+from backend.app.routers import (
+    board_router,
+    folder_router,
+    subscription_router,
+)
 from backend.app.routers.payment_router import router as subscription_payment_router
 from backend.app.routers.notion_auth_router import router as notion_auth_router
 from backend.app.routers.memo_router import router as memo_router
 from backend.app.routers.audio_router import router as audio_router
-from backend.app.routers.user.user_router import router as user_router
 from backend.app.routers.recording_usage_router import router as recording_usage_router
 from backend.app.routers.gemini_router import router as gemini_router
+
+# ============================================
+# 💾 Redis 관련
+# ============================================
+from .routers.redis_test_router import router as redis_test_router
+from .util.redis_client import get_redis, close_redis
 
 load_dotenv()
 
@@ -48,6 +78,7 @@ app.include_router(memo_router)
 app.include_router(audio_router)
 app.include_router(recording_usage_router)
 app.include_router(gemini_router)
+app.include_router(redis_test_router)
 
 # static 디렉토리 생성 후 mount
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -149,8 +180,20 @@ async def root():
     return {"message": "Hello, FastAPI is running"}
 
 @app.on_event("startup")
-def startup_event():
+async def startup_event():
+    # ✅ Redis 연결
+    await get_redis()
+
+    # ✅ 스케줄러 시작
     start_scheduler()
+
+    # ✅ 초기 데이터 시드
     db = SessionLocal()
-    try: seed_plans(db)
-    finally: db.close()
+    try:
+        seed_plans(db)
+    finally:
+        db.close()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await close_redis()

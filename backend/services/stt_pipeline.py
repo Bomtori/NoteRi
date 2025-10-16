@@ -52,7 +52,6 @@ class STTPipeline:
         self.last_cut_ts = None            # float | None
         self._tick_interval = 1.0          # 초
         self._min_chars_for_summary = 40   # 요약 최소 분량 (부족하면 다음 구간으로 합산)
-        # 참고: 너무 낮추면 빈약한 요약이 나올 수 있음. 필요시 60~120으로 조정.
 
         # ===== 텍스트/오디오 버퍼 =====
         # 확정 문장 히스토리: (확정시각 timestamp, text) 리스트
@@ -86,7 +85,10 @@ class STTPipeline:
     async def end_session(self):
         """WS 종료 직전 호출: 마지막 구간 요약 flush & 타이머 종료."""
         try:
-            await self._flush_interval_summary(force=True)
+            # ★ 종료 전에 최종 요약을 반드시 생성/전송
+            await self.flush_final_summary()
+            # 전송이 이벤트 루프에 스케줄될 수 있도록 아주 짧게 양보
+            await asyncio.sleep(0.05)
         except Exception as e:
             logger.warning(f"flush on end_session failed: {e}")
 
@@ -175,6 +177,45 @@ class STTPipeline:
         self.paragraph_buffer = [(ts, t) for (ts, t) in self.paragraph_buffer if ts >= self.last_cut_ts]
 
         logger.info("🧾 Interval summarized and sent.")
+
+    # ---------------------------------------------------------------------
+    # 🔸 종료 시 최종 요약 보장을 위한 헬퍼들 (추가)
+    # ---------------------------------------------------------------------
+    async def _force_finalize_live_buffer(self):
+        """
+        남아있는 실시간 텍스트 버퍼를 무음 주입처럼 강제로 확정시킨다.
+        segmenter가 finalize를 반환하면 즉시 WS로 보내고 paragraph_buffer에 적재.
+        """
+        # 무음 2~3틱 주입하면 대부분 finalize 발생
+        for _ in range(3):
+            live, finalized = self.segmenter.feed(is_silence=True)
+            if finalized:
+                # 확정 문장 즉시 전송
+                if self.ws is not None:
+                    try:
+                        await self.ws.send_json({"append": finalized})
+                    except Exception:
+                        pass
+                # 요약 구간 집계용으로 기록
+                self.paragraph_buffer.append((time.time(), finalized))
+                break
+
+    async def flush_final_summary(self):
+        """
+        종료 직전: 라이브 버퍼까지 확정 -> 마지막 구간 요약(force=True) 생성 -> 전송.
+        """
+        # 1) 라이브 버퍼 강제 확정
+        await self._force_finalize_live_buffer()
+
+        # 2) 마지막 1분 요약 생성/전송 (force=True면 분량 부족이어도 실행)
+        await self._flush_interval_summary(force=True)
+
+        # 3) (선택) 프런트가 구분하기 쉬운 종료 이벤트
+        if self.ws is not None:
+            try:
+                await self.ws.send_json({"event": "final_summary_done"})
+            except Exception:
+                pass
 
     # ---------------------------------------------------------------------
     # 실시간 feed

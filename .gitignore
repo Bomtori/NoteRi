@@ -1,31 +1,45 @@
-# Python
+# =========================================
+# 🐍 Python
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
 
-# venv
+# =========================================
+# 🧩 Virtual Environment
 .venv/
 venv/
 
-# IDE
+# =========================================
+# 💻 IDE / Editor
 .idea/
 .vscode/
 
-# OS
+# =========================================
+# 🧠 OS files
 .DS_Store
 Thumbs.db
 
-# Node (있다면)
+# =========================================
+# 🪄 Node / Frontend
 node_modules/
 dist/
 build/
 
-# Alembic (migration versions - auto-generated)
+# =========================================
+# 🧬 Alembic (migration versions)
 backend/alembic/versions/
 
-# Recordings (audio files etc.)
+# =========================================
+# 🎙️ Recordings (audio, meeting files)
 backend/recordings/
 
-# Environment variables
+# =========================================
+# 🔐 Environment variables
 backend/.env
+
+# =========================================
+# 📦 Seed dummy data (CSV, test seeds)
+backend/app/seed/*.csv
+backend/app/seed/notelee_dummy_*.csv
+backend/app/seed/__pycache__/

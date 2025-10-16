@@ -10,7 +10,7 @@ from backend.services.diarization import DiarizationService
 from backend.app.tasks.scheduler import start_scheduler
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.db import get_db, SessionLocal
-from backend.app.seed.paln_seed import seed_plans
+from backend.app.seed.plan_seed import seed_plans
 from backend.app.routers.user.google_auth_router import router as google_auth_router  # ✅ login.py에서 라우터 import
 from backend.app.routers.user.kakao_auth_router import router as kakao_auth_router
 from backend.app.routers.user.naver_auth_router import router as naver_auth_router

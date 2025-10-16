@@ -2,6 +2,8 @@ from fastapi import FastAPI, WebSocket, Query
 from starlette.middleware.sessions import SessionMiddleware
 import os
 from dotenv import load_dotenv
+from fastapi import WebSocket
+from starlette.websockets import WebSocketState, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from backend.services.stt_pipeline import STTPipeline
 from backend.services.diarization import DiarizationService
@@ -67,7 +69,7 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("✅ connection open")
 
-    # 🔹 시작 버튼 즉시 1분 타이머 켜기 (오디오 유무 무관)
+    # 1) 오디오 유무와 관계없이 세션/타이머 시작
     await pipeline.begin_session(websocket)
 
     try:
@@ -75,15 +77,28 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_bytes()
             await pipeline.feed(data, websocket)
 
+    except WebSocketDisconnect:
+        # 클라이언트가 정상적으로 끊은 경우
+        print("🔌 client disconnected")
     except Exception as e:
-        # 클라이언트가 정상적으로 닫아도 여기로 들어옴
+        # 기타 예외
         print(f"❌ 오류 발생: {e}")
     finally:
-        # 🔹 남은 내용 구간 요약 강제 flush + 타이머 종료
-        await pipeline.end_session()   # 내부에서 flush & stop
+        # --- 종료 시 순서 중요 ---
+        # A. 가능하면 최종 요약을 먼저 생성/전송(WS가 살아있을 때만)
+        try:
+            if websocket.application_state == WebSocketState.CONNECTED:
+                await pipeline.flush_final_summary()
+        except Exception as e:
+            print(f"⚠️ flush_final_summary 실패: {e}")
 
-        # ✅ WebSocket 종료 → 원본 오디오 저장
-        result = pipeline.save_raw_audio()
+        # B. 원본 오디오 저장(버퍼가 초기화되기 전에 반드시 실행)
+        result = None
+        try:
+            result = pipeline.save_raw_audio()  # 저장 후 내부적으로 부분 초기화(reset) 수행
+        except Exception as e:
+            print(f"⚠️ save_raw_audio 실패: {e}")
+
         if result:
             filepath = result["filepath"]
             duration = result["duration"]
@@ -91,8 +106,23 @@ async def websocket_endpoint(websocket: WebSocket):
         else:
             print("⚠️ 저장할 오디오 데이터 없음")
 
-        print("🔌 connection closed")
+        # C. 세션 종료(타이머/상태 정리). 이미 요약/저장 했으므로 여기서는 정리만.
+        try:
+            # end_session 내부에서 WS로 보내지 않도록 방어적으로 끊어둠
+            if websocket.application_state != WebSocketState.CONNECTED:
+                pipeline.ws = None
+            await pipeline.end_session()
+        except Exception as e:
+            print(f"⚠️ end_session 실패: {e}")
 
+        # D. 서버 측에서 WS가 아직 열려있다면 안전하게 닫기
+        try:
+            if websocket.application_state == WebSocketState.CONNECTED:
+                await websocket.close()
+        except Exception:
+            pass
+
+        print("🔌 connection closed")
 
 # === 수동 저장 API (옵션) ===
 @app.post("/save-audio")
@@ -124,4 +154,3 @@ def startup_event():
     db = SessionLocal()
     try: seed_plans(db)
     finally: db.close()
-

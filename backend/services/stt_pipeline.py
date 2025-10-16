@@ -104,6 +104,9 @@ class STTPipeline:
         self.ws = None
         logger.info("🔴 Session ended: summary loop stopped.")
 
+        self.reset_all()
+
+
     # ---------------------------------------------------------------------
     # 내부 타이머 루프 & 요약 로직
     # ---------------------------------------------------------------------
@@ -280,14 +283,35 @@ class STTPipeline:
     # 상태 초기화/저장
     # ---------------------------------------------------------------------
     def reset(self):
-        """모든 버퍼/상태 초기화 (녹음 저장 후 호출)"""
+        """오디오/세그먼트 버퍼만 비움(세션/태스크 유지)"""
         self.raw_audio_buffer.clear()
         self.segmenter.buffer = ""
         self.segmenter.silence_time = 0.0
         self.deduper.reset()
-        # paragraph_buffer는 **세션 내 구간 요약**에 사용되므로
-        # 여기서 비우지 않고, 구간 요약 시 소비/정리한다.
-        logger.info("🔄 STT Pipeline 상태 초기화 완료")
+        logger.info("🔄 STT Pipeline 상태 초기화 완료 (buffers only)")
+    
+    
+    def reset_all(self):
+        """세션 전체 완전 초기화"""
+        # 1) 내부 버퍼 초기화
+        self.raw_audio_buffer.clear()
+        self.segmenter.buffer = ""
+        self.segmenter.silence_time = 0.0
+        self.deduper.reset()
+        self.paragraph_buffer.clear()
+
+        # 2) 세션 상태 초기화
+        self.session_active = False
+        self.session_start_ts = None
+        self.last_cut_ts = None
+        self.ws = None
+
+        # 3) 요약 루프 중단
+        if self.summary_task and not self.summary_task.done():
+            self.summary_task.cancel()
+        self.summary_task = None
+
+        logger.info("🧹 STT Pipeline 완전 초기화 완료")
 
     def save_raw_audio(self, folder=None, filename=None):
         """원본 오디오를 WAV 파일로 저장"""

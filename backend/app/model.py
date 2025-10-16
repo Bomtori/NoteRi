@@ -4,6 +4,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy.sql import func
+from sqlalchemy.dialects.postgresql import JSONB
 import enum
 
 Base = declarative_base()
@@ -127,6 +128,7 @@ class Folder(Base):
     id = Column(Integer, primary_key=True)
     parent_id = Column(Integer, ForeignKey("folders.id"))
     name = Column(String, nullable=False)
+    color = Column(String(7), nullable=False, default="#7E36F9")
     created_at = Column(TIMESTAMP)
     updated_at = Column(TIMESTAMP)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
@@ -141,7 +143,7 @@ class Board(Base):
     __tablename__ = "boards"
 
     id = Column(Integer, primary_key=True)
-    folder_id = Column(Integer, ForeignKey("folders.id", ondelete="CASCADE"), nullable=False)
+    folder_id = Column(Integer, ForeignKey("folders.id", ondelete="CASCADE"), nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     title = Column(String, nullable=False)
     description = Column(Text)
@@ -302,8 +304,8 @@ class AIGemini(Base):
     input_tokens = Column(Integer)
     output_tokens = Column(Integer)
     finish_reason = Column(String(64))
-    safety = Column(JSON)             # {"blocked": false, "categories": [...]} 등
-    meta = Column(JSON)               # {"http_status":200, "note":"..."} 등
+    safety = Column(JSONB)             # {"blocked": false, "categories": [...]} 등
+    meta = Column(JSONB)               # {"http_status":200, "note":"..."} 등
     is_sampled = Column(Boolean, default=True)
 
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), index=True)

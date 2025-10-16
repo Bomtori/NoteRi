@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, UTC, date, timedelta
 from fastapi.responses import JSONResponse
 from fastapi import status
-from backend.app.model import User, Subscription, PlanType
+from backend.app.model import User, Subscription, Plan
 from backend.app.util.auth import create_access_token
 
 
@@ -24,7 +24,7 @@ def get_or_create_user(
         User.oauth_provider == provider,
         User.oauth_sub == sub
     ).first()
-
+    free_plan = db.query(Plan).filter(Plan.name == "free").first()
     # 2) 없는 경우 (처음 로그인)
     if not db_user:
         # 혹시 같은 email인데 탈퇴 상태(is_active=False)인지 확인
@@ -53,11 +53,10 @@ def get_or_create_user(
         # 무료 플랜 생성
         free_sub = Subscription(
             user_id=db_user.id,
-            plan=PlanType.free,
+            plan_id=free_plan.id,  # ✅ 또는 plan=free_plan (둘 중 하나)
             start_date=date.today(),
-            end_date=date.today() + timedelta(days=365*100),
+            end_date=date.today() + timedelta(days=365 * 100),
             is_active=True,
-            payment_info={"type": "auto", "note": "free plan on signup"},
             created_at=datetime.now(UTC)
         )
         db.add(free_sub)

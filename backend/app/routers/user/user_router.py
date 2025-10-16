@@ -51,9 +51,9 @@ def signup_last_5_years(db: Session = Depends(get_db)):
 def last_7d(db: Session = Depends(get_db)):
     return {"total": user_crud.get_last_7d_signups(db)}
 
-@router.get("/last-6m")
+@router.get("/last-m")
 def last_6m(db: Session = Depends(get_db)):
-    return {"total": user_crud.get_last_6m_signups(db)}
+    return {"total": user_crud.get_last_m_signups(db)}
 
 @router.get("/last-12m")
 def last_12m(db: Session = Depends(get_db)):

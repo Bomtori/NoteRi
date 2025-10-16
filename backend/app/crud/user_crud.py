@@ -205,14 +205,14 @@ def get_last_7d_signups(db: Session) -> int:
     return _count_signups(db, start_date=start, end_date=end)
 
 
-# ---------- 2) 최근 6개월 간 가입자 ----------
-def get_last_6m_signups(db: Session) -> int:
+# ---------- 2) 최근 1개월 간 가입자 ----------
+def get_last_m_signups(db: Session) -> int:
     """
     오늘 기준 '달' 단위로 6개월 전 같은 일자부터 오늘까지.
     예) 10월 15일이라면 4월 15일~10월 15일(포함). [start, end) = [six_months_ago, tomorrow)
     """
     today = _today_local()
-    start = _add_months(today, -6)
+    start = _add_months(today, 0)
     end = today + timedelta(days=1)
     return _count_signups(db, start_date=start, end_date=end)
 

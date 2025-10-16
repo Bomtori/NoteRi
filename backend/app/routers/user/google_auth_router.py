@@ -25,7 +25,7 @@ oauth.register(
 
 COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN", None)
 ACCESS_TOKEN_MAX_AGE = 3600  # 초
-FRONTEND_URL = os.getenv("FRONTEND_URL")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 @router.get("/login")
 async def login_google(request: Request):
     redirect_uri = request.url_for("google_callback")
@@ -58,7 +58,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
     access_token = create_access_token({"sub": str(db_user.id), "email": db_user.email})
 
     # ✅ 쿼리파라미터로 토큰 전달
-    redirect_to = f"{FRONTEND_URL}/auth/callback?access_token={quote(access_token)}"
+    redirect_to = f"{FRONTEND_URL}/test/auth/callback?access_token={quote(access_token)}"
     print("[GOOGLE_CALLBACK redirect_to]", redirect_to)   # <— 로그 확인용
     return RedirectResponse(redirect_to)  # 기본 307 OK
 

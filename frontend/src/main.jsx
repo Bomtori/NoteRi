@@ -12,6 +12,7 @@ import PaymentFail from "./PaymentFail.jsx";
 import ChatBox from "./test/ChatBox.jsx";
 import LoginPage from "./test/LoginPage.jsx";
 import AuthCallback from "./test/AuthCallback.jsx";
+import Home from "./test/components/Home.jsx";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
@@ -27,6 +28,7 @@ createRoot(document.getElementById("root")).render(
         <Route path="/pay" element={<PaymentButton />} />
         <Route path="/pay/success" element={<PaymentSuccess />} />
         <Route path="/pay/fail" element={<PaymentFail />} />
+          <Route path="/home" element={<Home/>}/>
         {/* 나중에 App 안쪽 페이지들을 여기에 추가할 수도 있음 */}
       </Routes>
     </BrowserRouter>

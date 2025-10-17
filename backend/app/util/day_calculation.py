@@ -43,3 +43,11 @@ def _add_months(d: date, months: int) -> date:
         next_start = date(y, m + 1, 1)
     last_day = (next_start - timedelta(days=1)).day
     return date(y, m, min(d.day, last_day))
+
+
+def _week_bounds(d: date) -> Tuple[date, date]:
+    """월요일 시작 ~ 다음 주 월요일 (반열린)"""
+    # isoweekday(): Mon=1 ... Sun=7
+    start = d - timedelta(days=d.isoweekday() - 1)
+    end = start + timedelta(days=7)
+    return start, end

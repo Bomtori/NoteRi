@@ -5,7 +5,7 @@ import PaymentFail from "./PaymentFail";
 import ChatBox from "./test/ChatBox";
 import LoginPage from "./test/LoginPage.jsx";
 import AuthCallback from "./test/AuthCallback.jsx";
-import Home from "./test/components/Home.jsx"
+import DashBoard from "./test/components/DashBoard.jsx"
 
 function App() {
   return (
@@ -18,7 +18,7 @@ function App() {
         <Route path="/" element={<PaymentButton />} />
         <Route path="/payments/success" element={<PaymentSuccess />} />
         <Route path="/payments/fail" element={<PaymentFail />} /><ChatBox />
-        <Route path="/home" element={<Home/>}/>
+        <Route path="/home" element={<DashBoard/>}/>
       </Routes>
     </BrowserRouter>
   );

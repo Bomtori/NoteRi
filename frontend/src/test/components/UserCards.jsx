@@ -1,18 +1,14 @@
 import StatCard from "@/test/components/StatCard";
 import {useEffect, useMemo, useState} from "react";
-import DateButtons from "@/test/components/DateButtons.jsx";
-import DateButton from "@/test/components/DateButtons.jsx";
 import CardWithActions from "@/test/components/CardWithActions.jsx";
 import CardWithDonutGraph from "@/test/components/CardWithDonutGraph.js";
 import MetricStatCard from "@/test/components/MetricsStatCard.js";
+import UserSignupTrend from "@/test/components/UserSignupTrend.jsx";
 
 const API_BASE_URL = import.meta.env.API_BASE_URL ?? "http://localhost:8000"
 
-function UserSignupTrend() {
-  return null;
-}
 
-export default function Cards() {
+export default function UserCards() {
 
   const [totalUsers, setTotalUsers] = useState(0)
   const [noActiveUsers, setNoActiveUsers] = useState(0)
@@ -41,6 +37,7 @@ const [providerCounts, setProviderCounts] = useState({}); // {google, naver, kak
         const res = await fetch(`${API_BASE_URL}${endpoint}`, { signal: ac.signal });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
+              console.log("userData", data)
         // 예: 각각의 state로 저장
         if (range === "today") setTodaySignupUsers(data.total ?? 0);
         if (range === "7d") setLast7dSignupUsers(data.total ?? 0);
@@ -63,12 +60,10 @@ useEffect(() => {
       const res = await fetch(`${API_BASE_URL}/users/count/provider`, { signal: ac.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      // 예: data.get_user_count_by_provider === { google:116, naver:26, kakao:52 }
-      console.log("data", data)
       setProviderCounts(data || {})
     } catch (e) {
       if (e.name !== "AbortError") {
-        setError("전체 사용자 수를 불러오지 못했습니다.");
+        setError("사용자 수를 불러오지 못했습니다.");
         setProviderCounts({});
       }
     } finally {
@@ -128,21 +123,21 @@ const provider = useMemo(() => {
   return (
     <div className="min-h-screen bg-background text-foreground p-6">
       <div className="max-w-6xl mx-auto grid gap-6 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricStatCard
+        <MetricStatCard className="h-[190px]"
           title="전체 사용자"
           value={totalUsers ?? 0}
           caption={`비활성 유저 : ${(noActiveUsers ?? 0).toLocaleString()} 명`}
           loading={loading}
           error={error}
         />
-        <StatCard
+        <StatCard className="h-[190px]"
           title="MAU"
           value="1,532"
           delta="+7.4%"
           trend="up"
           highlight="전일 대비 7.4% 상승"
         />
-        <CardWithActions
+        <CardWithActions className="h-[190px]"
             range={range}
             setRange={setRange}
             todaySignupUsers={todaySignupUsers}
@@ -150,9 +145,11 @@ const provider = useMemo(() => {
       lastMonthSignupUsers={lastMonthSignupUsers}
       lastYearSignupUsers={lastYearSignupUsers}
         />
-        <CardWithDonutGraph
+        <CardWithDonutGraph className="sm:col-span-2 xl:col-span-2 h-[340px]"
         providerUsers={provider}/>
-        <UserSignupTrend/>
+        <div className="col-span-1 sm:col-span-2 xl:col-span-4">
+      <UserSignupTrend />   {/* ← 이 카드가 한 줄 전체(4칸)를 차지 */}
+    </div>
       </div>
     </div>
   )

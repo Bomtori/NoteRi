@@ -1,13 +1,16 @@
 # routers/subscription_router.py
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException,Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from backend.app.db import get_db
 from backend.app.model import Subscription, Plan, User
 from backend.app.schemas.subscription_schema import SubscriptionResponse, SubscriptionUpdate
 from backend.app.deps.auth import get_current_user
+from backend.app.crud.subscription_crud import get_subscription_count_by_plan
 from backend.app.crud import subscription_crud
 from datetime import date, timedelta
+
+from backend.app.schemas.user_schema import PlanUserCount
 
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 
@@ -147,6 +150,21 @@ def cancel_subscription(
         is_active=sub.is_active,
     )
 
-@router.get("/count/plan")
-def get_count_by_plan(db: Session = Depends(get_db)):
-    return subscription_crud.get_subscription_count_by_plan(db)
+@router.get("/count/plan", response_model=List[PlanUserCount])
+async def get_plan_user_counts(
+    db: Session = Depends(get_db),
+    # 필요 시 인증 걸고 싶으면 아래 주석 해제
+    # _user=Depends(get_current_user),
+    as_of: Optional[date] = Query(None, description="이 날짜에 유효한 구독만 집계"),
+    active_only: bool = Query(True, description="is_active=True만 집계"),
+    date_from: Optional[date] = Query(None, description="구간 시작 (start_date 기준)"),
+    date_to: Optional[date] = Query(None, description="구간 끝 (start_date 기준)"),
+):
+    rows = get_subscription_count_by_plan(
+        db,
+        as_of=as_of,
+        active_only=active_only,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return [{"plan": plan, "user_count": cnt} for plan, cnt in rows]

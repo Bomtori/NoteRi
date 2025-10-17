@@ -10,14 +10,16 @@ export default function ShadcnAreaChart({
   title = "트래픽",
   data,
   height = 260,
-  color = "#4285F4",
+  color = "#7E36F9",
   showGrid = true,
+    gradientId=""
 }: {
   title?: string
   data: Point[]
   height?: number
   color?: string
   showGrid?: boolean
+  gradientId?:string
 }) {
   return (
     <Card className="bg-card text-card-foreground">

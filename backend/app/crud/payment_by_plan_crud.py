@@ -144,3 +144,21 @@ def get_revenue_share_by_plan(
     if total == 0:
         return {k: 0.0 for k in by_plan}
     return {k: v / total for k, v in by_plan.items()}
+
+def get_total_revenue_paid_plans(
+    db: Session,
+    *,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+) -> Dict[str, float]:
+    """
+    유료 플랜(pro, enterprise)만 총 매출 집계.
+    기간을 지정하지 않으면 전체(SUCCESS 전부).
+    반환 예: {"pro": 155000.0, "enterprise": 420000.0}
+    """
+    by_plan = _sum_by_plan(db, start_date=start_date, end_date=end_date)
+    # 유료 플랜만 추출 + 키 보장
+    return {
+        "pro": float(by_plan.get("pro", 0.0)),
+        "enterprise": float(by_plan.get("enterprise", 0.0)),
+    }

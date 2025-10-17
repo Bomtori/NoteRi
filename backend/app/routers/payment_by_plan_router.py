@@ -11,6 +11,7 @@ from backend.app.crud.payment_by_plan_crud import (
     get_mom_growth_by_plan,
     get_yoy_growth_by_plan,
     get_revenue_share_by_plan,
+get_total_revenue_paid_plans
 )
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
@@ -53,3 +54,11 @@ def revenue_share(
     - 날짜 구간은 [start_date, end_date] 반열린 구간
     """
     return get_revenue_share_by_plan(db, start_date=start_date, end_date=end_date)
+
+@router.get("/revenue/paid")
+def read_revenue_paid_plans(
+    db: Session = Depends(get_db),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),  # [start_date, end_date) 반열린
+):
+    return get_total_revenue_paid_plans(db, start_date=start_date, end_date=end_date)

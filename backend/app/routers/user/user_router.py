@@ -53,6 +53,7 @@ def last_7d(db: Session = Depends(get_db)):
 
 @router.get("/last-m")
 def last_6m(db: Session = Depends(get_db)):
+    print("한 달동안 가입자 수 ", user_crud.get_last_m_signups(db))
     return {"total": user_crud.get_last_m_signups(db)}
 
 @router.get("/last-12m")

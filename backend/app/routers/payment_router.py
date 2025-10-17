@@ -9,6 +9,7 @@ import base64
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+
 from backend.app.deps.auth import get_current_user
 from backend.app.model import User
 from backend.app.db import get_db
@@ -24,7 +25,12 @@ from backend.app.crud.payment_crud import (
     get_payment_last_5_years_by_plan,
     get_my_payments,
     get_my_payment_detail, get_total_revenue_by_plan, get_total_payment_amount
+, get_this_week_total_revenue,
+    get_this_month_total_revenue,
+    get_this_year_total_revenue, _sum_total_amount,
 )
+from backend.app.util.day_calculation import _today_local
+
 
 class PaymentRequest(BaseModel):
     plan: PlanType
@@ -160,20 +166,13 @@ logger = logging.getLogger(__name__)
 @router.get("/today")
 def get_payments_today(db: Session = Depends(get_db)):
     try:
-        # 👉 실제 로직: 필요한 함수 호출
-        # 예: rows = payment_crud.get_today_by_plan(db)
-        rows = [
-            {"plan": "basic", "amount": 12000, "count": 3},
-            {"plan": "pro",   "amount": 45000, "count": 2},
-        ]
-        total_amount = sum(r["amount"] for r in rows)
-        total_count = sum(r["count"] for r in rows)
-        return {"ok": True, "total_amount": total_amount, "total_count": total_count, "data": rows}
-    except HTTPException:
-        raise
-    except Exception as e:
+        start = _today_local()            # 오늘 00:00 (로컬)
+        end   = start + timedelta(days=1) # 내일 00:00 (배타)
+
+        total = _sum_total_amount(db, start_date=start, end_date=end)
+        return {"ok": True, "total": int(total or 0)}   # ← total_amount 아님!
+    except Exception:
         logger.exception("GET /payments/today failed")
-        # JSON 에러로 반환 → CORS 미들웨어가 헤더를 붙일 수 있음
         raise HTTPException(status_code=500, detail="PAYMENTS_TODAY_FAILED")
 
 @router.get("/last-7-days")
@@ -264,3 +263,18 @@ def read_total_payment(db: Session = Depends(get_db)):
     전체 기간 총 매출 (SUCCESS만).
     """
     return {"total": get_total_payment_amount(db)}
+
+@router.get("/total/week")
+def read_total_week(db: Session = Depends(get_db)):
+    """이번 주 총매출 (월~오늘, 내일 0시 미만)"""
+    return {"total": get_this_week_total_revenue(db)}
+
+@router.get("/total/month")
+def read_total_month(db: Session = Depends(get_db)):
+    """이번 달 총매출 (1일~오늘, 내일 0시 미만)"""
+    return {"total": get_this_month_total_revenue(db)}
+
+@router.get("/total/year")
+def read_total_year(db: Session = Depends(get_db)):
+    """이번 년도 총매출 (YTD: 1/1~오늘, 내일 0시 미만)"""
+    return {"total": get_this_year_total_revenue(db)}

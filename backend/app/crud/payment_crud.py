@@ -5,7 +5,9 @@ from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 from backend.app.model import Payment, Subscription, Plan, PlanType
 from backend.app.util.trend import trend_series
-
+from backend.app.util.day_calculation import (
+_today_local,_growth_rate,_month_bounds,_add_months,_year_bounds,_week_bounds
+)
 # 공통 where / joins
 JOINS = """
 LEFT JOIN subscriptions s ON p.subscription_id = s.id
@@ -154,3 +156,39 @@ def get_total_payment_amount(db: Session) -> float:
               .filter(Payment.status == "SUCCESS")\
               .scalar() or Decimal("0")
     return float(total)
+
+
+def _sum_total_amount(
+    db: Session, *, start_date: Optional[date] = None, end_date: Optional[date] = None
+) -> float:
+    """
+    기간 총 매출 (SUCCESS만). 날짜 구간은 [start_date, end_date) 반열린.
+    """
+    q = db.query(func.coalesce(func.sum(Payment.amount), 0)).filter(Payment.status == "SUCCESS")
+    if start_date is not None:
+        q = q.filter(func.date(Payment.approved_at) >= start_date)
+    if end_date is not None:
+        q = q.filter(func.date(Payment.approved_at) < end_date)
+    total: Decimal = q.scalar() or Decimal("0")
+    return float(total)
+
+# ---- 이번 주 총매출 (월~오늘, 내일 0시 미만) ----
+def get_this_week_total_revenue(db: Session) -> float:
+    today = _today_local()
+    week_start, _next_monday = _week_bounds(today)   # 이번 주 월요일
+    end = today + timedelta(days=1)                  # 오늘 포함
+    return _sum_total_amount(db, start_date=week_start, end_date=end)
+
+# ---- 이번 달 총매출 (1일~오늘, 내일 0시 미만) ----
+def get_this_month_total_revenue(db: Session) -> float:
+    today = _today_local()
+    month_start, _next_month = _month_bounds(today)
+    end = today + timedelta(days=1)
+    return _sum_total_amount(db, start_date=month_start, end_date=end)
+
+# ---- 이번 년도 총매출 (YTD: 1/1~오늘, 내일 0시 미만) ----
+def get_this_year_total_revenue(db: Session) -> float:
+    today = _today_local()
+    year_start, _next_year = _year_bounds(today)
+    end = today + timedelta(days=1)
+    return _sum_total_amount(db, start_date=year_start, end_date=end)

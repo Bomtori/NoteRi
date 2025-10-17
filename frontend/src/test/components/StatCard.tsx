@@ -13,8 +13,8 @@ export default function StatCard({
   highlight,
   caption,
   className,
-  actions,              // ← 제목 옆 버튼 슬롯
-  hideTrend = false,    // ← 필요 시 뱃지 숨김
+  actions,              // 제목 아래 버튼 영역
+  hideTrend = false,
 }: {
   title: string
   value: string | number
@@ -30,33 +30,33 @@ export default function StatCard({
   const Icon = isUp ? TrendingUp : TrendingDown
 
   return (
-    <Card className={cn("hover:shadow-md transition", className)}>
-      <CardHeader className="flex items-start justify-between space-y-0">
-        {/* 왼쪽: 제목 + 버튼들을 한 줄로 */}
-        <div className="flex items-center gap-2.5 min-w-0">
-          <CardTitle className="text-muted-foreground whitespace-nowrap">
-            {title}
-          </CardTitle>
-        </div>
-        <div>
-          {actions && <div className="shrink-0">{actions}</div>}
+    <Card className={cn("w-full hover:shadow-md transition", className)}>
+      <CardHeader className="space-y-2">
+        {/* 1) 제목과 뱃지 한 줄 */}
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-muted-foreground">{title}</CardTitle>
+
+          {!hideTrend && (
+            <Badge
+              variant={isUp ? "secondary" : "destructive"}
+              className={cn("gap-1", isUp && "bg-green-50 text-green-700 border border-green-200")}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {delta}
+            </Badge>
+          )}
         </div>
 
-        {/* 오른쪽: 트렌드 뱃지 */}
-        {!hideTrend && (
-          <Badge
-            // 타입 충돌 피하려고 기존 variant만 사용 + 초록 스타일 덮어쓰기
-            variant={isUp ? "secondary" : "destructive"}
-            className={cn("gap-1", isUp && "bg-green-50 text-green-700 border border-green-200")}
-          >
-            <Icon className="h-3.5 w-3.5" />
-            {delta}
-          </Badge>
-        )}
+        {/* 2) 버튼(actions) — 제목 아래 */}
+        {actions && <div className="shrink-0">{actions}</div>}
       </CardHeader>
 
       <CardContent>
-        <div className="text-3xl font-semibold tracking-tight">{value}</div>
+        {/* 3) 값 — 한 줄 고정 */}
+        <div className="text-3xl font-semibold tracking-tight whitespace-nowrap">
+          {value}
+        </div>
+
         <div className="mt-3 space-y-0.5">
           {highlight && (
             <div className="text-sm font-medium flex items-center gap-1">

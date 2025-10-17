@@ -2,7 +2,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 from decimal import Decimal
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, List
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session

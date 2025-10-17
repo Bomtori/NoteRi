@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, UTC
 
 from backend.app.deps.auth import get_current_user
-from backend.app.model import User
+from backend.app.model import User, Subscription, Plan
 from backend.app.db import get_db
 from backend.app.schemas import user_schema
 import os
@@ -15,17 +15,39 @@ router = APIRouter()
 # ✅ 사용자 정보 조회 (GET)
 @router.get("/users/me", response_model=user_schema.UserResponse)
 async def get_user_me(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),   # ✅ 이렇게 파라미터로 받아야 함
 ):
+    # 활성 구독 중 최신(시작일 기준) 1건 조회
+    from sqlalchemy import desc
+    active_sub = (
+        db.query(Subscription)
+        .filter(
+            Subscription.user_id == current_user.id,
+            Subscription.is_active == True,
+        )
+        .order_by(desc(Subscription.start_date))   # 필요 시 기준 변경 가능
+        .first()
+    )
+
+    # Plan.name 이 Enum(PlanType)이면 .value 로 문자열 뽑기
+    plan_name = (
+        active_sub.plan.name.value
+        if active_sub and active_sub.plan
+        else None
+    )
+
     return {
         "id": current_user.id,
         "email": current_user.email,
         "name": current_user.name,
         "nickname": current_user.nickname,
         "picture": current_user.picture,
+        "oauth_provider": current_user.oauth_provider,
         "is_active": current_user.is_active,
         "created_at": current_user.created_at,
         "updated_at": current_user.updated_at,
+        "plan_name": plan_name,
     }
 
 

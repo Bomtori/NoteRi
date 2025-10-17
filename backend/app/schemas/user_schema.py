@@ -17,6 +17,7 @@ class UserResponse(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
+    plan_name: Optional[str] = None
 
     class Config:
         orm_mode = True

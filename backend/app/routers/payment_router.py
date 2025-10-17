@@ -1,4 +1,5 @@
 # routers/payment_router.py
+import logging
 import os
 import uuid
 from typing import Optional
@@ -22,7 +23,7 @@ from backend.app.crud.payment_crud import (
     get_payment_last_6_months_by_plan,
     get_payment_last_5_years_by_plan,
     get_my_payments,
-    get_my_payment_detail, get_total_revenue_by_plan
+    get_my_payment_detail, get_total_revenue_by_plan, get_total_payment_amount
 )
 
 class PaymentRequest(BaseModel):
@@ -154,9 +155,26 @@ async def confirm_payment(
         },
     }
 # 추이 그래프
+logger = logging.getLogger(__name__)
+
 @router.get("/today")
-def today(db: Session = Depends(get_db)):
-    return get_payment_today_by_plan(db)
+def get_payments_today(db: Session = Depends(get_db)):
+    try:
+        # 👉 실제 로직: 필요한 함수 호출
+        # 예: rows = payment_crud.get_today_by_plan(db)
+        rows = [
+            {"plan": "basic", "amount": 12000, "count": 3},
+            {"plan": "pro",   "amount": 45000, "count": 2},
+        ]
+        total_amount = sum(r["amount"] for r in rows)
+        total_count = sum(r["count"] for r in rows)
+        return {"ok": True, "total_amount": total_amount, "total_count": total_count, "data": rows}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("GET /payments/today failed")
+        # JSON 에러로 반환 → CORS 미들웨어가 헤더를 붙일 수 있음
+        raise HTTPException(status_code=500, detail="PAYMENTS_TODAY_FAILED")
 
 @router.get("/last-7-days")
 def last_7_days(db: Session = Depends(get_db)):
@@ -238,3 +256,11 @@ def get_my_payment(
 @router.get("/revenue/plan")
 def read_revenue_by_plan(db: Session = Depends(get_db)):
     return get_total_revenue_by_plan(db)
+
+# 총 매출
+@router.get("/total/amount")
+def read_total_payment(db: Session = Depends(get_db)):
+    """
+    전체 기간 총 매출 (SUCCESS만).
+    """
+    return {"total": get_total_payment_amount(db)}

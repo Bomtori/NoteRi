@@ -1,5 +1,6 @@
 from typing import Optional, Tuple, List  # ✅ 확인
 from datetime import date, timedelta
+from decimal import Decimal
 from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 from backend.app.model import Payment, Subscription, Plan, PlanType
@@ -144,3 +145,12 @@ def get_total_revenue_by_plan(db: Session):
         revenue_dict.setdefault(plan.value, 0.0)
 
     return revenue_dict
+
+def get_total_payment_amount(db: Session) -> float:
+    """
+    전체 기간 총 매출 (SUCCESS만).
+    """
+    total = db.query(func.coalesce(func.sum(Payment.amount), 0))\
+              .filter(Payment.status == "SUCCESS")\
+              .scalar() or Decimal("0")
+    return float(total)

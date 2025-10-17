@@ -83,13 +83,19 @@ app.include_router(redis_test_router)
 # static 디렉토리 생성 후 mount
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+origins = [
+    "http://localhost:5173",      # 학원에서 돌리는 프론트
+    "http://127.0.0.1:5173",
+    "http://1.236.171.160:5173",  # 필요 시 추가
+]
+
 # ✅ CORS 설정
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 프론트엔드 주소
-    allow_credentials=True,
-    allow_methods=["*"],   # 모든 메서드 허용 (GET, POST, OPTIONS 등)
-    allow_headers=["*"],   # 모든 헤더 허용
+    allow_origins=origins,
+    allow_credentials=True,  # 로그인 쿠키, 토큰 등
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 pipeline = STTPipeline()

@@ -26,11 +26,11 @@ oauth.register(
 COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN", None)
 ACCESS_TOKEN_MAX_AGE = 3600  # 초
 FRONTEND_URL = os.getenv("FRONTEND_URL")
+
 @router.get("/login")
 async def login_google(request: Request):
-    redirect_uri = request.url_for("google_callback")
+    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI") or request.url_for("google_callback")
     return await oauth.google.authorize_redirect(request, redirect_uri)
-
 
 @router.get("/callback", name="google_callback")
 async def google_callback(request: Request, db: Session = Depends(get_db)):

@@ -21,5 +21,3 @@ def test_chat_basic():
     out = generate_text("Reply exactly with: pong.", temperature=0.0, max_output_tokens=16).strip()
     print("MODEL OUT:", repr(out))
     assert out.lower().startswith("pong")
-
-## 헤헤

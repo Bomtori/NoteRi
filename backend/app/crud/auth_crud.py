@@ -98,8 +98,7 @@ def get_or_create_user(
             start_date=date.today(),
             end_date=date.today() + timedelta(days=365 * 100),
             is_active=True,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
+            created_at=datetime.now(UTC)
         )
         db.add(free_sub)
         db.commit()

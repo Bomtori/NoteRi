@@ -14,27 +14,40 @@ def get_or_create_user(
     name: str,
     nickname: str,
     picture: str,
-):
-    """
-    공통: OAuth 로그인한 유저 DB에 등록 (없으면 생성)
-    - 탈퇴(is_active=False) 계정이 있으면 재활성화
-    """
-    # 1) provider + sub 기준으로 기존 유저 찾기
-    db_user = db.query(User).filter(
+) -> User:
+    # 1) 우선 provider+sub로 조회
+    user = db.query(User).filter(
         User.oauth_provider == provider,
         User.oauth_sub == sub
     ).first()
-    free_plan = db.query(Plan).filter(Plan.name == "free").first()
-    # 2) 없는 경우 (처음 로그인)
-    if not db_user:
-        # 혹시 같은 email인데 탈퇴 상태(is_active=False)인지 확인
-        user = db.query(User).filter(
-            User.email == email,
-            User.oauth_provider == provider
-        ).first()
+    if user:
+        # 프로필 최신화(선택)
+        user.name = user.name or name
+        user.nickname = user.nickname or nickname
+        user.picture = user.picture or picture
+        user.updated_at = datetime.now(UTC)
+        db.commit()
+        db.refresh(user)
+        return user
 
-        # ✅ 완전히 새 계정 생성
-        db_user = User(
+    # 2) 없으면 email로 조회해서 같은 사람으로 본다 (이메일=계정 기준)
+    user = db.query(User).filter(User.email == email).first()
+    if user:
+        # 기존 계정에 새로운 provider/sub 연결
+        user.oauth_provider = provider
+        user.oauth_sub = sub
+        # 필요한 경우 프로필 갱신(비어있을 때만)
+        user.name = user.name or name
+        user.nickname = user.nickname or nickname
+        user.picture = user.picture or picture
+        user.updated_at = datetime.now(UTC)
+        db.commit()
+        db.refresh(user)
+        return user
+
+    # 3) email도 없으면 신규 생성
+    try:
+        user = User(
             email=email,
             name=name,
             nickname=nickname,
@@ -46,28 +59,23 @@ def get_or_create_user(
             created_at=datetime.now(UTC),
             updated_at=datetime.now(UTC),
         )
-        db.add(db_user)
+        db.add(user)
         db.commit()
-        db.refresh(db_user)
-
-        # 무료 플랜 생성
-        free_sub = Subscription(
-            user_id=db_user.id,
-            plan_id=free_plan.id,  # ✅ 또는 plan=free_plan (둘 중 하나)
-            start_date=date.today(),
-            end_date=date.today() + timedelta(days=365 * 100),
-            is_active=True,
-            created_at=datetime.now(UTC)
-        )
-        db.add(free_sub)
-        db.commit()
-        return db_user
-
-    # 3) 기존 유저 있으면 로그인 처리 (updated_at 갱신)
-    db_user.updated_at = datetime.now(UTC)
-    db.commit()
-    db.refresh(db_user)
-    return db_user
+        db.refresh(user)
+        return user
+    except IntegrityError:
+        # 경합 시 롤백 후 email 기준으로 재조회
+        db.rollback()
+        user = db.query(User).filter(User.email == email).first()
+        if user:
+            # 필요하면 provider/sub 업데이트
+            user.oauth_provider = provider
+            user.oauth_sub = sub
+            user.updated_at = datetime.now(UTC)
+            db.commit()
+            db.refresh(user)
+            return user
+        raise
 
 
 def generate_login_response(db_user: User):

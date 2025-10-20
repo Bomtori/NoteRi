@@ -1,31 +1,52 @@
 # backend/app/util/redis_publisher.py
+
 import time
 from typing import Optional, Dict, Any
 from .redis_client import get_redis
 
-SEG_KEY_FMT  = "stt:{sid}:segments"     # 확정 히스토리(Stream)
-SUM_KEY_FMT  = "stt:{sid}:summaries"    # 1분 요약(Stream)
-META_KEY_FMT = "stt:{sid}:meta"         # 메타(Hash)
+# 기본 포맷(접미사)
+SEG_SUFFIX  = "{sid}:segments"
+SUM_SUFFIX  = "{sid}:summaries"
+META_SUFFIX = "{sid}:meta"
 
-def _k(fmt: str, sid: str) -> str:
-    return fmt.format(sid=sid)
+def _k(prefix: str, suffix_fmt: str, sid: str) -> str:
+    """
+    항상 날짜 prefix를 강제.
+    예) prefix='stt:2025-10-20' -> 'stt:2025-10-20:<sid>:segments'
+    """
+
+    assert prefix and prefix.startswith("stt:"), "prefix is required (e.g., 'stt:YYYY-MM-DD')"
+    return f"{prefix}:{suffix_fmt.format(sid=sid)}"
 
 def now_ms() -> int:
     return int(time.time() * 1000)
 
 # ── 메타: 녹음 시작/종료 ────────────────────────────────────────────────
-async def init_session_meta(sid: str, *, sample_rate: int, stt_model: str, vad_threshold: float):
+async def init_session_meta(
+    sid: str,
+    *,
+    sample_rate: int,
+    vad_threshold: float,
+    prefix: str,
+    **extra_fields: Any,
+):
+    """
+    NOTE: stt_model 필드는 제거(요청 반영). 필요시 extra_fields로 임시 필드 추가 가능.
+    """
     r = await get_redis()
-    await r.hset(_k(META_KEY_FMT, sid), mapping={
+    fields: Dict[str, Any] = {
         "started_at_ms": now_ms(),
         "sample_rate": sample_rate,
-        "stt_model": stt_model,
         "vad_threshold": vad_threshold,
-    })
+    }
+    if extra_fields:
+        # 문자열 강제 변환은 여기서 하지 않음(원 타입 유지)
+        fields.update(extra_fields)
+    await r.hset(_k(prefix, META_SUFFIX, sid), mapping=fields)
 
-async def end_session_meta(sid: str):
-    r = await get_redis()
-    await r.hset(_k(META_KEY_FMT, sid), "ended_at_ms", now_ms())
+async def end_session_meta(sid: str, *, prefix: str):
+    await r.hset(_k(prefix, META_SUFFIX, sid), "ended_at_ms", now_ms())
+ 
 
 # ── 확정 히스토리(Stream) ─────────────────────────────────────────────
 async def publish_segment(
@@ -37,7 +58,7 @@ async def publish_segment(
     confidence: Optional[float] = None,
     ts_start_ms: Optional[int] = None,
     ts_end_ms: Optional[int] = None,
-    model: Optional[str] = None,
+    prefix: str,
 ) -> str:
     r = await get_redis()
     fields: Dict[str, Any] = {
@@ -48,9 +69,8 @@ async def publish_segment(
     if confidence  is not None: fields["confidence"]  = confidence
     if ts_start_ms is not None: fields["ts_start_ms"] = ts_start_ms
     if ts_end_ms   is not None: fields["ts_end_ms"]   = ts_end_ms
-    if model       is not None: fields["model"]       = model
 
-    return await r.xadd(_k(SEG_KEY_FMT, sid), fields, maxlen=20000, approximate=True)
+    return await r.xadd(_k(prefix, SEG_SUFFIX, sid), fields, maxlen=20000, approximate=True)
 
 # ── 1분 요약(Stream) ──────────────────────────────────────────────────
 async def publish_summary(
@@ -63,6 +83,7 @@ async def publish_summary(
     tokens_input: Optional[int] = None,
     tokens_output: Optional[int] = None,
     source_text: Optional[str] = None,
+    prefix: str,
 ) -> str:
     r = await get_redis()
     fields: Dict[str, Any] = {
@@ -75,4 +96,4 @@ async def publish_summary(
     if tokens_output is not None: fields["tokens_output"] = tokens_output
     if source_text   is not None: fields["source_text"]   = source_text
 
-    return await r.xadd(_k(SUM_KEY_FMT, sid), fields, maxlen=5000, approximate=True)
+    return await r.xadd(_k(prefix, SUM_SUFFIX, sid), fields, maxlen=5000, approximate=True)

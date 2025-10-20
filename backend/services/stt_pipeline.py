@@ -7,6 +7,9 @@ import os
 import contextlib
 from datetime import datetime
 import time
+from uuid import uuid4
+
+from starlette.websockets import WebSocketState
 
 from backend.ml.stt_model import STTModel
 from backend.ml.vad import VADFilter
@@ -14,6 +17,17 @@ from backend.ml.postprocess.silence_segmenter import SilenceSegmenter
 from backend.ml.postprocess.timestamp_deduplicator import TimestampDeduplicator
 from backend.ml.summarizer import ThreeLineSummarizer
 from backend.config import VAD_THRESHOLD, VAD_SAMPLE_RATE
+
+# ✅ Redis 퍼블리셔 (요구사항 반영: session_id 필드 미사용, raw_text/speaker_label 사용)
+from backend.app.util.redis_publisher import (
+    init_session_meta, end_session_meta,
+    publish_segment, publish_summary
+)
+
+def _short_sid() -> str:
+    """8자리 짧은 SID (예: 'a1b2c3d4')"""
+    return uuid4().hex[:8]
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -63,6 +77,9 @@ class STTPipeline:
         self.last_saved_file = None
         self.last_saved_duration = None
 
+        # ✅ 짧은 세션 식별자 (Redis 키 네임스페이스 전용. 엔트리 필드에는 넣지 않음)
+        self.sid: str | None = None
+
     # ---------------------------------------------------------------------
     # 세션 수명주기 (선택적)
     # main.py에서 await pipeline.begin_session(websocket) / await pipeline.end_session()
@@ -74,13 +91,29 @@ class STTPipeline:
         if self.session_active:
             return
         self.ws = websocket
+
+        # ✅ 프론트가 ws?sid=... 로 주면 그걸 12자리까지 사용, 없으면 8자리 생성
+        query_sid = websocket.query_params.get("sid") if hasattr(websocket, "query_params") else None
+        self.sid = (query_sid[:12] if query_sid else None) or self.sid or _short_sid()
+
         self.session_active = True
         now = time.time()
         self.session_start_ts = now
         self.last_cut_ts = now
         if self.summary_task is None or self.summary_task.done():
             self.summary_task = asyncio.create_task(self._summary_loop())
-        logger.info("🟢 Session begun: summary loop started.")
+        logger.info(f"🟢 Session begun: sid={self.sid}, summary loop started.")
+
+        # ✅ 녹음 시작 시각 기록 (메타 HASH: started_at_ms)
+        try:
+            await init_session_meta(
+                sid=self.sid,
+                sample_rate=VAD_SAMPLE_RATE,
+                stt_model=getattr(self.stt, "model_name", "faster-whisper"),
+                vad_threshold=VAD_THRESHOLD
+            )
+        except Exception as e:
+            logger.warning(f"init_session_meta failed: {e}")
 
     async def end_session(self):
         """WS 종료 직전 호출: 마지막 구간 요약 flush & 타이머 종료."""
@@ -91,6 +124,13 @@ class STTPipeline:
             await asyncio.sleep(0.05)
         except Exception as e:
             logger.warning(f"flush on end_session failed: {e}")
+
+        # ✅ 녹음 종료 시각 기록 (메타 HASH: ended_at_ms)
+        if self.sid:
+            try:
+                await end_session_meta(self.sid)
+            except Exception as e:
+                logger.warning(f"end_session_meta failed: {e}")
 
         if self.summary_task and not self.summary_task.done():
             self.summary_task.cancel()
@@ -105,7 +145,6 @@ class STTPipeline:
         logger.info("🔴 Session ended: summary loop stopped.")
 
         self.reset_all()
-
 
     # ---------------------------------------------------------------------
     # 내부 타이머 루프 & 요약 로직
@@ -168,10 +207,24 @@ class STTPipeline:
         # 요약은 별 스레드에서 실행(이벤트 루프 블로킹 방지)
         summary = await asyncio.to_thread(self.summarizer.summarize, source_text)
 
-        try:
-            await self.ws.send_json({"paragraph": source_text, "summary": summary})
-        except Exception as e:
-            logger.warning(f"Send summary failed: {e}")
+        # ✅ 안전 전송
+        await self._safe_send_json({"paragraph": source_text, "summary": summary})
+
+        
+        if self.sid:
+            try:
+                start_ms = int(self.last_cut_ts * 1000)
+                end_ms   = int(now * 1000)
+                await publish_summary(
+                    sid=self.sid,
+                    interval_start_ms=start_ms,
+                    interval_end_ms=end_ms,
+                    summary_text=summary,
+                    model=getattr(self.summarizer, "model_name", "three-line"),
+                    # source_text=source_text  # 필요 시 저장
+                )
+            except Exception as e:
+                logger.warning(f"publish_summary failed: {e}")
 
         # 이번 구간 종료 → 컷 이동
         self.last_cut_ts = now
@@ -182,8 +235,16 @@ class STTPipeline:
         logger.info("🧾 Interval summarized and sent.")
 
     # ---------------------------------------------------------------------
-    # 🔸 종료 시 최종 요약 보장을 위한 헬퍼들 (추가)
+    # 🔸 종료 시 최종 요약 보장을 위한 헬퍼들
     # ---------------------------------------------------------------------
+    async def _safe_send_json(self, payload: dict):
+        """웹소켓이 살아있을 때만 안전하게 JSON 전송"""
+        if self.ws and self.ws.application_state == WebSocketState.CONNECTED:
+            try:
+                await self.ws.send_json(payload)
+            except Exception:
+                pass
+
     async def _force_finalize_live_buffer(self):
         """
         남아있는 실시간 텍스트 버퍼를 무음 주입처럼 강제로 확정시킨다.
@@ -193,12 +254,7 @@ class STTPipeline:
         for _ in range(3):
             live, finalized = self.segmenter.feed(is_silence=True)
             if finalized:
-                # 확정 문장 즉시 전송
-                if self.ws is not None:
-                    try:
-                        await self.ws.send_json({"append": finalized})
-                    except Exception:
-                        pass
+                await self._safe_send_json({"append": finalized})
                 # 요약 구간 집계용으로 기록
                 self.paragraph_buffer.append((time.time(), finalized))
                 break
@@ -214,11 +270,7 @@ class STTPipeline:
         await self._flush_interval_summary(force=True)
 
         # 3) (선택) 프런트가 구분하기 쉬운 종료 이벤트
-        if self.ws is not None:
-            try:
-                await self.ws.send_json({"event": "final_summary_done"})
-            except Exception:
-                pass
+        await self._safe_send_json({"event": "final_summary_done"})
 
     # ---------------------------------------------------------------------
     # 실시간 feed
@@ -231,6 +283,9 @@ class STTPipeline:
         # 세션/타이머 자동 초기화 (main에서 begin_session을 안 불렀을 때를 대비)
         if not self.session_active or self.ws is None:
             self.ws = websocket
+            query_sid = websocket.query_params.get("sid") if hasattr(websocket, "query_params") else None
+            self.sid = (query_sid[:12] if query_sid else None) or self.sid or _short_sid()
+
             self.session_active = True
             now = time.time()
             if self.session_start_ts is None:
@@ -239,7 +294,18 @@ class STTPipeline:
                 self.last_cut_ts = now
             if self.summary_task is None or self.summary_task.done():
                 self.summary_task = asyncio.create_task(self._summary_loop())
-            logger.info("🟢 Session auto-begun by first feed().")
+            logger.info(f"🟢 Session auto-begun by first feed(). sid={self.sid}")
+
+            # ✅ auto-begin 시에도 메타 시작 기록 보장
+            try:
+                await init_session_meta(
+                    sid=self.sid,
+                    sample_rate=VAD_SAMPLE_RATE,
+                    stt_model=getattr(self.stt, "model_name", "faster-whisper"),
+                    vad_threshold=VAD_THRESHOLD
+                )
+            except Exception as e:
+                logger.warning(f"init_session_meta(auto) failed: {e}")
 
         # === 원본 오디오 저장 ===
         self.raw_audio_buffer.extend(data)
@@ -247,12 +313,27 @@ class STTPipeline:
         # === 1. VAD 체크 ===
         if not self.vad.has_speech(data):
             live, finalized = self.segmenter.feed(is_silence=True)
+            if live:
+                await self._safe_send_json({"realtime": live})
+
             if finalized:
-                await websocket.send_json({"append": finalized})
+                await self._safe_send_json({"append": finalized})
                 # 확정 시점 기록
                 self.paragraph_buffer.append((time.time(), finalized))
                 logger.info(f"Finalized (silence): {finalized}")
-            return
+
+                # ✅ Redis로 확정 히스토리 적재 (raw_text / speaker_label='A')
+                if self.sid:
+                    try:
+                        await publish_segment(
+                            sid=self.sid,
+                            raw_text=finalized,
+                            speaker_label="A",
+                            model=getattr(self.stt, "model_name", "faster-whisper"),
+                        )
+                    except Exception as e:
+                        logger.warning(f"publish_segment failed(silence): {e}")
+            return  # ✅ 중요: 무음 분기에서는 여기서 종료
 
         # === 2. STT 실행 (segments 반환) ===
         segments = await asyncio.to_thread(self.stt.feed, data, True)
@@ -268,14 +349,26 @@ class STTPipeline:
         live, finalized = self.segmenter.feed(text=raw_text)
 
         if live:
-            await websocket.send_json({"realtime": live})
+            await self._safe_send_json({"realtime": live})
             logger.debug(f"Live Buffer: {live}")
 
         if finalized:
-            await websocket.send_json({"append": finalized})
+            await self._safe_send_json({"append": finalized})
             # 확정 시점 기록
             self.paragraph_buffer.append((time.time(), finalized))
             logger.info(f"Finalized: {finalized}")
+
+            # ✅ Redis로 확정 히스토리 적재 (raw_text / speaker_label='A')
+            if self.sid:
+                try:
+                    await publish_segment(
+                        sid=self.sid,
+                        raw_text=finalized,
+                        speaker_label="A",
+                        model=getattr(self.stt, "model_name", "faster-whisper"),
+                    )
+                except Exception as e:
+                    logger.warning(f"publish_segment failed: {e}")
 
         logger.debug(f"Deduped Text: {raw_text}")
 
@@ -289,8 +382,7 @@ class STTPipeline:
         self.segmenter.silence_time = 0.0
         self.deduper.reset()
         logger.info("🔄 STT Pipeline 상태 초기화 완료 (buffers only)")
-    
-    
+
     def reset_all(self):
         """세션 전체 완전 초기화"""
         # 1) 내부 버퍼 초기화

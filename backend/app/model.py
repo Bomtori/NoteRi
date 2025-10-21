@@ -160,7 +160,6 @@ class Board(Base):
     audios = relationship("AudioData", back_populates="board", cascade="all, delete-orphan")
     memos = relationship("Memo", back_populates="board", cascade="all, delete-orphan")
     transcripts = relationship("Transcript", back_populates="board", cascade="all, delete-orphan")
-    summaries = relationship("Summary", back_populates="board", cascade="all, delete-orphan")
 
     # 기존 recording_sessions 유지
     recording_sessions = relationship("RecordingSession", back_populates="board")
@@ -172,13 +171,14 @@ class AudioData(Base):
 
     id = Column(Integer, primary_key=True)
     board_id = Column(Integer, ForeignKey("boards.id", ondelete="CASCADE"), nullable=False)
+    recording_session_id = Column(Integer, ForeignKey("recording_sessions.id", ondelete="CASCADE"), nullable=False)
     file_path = Column(String, nullable=False)
     duration = Column(Integer)
     language = Column(String)
-    created_at = Column(TIMESTAMP)
+    created_at = Column(TIMESTAMP, server_default=func.now())
 
     board = relationship("Board", back_populates="audios")
-
+    session = relationship("RecordingSession", back_populates="audio")
 
 # Recording Sessions
 class RecordingSession(Base):
@@ -194,7 +194,10 @@ class RecordingSession(Base):
 
     board = relationship("Board", back_populates="recording_sessions")
     results = relationship("RecordingResult", back_populates="session")
-
+    # 세션 ↔ 오디오 1:1 (보통 한 세션에 WAV 1개)
+    audio = relationship("AudioData", back_populates="session", uselist=False, cascade="all, delete-orphan")
+    # ✅ 세션에 요약 귀속 (1:N)
+    summaries = relationship("Summary", back_populates="session", cascade="all, delete-orphan")
 
 # Recording Results
 class RecordingResult(Base):
@@ -227,7 +230,6 @@ class Transcript(Base):
 
     result = relationship("RecordingResult", back_populates="transcripts")
     board = relationship("Board", back_populates="transcripts")  # ✅ 추가
-    summaries = relationship("Summary", back_populates="transcript")
 
 
 # Memos
@@ -249,16 +251,21 @@ class Summary(Base):
     __tablename__ = "summaries"
 
     id = Column(Integer, primary_key=True)
-    transcript_id = Column(Integer, ForeignKey("transcripts.id", ondelete="CASCADE"), nullable=False)
-    board_id = Column(Integer, ForeignKey("boards.id", ondelete="CASCADE"), nullable=False)  # ✅ 새 연결
-    summary_type = Column(String)
+    # ✅ 핵심: 세션 FK로 귀속
+    recording_session_id = Column(Integer, ForeignKey("recording_sessions.id", ondelete="CASCADE"), nullable=False)
+    summary_type = Column(String)                      # 'interval' | 'final' 등
     content = Column(Text, nullable=False)
-    rating = Column(Boolean)
-    created_at = Column(TIMESTAMP)
+    rating = Column(Boolean)                           # 선택: 사용자 평점/북마크 등
+    # 선택: 구간 요약 및 로깅 메타
+    interval_start_at = Column(TIMESTAMP, nullable=True)
+    interval_end_at   = Column(TIMESTAMP, nullable=True)
+    model        = Column(String, nullable=True)
+    tokens_input = Column(Integer, nullable=True)
+    tokens_output= Column(Integer, nullable=True)
+    created_at   = Column(TIMESTAMP, server_default=func.now())
 
-    transcript = relationship("Transcript", back_populates="summaries")
-    board = relationship("Board", back_populates="summaries")  # ✅ 추가
-
+    # 관계
+    session = relationship("RecordingSession", back_populates="summaries")
 
 # Notifications
 class Notification(Base):

@@ -29,3 +29,5 @@ backend/recordings/
 
 # Environment variables
 backend/.env
+backend/.env
+.env

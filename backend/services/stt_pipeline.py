@@ -24,6 +24,7 @@ from backend.app.util.redis_publisher import (
     init_session_meta, end_session_meta,
     publish_segment, publish_summary
 )
+from backend.app.tasks.redis_to_pg import ingest_one_session
 
 def _short_sid() -> str:
     """8자리 짧은 SID (예: 'a1b2c3d4')"""
@@ -85,6 +86,10 @@ class STTPipeline:
         # ✅ 짧은 세션 식별자 (Redis 키 네임스페이스 전용. 엔트리 필드에는 넣지 않음)
         self.sid: str | None = None
         self.redis_prefix: str | None = None  # 'stt:YYYY-MM-DD' (세션 시작 시 고정)
+
+        # ----- 현재 발화 구간 추적용 (STT 토막들의 최소/최대 시간, 단위: 초)
+        self._utt_min_start: float | None = None
+        self._utt_max_end: float | None = None
 
     # ---------------------------------------------------------------------
     # 세션 수명주기 (선택적)
@@ -155,6 +160,15 @@ class STTPipeline:
         logger.info("🔴 Session ended: summary loop stopped.")
 
         self.reset_all()
+
+        # ✅ 종료 후 Redis→Postgres 적재 (이벤트 루프 블로킹 방지: 스레드로 실행)
+        if self.sid and self.redis_prefix:
+            try:
+                await asyncio.to_thread(ingest_one_session, self.redis_prefix, self.sid)
+                logger.info(f"[DB] Redis→Postgres ingest done. sid={self.sid}")
+            except Exception as e:
+                logger.warning(f"[DB] ingest failed for sid={self.sid}: {e}")
+
 
     # ---------------------------------------------------------------------
     # 내부 타이머 루프 & 요약 로직
@@ -237,8 +251,6 @@ class STTPipeline:
                     interval_start_ms=int(start_ts * 1000),
                     interval_end_ms=int(now * 1000),
                     summary_text=summary,
-                    # model/getattr 제거 (요청 반영: 필요없음)
-                    # source_text=source_text  # 필요 시 활성화
                 )
             except Exception as e:
                 logger.warning(f"publish_summary failed: {e}")
@@ -314,15 +326,28 @@ class STTPipeline:
                 self.paragraph_buffer.append((time.time(), finalized))
                 logger.info(f"Finalized (silence): {finalized}")
 
-                # ✅ Redis로 확정 히스토리 적재 (raw_text / speaker_label='A')
+                # ✅ Redis로 확정 히스토리 적재
                 if self.sid:
                     try:
+                        # 절대 타임라인: 세션 시작부터의 월클락을 end로, STT 구간 길이로 start를 역산
+                        now_ms = int(((time.time() - (self.session_start_ts or time.time())) * 1000))
+                        dur_ms = 0
+                        if (self._utt_min_start is not None) and (self._utt_max_end is not None):
+                            dur_ms = max(0, int((self._utt_max_end - self._utt_min_start) * 1000))
+                        ts_end_ms = now_ms
+                        ts_start_ms = max(0, ts_end_ms - dur_ms)                       
+
                         await publish_segment(
                             sid=self.sid,
                             prefix=self.redis_prefix,
                             raw_text=finalized,
                             speaker_label="A",
+                            ts_start_ms=ts_start_ms,
+                            ts_end_ms=ts_end_ms,
                         )
+                        # 문장 하나 확정했으니 누적 범위 리셋  
+                        self._utt_min_start = None
+                        self._utt_max_end = None
                     except Exception as e:
                         logger.warning(f"publish_segment failed(silence): {e}")
 
@@ -332,6 +357,27 @@ class STTPipeline:
         segments = await asyncio.to_thread(self.stt.feed, data, True)
         if segments is None:
             return
+
+        # === 2-1. 현재 발화 구간(min start/max end) 누적 ===
+        # segments 원소가 (token, start, end) 튜플이거나, 객체에 .start/.end 속성이 있다고 가정하여 안전하게 처리
+        def _get_se_times(seg):
+            s = getattr(seg, "start", None)
+            e = getattr(seg, "end",   None)
+            if s is None or e is None:
+                if isinstance(seg, (list, tuple)) and len(seg) >= 3:
+                    # 보편적 포맷: (word, start, end)
+                    s, e = seg[1], seg[2]
+            return s, e
+
+        for _seg in segments:
+            s, e = _get_se_times(_seg)
+            if s is None or e is None:
+                continue
+            if self._utt_min_start is None or s < self._utt_min_start:
+                self._utt_min_start = float(s)
+            if self._utt_max_end is None or e > self._utt_max_end:
+                self._utt_max_end = float(e)
+
 
         # === 3. 타임스탬프 Deduplication ===
         raw_text = self.deduper.filter(segments)
@@ -354,12 +400,24 @@ class STTPipeline:
             # ✅ Redis로 확정 히스토리 적재 (raw_text / speaker_label='A')
             if self.sid:
                 try:
+                    now_ms = int(((time.time() - (self.session_start_ts or time.time())) * 1000))
+                    dur_ms = 0
+                    if (self._utt_min_start is not None) and (self._utt_max_end is not None):
+                        dur_ms = max(0, int((self._utt_max_end - self._utt_min_start) * 1000))
+                    ts_end_ms = now_ms
+                    ts_start_ms = max(0, ts_end_ms - dur_ms)
+
                     await publish_segment(
                         sid=self.sid,
                         prefix=self.redis_prefix,
                         raw_text=finalized,
                         speaker_label="A",
+                        ts_start_ms=ts_start_ms,
+                        ts_end_ms=ts_end_ms,
                     )
+                    # 확정 후 누적 범위 리셋
+                    self._utt_min_start = None
+                    self._utt_max_end = None
                 except Exception as e:
                     logger.warning(f"publish_segment failed: {e}")
 
@@ -374,6 +432,9 @@ class STTPipeline:
         self.segmenter.buffer = ""
         self.segmenter.silence_time = 0.0
         self.deduper.reset()
+        # 발화 구간 추적 리셋
+        self._utt_min_start = None
+        self._utt_max_end = None
         logger.info("🔄 STT Pipeline 상태 초기화 완료 (buffers only)")
 
     def reset_all(self):
@@ -384,6 +445,8 @@ class STTPipeline:
         self.segmenter.silence_time = 0.0
         self.deduper.reset()
         self.paragraph_buffer.clear()
+        self._utt_min_start = None
+        self._utt_max_end = None
 
         # 2) 세션 상태 초기화
         self.session_active = False

@@ -6,10 +6,8 @@ import { cn } from "@/lib/utils"
 
 /**
  * props
- * - items?: Array<{ id: string; label: string; note?: string; count: number }>
- * - usersByPlan?: Record<string, number>  // { Basic: 9508, Pro: 5546, ... }
- * - highlight?: string                    // 강조할 플랜 이름 (대소문자 무시)
- * - notes?: Record<string, string>        // 라벨 옆 보조표기
+ * - items?: Array<{ id: string; label: string; count: number }>
+ * - usersByPlan?: Array<{ plan: string; user_count: number }> | Record<string, number>
  * - title?: string
  * - className?: string
  */
@@ -19,13 +17,24 @@ export default function PricingBreakdownCard({
   title = "요금제별 가입 현황",
   className,
 }) {
-  // 입력 통합 (items 우선, 없으면 usersByPlan에서 생성)
   const rows = useMemo(() => {
+    // 1) items가 오면 그대로 사용
     if (Array.isArray(items)) return items
+
+    // 2) usersByPlan이 배열 형태([{plan,user_count}])일 때
+    if (Array.isArray(usersByPlan)) {
+      return usersByPlan.map(({ plan, user_count }) => ({
+        id: String(plan),
+        label: String(plan),
+        count: Number(user_count ?? 0),
+      }))
+    }
+
+    // 3) usersByPlan이 객체 형태({ planName: count })일 때
     const obj = usersByPlan || {}
     return Object.entries(obj).map(([name, count]) => ({
-      id: name,
-      label: name,
+      id: String(name),
+      label: String(name),
       count: Number(count ?? 0),
     }))
   }, [items, usersByPlan])
@@ -34,6 +43,7 @@ export default function PricingBreakdownCard({
     () => rows.reduce((s, r) => s + (Number(r.count) || 0), 0),
     [rows]
   )
+
   return (
     <Card className={cn("w-full", className)}>
       <CardHeader className="pb-3">
@@ -56,7 +66,7 @@ export default function PricingBreakdownCard({
                   <div className="min-w-0">
                     <div className="text-sm font-medium">{label}</div>
                   </div>
-                  <div className={cn("text-lg font-semibold tabular-nums")}>
+                  <div className="text-lg font-semibold tabular-nums">
                     {Number(count || 0).toLocaleString()}명
                   </div>
                 </React.Fragment>

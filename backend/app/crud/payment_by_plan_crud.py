@@ -73,6 +73,57 @@ def get_last_365d_revenue_by_plan(db: Session) -> Dict[str, float]:
     return _sum_by_plan(db, start_date=start, end_date=end)
 
 
+# ───────────── 전일 대비 (DoD) ─────────────
+def get_dod_growth_by_plan(db) -> Dict[str, dict]:
+    """
+    오늘(00:00~내일 00:00) vs 어제(00:00~오늘 00:00).
+    반환: {"pro": {"current": ..., "previous": ..., "growth_rate": ...}, ...}
+    """
+    today = _today_local()                 # date(로컬)
+    cur_start = today                      # 오늘 00:00
+    cur_end   = today + timedelta(days=1)  # 내일 00:00 (배타)
+
+    prev_start = today - timedelta(days=1) # 어제 00:00
+    prev_end   = today                     # 오늘 00:00
+
+    cur  = _sum_by_plan(db, start_date=cur_start,  end_date=cur_end)
+    prev = _sum_by_plan(db, start_date=prev_start, end_date=prev_end)
+
+    out = {}
+    for p in PlanType:
+        c  = float(cur.get(p.value, 0.0))
+        pv = float(prev.get(p.value, 0.0))
+        out[p.value] = {"current": c, "previous": pv, "growth_rate": _growth_rate(c, pv)}
+    return out
+
+
+# ───────────── 전주 대비 (WoW: 주간누적 동요일까지) ─────────────
+def get_wow_growth_by_plan(db) -> Dict[str, dict]:
+    """
+    이번 주 누적(월요일 00:00 ~ 오늘 포함) vs 지난주 '동요일'까지 누적.
+    - 이번 주의 시작: 월요일 00:00 (ISO 주)
+    - 지난 주 비교 구간: (이번 주 시작 - 7일) ~ (그 + (오늘-이번주시작) + 1일)
+    반환: {"enterprise": {"current": ..., "previous": ..., "growth_rate": ...}, ...}
+    """
+    today = _today_local()                     # date
+    # 이번 주 시작(월요일 00:00)
+    cur_w_start = today - timedelta(days=today.weekday())
+    cur_end     = today + timedelta(days=1)    # 오늘 포함 (내일 00:00)
+
+    # 지난 주 시작 및 '동요일'까지 동일 길이 구간
+    prev_w_start = cur_w_start - timedelta(days=7)
+    elapsed_days = (today - cur_w_start).days  # 이번주 경과 일수(월:0, 화:1, ...)
+    prev_end     = prev_w_start + timedelta(days=elapsed_days + 1)  # 배타 상한
+
+    cur  = _sum_by_plan(db, start_date=cur_w_start, end_date=cur_end)
+    prev = _sum_by_plan(db, start_date=prev_w_start, end_date=prev_end)
+
+    out = {}
+    for p in PlanType:
+        c  = float(cur.get(p.value, 0.0))
+        pv = float(prev.get(p.value, 0.0))
+        out[p.value] = {"current": c, "previous": pv, "growth_rate": _growth_rate(c, pv)}
+    return out
 # ---------------- 4) 플랜별 전월 대비 성장률 ----------------
 def get_mom_growth_by_plan(db: Session) -> Dict[str, dict]:
     """

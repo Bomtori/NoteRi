@@ -12,11 +12,11 @@ import { ButtonGroup } from "@/components/ui/button-group"
 function Buttons({ active = "users", onChange }) {
   return (
     <ButtonGroup className="flex items-center gap-2">
-      <ButtonGroup className="hidden sm:flex">
-        <Button variant="outline" size="icon" aria-label="Go Back" onClick={() => window.history.back()}>
-          <ArrowLeftIcon />
-        </Button>
-      </ButtonGroup>
+      {/*<ButtonGroup className="hidden sm:flex">*/}
+      {/*  <Button variant="outline" size="icon" aria-label="Go Back" onClick={() => window.history.back()}>*/}
+      {/*    <ArrowLeftIcon />*/}
+      {/*  </Button>*/}
+      {/*</ButtonGroup>*/}
 
       <ButtonGroup className="gap-2">
         <Button

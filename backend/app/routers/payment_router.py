@@ -74,7 +74,7 @@ def request_payment(
         "amount": amount,
         "orderName": f"{plan.name} plan subscription",
         "customerEmail": current_user.email,
-        "successUrl": f"{SUCCESS_URL}?orderId={order_id}&plan={plan.name}",
+        "successUrl": f"{SUCCESS_URL}?plan={plan.name}",
         "failUrl": FAIL_URL,
     }
 
@@ -175,21 +175,51 @@ def get_payments_today(db: Session = Depends(get_db)):
         logger.exception("GET /payments/today failed")
         raise HTTPException(status_code=500, detail="PAYMENTS_TODAY_FAILED")
 
+def _collapse_rows_to_xy(rows):
+    series = []
+    for r in rows or []:
+        x = getattr(r, "x", None) or getattr(r, "label", None) or getattr(r, "date", None) \
+            or getattr(r, "week", None) or getattr(r, "month", None) or getattr(r, "year", None) or ""
+        y = getattr(r, "y", None) or getattr(r, "count", None) or getattr(r, "value", None) \
+            or getattr(r, "total", None) or 0
+        series.append({"x": str(x), "y": int(y) if y is not None else 0})
+    return series
+
 @router.get("/last-7-days")
 def last_7_days(db: Session = Depends(get_db)):
-    return get_payment_last_7_days_by_plan(db)
+    try:
+        items = get_payment_last_7_days_by_plan(db)
+        return {"ok": True, "items": items}
+    except Exception:
+        logger.exception("GET /payments/last-7-days failed")
+        raise HTTPException(status_code=500, detail="PAYMENTS_LAST_7_DAYS_FAILED")
 
 @router.get("/last-5-weeks")
 def last_5_weeks(db: Session = Depends(get_db)):
-    return get_payment_last_5_weeks_by_plan(db )
+    try:
+        items = get_payment_last_5_weeks_by_plan(db)
+        return {"ok": True, "items": items}
+    except Exception:
+        logger.exception("GET /payments/last-5-weeks failed")
+        raise HTTPException(status_code=500, detail="PAYMENTS_LAST_5_WEEKS_FAILED")
 
 @router.get("/last-6-months")
-def last_6_months(db: Session = Depends(get_db) ):
-    return get_payment_last_6_months_by_plan(db )
+def last_6_months(db: Session = Depends(get_db)):
+    try:
+        items = get_payment_last_6_months_by_plan(db)
+        return {"ok": True, "items": items}
+    except Exception:
+        logger.exception("GET /payments/last-6-months failed")
+        raise HTTPException(status_code=500, detail="PAYMENTS_LAST_6_MONTHS_FAILED")
 
 @router.get("/last-5-years")
-def last_5_years(db: Session = Depends(get_db) ):
-    return get_payment_last_5_years_by_plan(db )
+def last_5_years(db: Session = Depends(get_db)):
+    try:
+        items = get_payment_last_5_years_by_plan(db)
+        return {"ok": True, "items": items}
+    except Exception:
+        logger.exception("GET /payments/last-5-years failed")
+        raise HTTPException(status_code=500, detail="PAYMENTS_LAST_5_YEARS_FAILED")
 
 @router.get("/me/payments", response_model=PaymentListResponse)
 def list_my_payments(

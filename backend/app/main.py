@@ -9,21 +9,7 @@ from backend.app.tasks.scheduler import start_scheduler
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.db import get_db, SessionLocal
 from backend.app.seed.paln_seed import seed_plans
-from backend.app.routers.user.google_auth_router import router as google_auth_router  # ✅ login.py에서 라우터 import
-from backend.app.routers.user.kakao_auth_router import router as kakao_auth_router
-from backend.app.routers.user.naver_auth_router import router as naver_auth_router
-from backend.app.routers.user.userInfo_router import router as userinfo_router
-from backend.app.routers import board_router as board_router, folder_router as folder_router, subscription_router as subscription_router
-from backend.app.routers.user.profile_upload_router import router as upload_router
-from backend.app.routers.payment_router import router as payment_router
-from backend.app.routers.notion_auth_router import router as notion_auth_router
-from backend.app.routers.memo_router import router as memo_router
-from backend.app.routers.audio_router import router as audio_router
-from backend.app.routers.user.user_router import router as user_router
-from backend.app.routers.recording_usage_router import router as recording_usage_router
-from backend.app.routers.gemini_router import router as gemini_router
-from backend.app.routers.payment_by_plan_router import router as payment_by_plan_router
-
+from backend.app.routers import register_routers
 load_dotenv()
 
 app = FastAPI()
@@ -31,23 +17,6 @@ app = FastAPI()
 # 세션 (OAuth redirect 시 필요할 수 있음)
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("APP_SECRET_KEY"))
 
-# 라우터 등록
-app.include_router(google_auth_router, prefix="", tags=["auth"])
-app.include_router(kakao_auth_router, prefix="", tags=["auth"])
-app.include_router(naver_auth_router, prefix="", tags=["auth"])
-app.include_router(userinfo_router, prefix="", tags=["users"])
-app.include_router(user_router)
-app.include_router(board_router.router)
-app.include_router(upload_router, prefix="", tags=["upload"])
-app.include_router(folder_router.router)
-app.include_router(subscription_router.router)
-app.include_router(payment_router)
-app.include_router(notion_auth_router)
-app.include_router(memo_router)
-app.include_router(audio_router)
-app.include_router(recording_usage_router)
-app.include_router(gemini_router)
-app.include_router(payment_by_plan_router)
 
 # static 디렉토리 생성 후 mount
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -55,7 +24,8 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 origins = [
     "http://localhost:5173",      # 학원에서 돌리는 프론트
     "http://127.0.0.1:5173",
-    "http://1.236.171.160:5173",  # 필요 시 추가
+    "http://1.236.171.160:5173",
+    "http://localhost:8000"# 필요 시 추가
 ]
 
 # ✅ CORS 설정
@@ -66,6 +36,8 @@ app.add_middleware(
     allow_methods=["*"],   # 모든 메서드 허용 (GET, POST, OPTIONS 등)
     allow_headers=["*"],   # 모든 헤더 허용
 )
+# 라우터 등록
+register_routers(app)  # 한 줄로 끝
 
 pipeline = STTPipeline()
 diarizer = DiarizationService()

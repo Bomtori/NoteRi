@@ -6,6 +6,7 @@ from fastapi import status
 
 from backend.app.model import User, Subscription, Plan, PlanType  # PlanType 꼭 import
 from backend.app.util.auth import create_access_token
+from backend.app.util.errors import OAuthProviderConflict
 
 
 def get_or_create_user(
@@ -17,7 +18,7 @@ def get_or_create_user(
     nickname: str,
     picture: str,
 ) -> User:
-    # 1) provider + sub로 조회
+    # 1) provider + sub로 조회 (이미 그 provider로 로그인한 적 있음)
     user = (
         db.query(User)
         .filter(User.oauth_provider == provider, User.oauth_sub == sub)
@@ -33,18 +34,26 @@ def get_or_create_user(
         db.refresh(user)
         return user
 
-    # 2) 이메일로 병합
-    user = db.query(User).filter(User.email == email).first()
-    if user:
-        user.oauth_provider = provider
-        user.oauth_sub = sub
-        user.name = user.name or name
-        user.nickname = user.nickname or nickname
-        user.picture = user.picture or picture
-        user.updated_at = datetime.now(UTC)
+    # 2) 이메일로 조회 (이미 같은 이메일로 다른 provider 가입 여부 확인)
+    existing = db.query(User).filter(User.email == email).first()
+    if existing:
+        # 기존 계정이 소셜 연동된 상태이고, 그 provider가 현재 시도한 provider와 다르면 충돌 처리
+        if existing.oauth_provider and existing.oauth_provider != provider:
+            # 예: 기존 'google', 시도는 'naver' → 병합 금지, 안내
+            raise OAuthProviderConflict(registered_provider=existing.oauth_provider)
+
+        # 여기서부터는 다음 케이스:
+        # - 기존 계정이 있는데 아직 oauth_provider가 비어있음 → 이번 provider로 연결 허용
+        # - 혹은 기존 provider와 같음(드문 케이스지만) → sub만 업데이트
+        existing.oauth_provider = provider
+        existing.oauth_sub = sub
+        existing.name = existing.name or name
+        existing.nickname = existing.nickname or nickname
+        existing.picture = existing.picture or picture
+        existing.updated_at = datetime.now(UTC)
         db.commit()
-        db.refresh(user)
-        return user
+        db.refresh(existing)
+        return existing
 
     # 3) 신규 생성 + 무료 구독 부여
     try:
@@ -65,27 +74,32 @@ def get_or_create_user(
         db.refresh(user)
     except IntegrityError:
         db.rollback()
-        # 경합 시 이메일 기준으로 재조회 후 provider/sub 업데이트
-        user = db.query(User).filter(User.email == email).first()
-        if not user:
+        # 경합이나 다른 곳에서 선점된 경우 이메일 재조회
+        existing = db.query(User).filter(User.email == email).first()
+        if not existing:
             raise
-        user.oauth_provider = provider
-        user.oauth_sub = sub
-        user.updated_at = datetime.now(UTC)
-        db.commit()
-        db.refresh(user)
-        return user
+        if existing.oauth_provider and existing.oauth_provider != provider:
+            # 이미 다른 provider로 가입돼 있었음 → 충돌
+            raise OAuthProviderConflict(registered_provider=existing.oauth_provider)
 
-    # ---- 여기까지 오면 '신규' 유저. 무료 플랜/구독 처리 ----
+        # 비어있거나 같은 provider면 연결
+        existing.oauth_provider = provider
+        existing.oauth_sub = sub
+        existing.updated_at = datetime.now(UTC)
+        db.commit()
+        db.refresh(existing)
+        return existing
+
+    # ---- 여기까지 오면 완전 신규 유저 → 무료 플랜/구독 처리 ----
     # (1) 무료 Plan 조회 또는 생성
     free_plan = db.query(Plan).filter(Plan.name == PlanType.free).first()
     if not free_plan:
-        free_plan = Plan(name=PlanType.free, price=0)  # 모델 스키마에 맞게 추가 필드 있으면 채우기
+        free_plan = Plan(name=PlanType.free, price=0)
         db.add(free_plan)
         db.commit()
         db.refresh(free_plan)
 
-    # (2) 사용자 활성 구독이 없을 때만 무료 구독 부여
+    # (2) 활성 구독 없으면 무료 구독 부여
     has_active = (
         db.query(Subscription)
         .filter(Subscription.user_id == user.id, Subscription.is_active == True)
@@ -94,11 +108,11 @@ def get_or_create_user(
     if not has_active:
         free_sub = Subscription(
             user_id=user.id,
-            plan_id=free_plan.id,  # 관계 필드에 Enum 넣지 말고 plan_id 사용!
+            plan_id=free_plan.id,
             start_date=date.today(),
             end_date=date.today() + timedelta(days=365 * 100),
             is_active=True,
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         db.add(free_sub)
         db.commit()

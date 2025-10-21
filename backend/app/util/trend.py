@@ -10,13 +10,14 @@ def _series_sql_parts(granularity: Granularity):
     if granularity == "day":
         series_sel  = "CAST(:start AS date), CAST(:end AS date), INTERVAL '1 day'"
         bucket_sql  = "series.bucket::date"
-        trunc_expr  = "date_trunc('day', {ts} AT TIME ZONE :tz)::date"
+        # ⬇️ timezone(:tz, {ts}) 로 변경
+        trunc_expr  = "date_trunc('day', timezone(:tz, {ts}))::date"
         label_key   = "date"
         label_fmt   = lambda d: d.isoformat()
     elif granularity == "week":
         series_sel  = "CAST(:start AS date), CAST(:end AS date), INTERVAL '1 week'"
         bucket_sql  = "series.bucket::date"
-        trunc_expr  = "date_trunc('week', {ts} AT TIME ZONE :tz)::date"
+        trunc_expr  = "date_trunc('week', timezone(:tz, {ts}))::date"
         label_key   = "week_start"
         label_fmt   = lambda d: d.isoformat()
     elif granularity == "month":
@@ -26,7 +27,7 @@ def _series_sql_parts(granularity: Granularity):
             "INTERVAL '1 month'"
         )
         bucket_sql  = "series.bucket::date"
-        trunc_expr  = "date_trunc('month', {ts} AT TIME ZONE :tz)::date"
+        trunc_expr  = "date_trunc('month', timezone(:tz, {ts}))::date"
         label_key   = "month"
         label_fmt   = lambda d: f"{d.year:04d}-{d.month:02d}"
     elif granularity == "year":
@@ -36,7 +37,7 @@ def _series_sql_parts(granularity: Granularity):
             "INTERVAL '1 year'"
         )
         bucket_sql  = "series.bucket::date"
-        trunc_expr  = "date_trunc('year', {ts} AT TIME ZONE :tz)::date"
+        trunc_expr  = "date_trunc('year', timezone(:tz, {ts}))::date"
         label_key   = "year"
         label_fmt   = lambda d: f"{d.year:04d}"
     else:
@@ -67,7 +68,17 @@ def trend_series(
     category_expr가 있으면 {bucket: {category: value}} 형식으로 응답.
     """
     series_sel, bucket_sql, trunc_expr, label_key, label_fmt = _series_sql_parts(granularity)
-    ts_qualified = f"{table}.{ts_column}" if "." not in ts_column else ts_column
+
+    # ⬇️ table에 별칭이 있으면 별칭.없음 → p.approved_at 형식으로 보정
+    if "." not in ts_column:
+        if " " in table:
+            alias = table.split()[-1]
+            ts_qualified = f"{alias}.{ts_column}"
+        else:
+            ts_qualified = f"{table}.{ts_column}"
+    else:
+        ts_qualified = ts_column
+
     trunc_sql = trunc_expr.format(ts=ts_qualified)
 
     if agg == "count":
@@ -91,12 +102,12 @@ def trend_series(
             {where_sql}
             GROUP BY 1, 2
         """
-        final_select = """
-            SELECT series.bucket::date AS bucket,
+        final_select = f"""
+            SELECT {bucket_sql} AS bucket,
                    c.category,
                    COALESCE(c.val, 0) AS val
             FROM series
-            LEFT JOIN counts c ON c.bucket::date = series.bucket::date
+            LEFT JOIN counts c ON c.bucket::date = {bucket_sql}
             ORDER BY series.bucket
         """
     else:
@@ -107,11 +118,11 @@ def trend_series(
             {where_sql}
             GROUP BY 1
         """
-        final_select = """
-            SELECT series.bucket::date AS bucket,
+        final_select = f"""
+            SELECT {bucket_sql} AS bucket,
                    COALESCE(c.val, 0) AS val
             FROM series
-            LEFT JOIN counts c ON c.bucket::date = series.bucket::date
+            LEFT JOIN counts c ON c.bucket::date = {bucket_sql}
             ORDER BY series.bucket
         """
 
@@ -139,35 +150,50 @@ def trend_series(
             by_bucket.setdefault(r.bucket, {})[r.category] = float(r.val)
 
         data: List[Dict[str, Any]] = []
-        totals = {c: 0.0 for c in cats}
-        for r in rows:
-            # rows는 시리즈 기준 정렬이라, 버킷 단위로 출력 재구성
-            pass
-        # rows를 다시 돌리면 비효율이라 버킷 재생성:
-        # granularity별 버킷 구간 재구성
+
+        # granularity별 버킷 재생성
         def _bucket_range(g, start, end):
             if g == "day":
-                return [start + timedelta(days=i) for i in range((end-start).days+1)]
+                return [start + timedelta(days=i) for i in range((end - start).days + 1)]
             if g == "week":
-                s = start - timedelta(days=start.weekday()); e = end - timedelta(days=end.weekday())
+                s = start - timedelta(days=start.weekday())
+                e = end - timedelta(days=end.weekday())
                 k = ((e - s).days // 7) + 1
                 return [s + timedelta(weeks=i) for i in range(k)]
             if g == "month":
-                out=[]; y,m=start.year,start.month
-                while (y,m) <= (end.year,end.month):
-                    out.append(date(y,m,1)); m=(m%12)+1; y += 1 if m==1 else 0
+                out = []
+                y, m = start.year, start.month
+                while (y, m) <= (end.year, end.month):
+                    out.append(date(y, m, 1))
+                    m = (m % 12) + 1
+                    if m == 1:
+                        y += 1
                 return out
             if g == "year":
-                return [date(y,1,1) for y in range(start.year, end.year+1)]
+                return [date(y, 1, 1) for y in range(start.year, end.year + 1)]
             raise ValueError
 
         buckets = _bucket_range(granularity, start, end)
+        totals: Dict[str, float] = {}
+
         for b in buckets:
             row = {label_key: label_fmt(b)}
-            for c in cats:
+            for c in by_bucket.keys() | set().union(*[set(v.keys()) for v in by_bucket.values()]) if by_bucket else set():
+                pass  # placeholder to preserve structure
+
+            # 카테고리 키 집합 계산
+            if buckets.index(b) == 0:
+                all_cats = set()
+                for v in by_bucket.values():
+                    all_cats |= set(v.keys())
+                totals = {c: 0.0 for c in all_cats}
+
+            # 값 채우기
+            for c in totals.keys():
                 v = by_bucket.get(b, {}).get(c, 0.0)
                 row[c] = v
                 totals[c] += v
+
             data.append(row)
 
         return {

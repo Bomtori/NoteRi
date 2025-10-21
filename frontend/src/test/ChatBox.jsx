@@ -8,7 +8,7 @@ function getToken() {
   return localStorage.getItem("access_token");
 }
 
-export default function GeminiChatBox() {
+export default function ChatBox() {
   const [prompt, setPrompt] = useState("");
   const [response, setResponse] = useState("");
   const [history, setHistory] = useState([]);

@@ -1,8 +1,9 @@
 import React, {useEffect, useState} from 'react';
 import Buttons from "./Buttons.jsx"
 import Menubars from "@/test/components/Menubar.jsx";
-import UserCards from "@/test/components/UserCards.jsx";
-import PaymentCards from "@/test/components/PaymentCards.jsx";
+import UserCards from "@/test/components/userDashBoard/UserCards.jsx";
+import PaymentCards from "@/test/components/paymentDashBoard/PaymentCards.jsx";
+import UsageCards from "@/test/components/usageDashBoard/UsageCards.jsx";
 
 export default function Dashboard() {
   // 주소 변경 없이 내부 탭만 관리
@@ -13,7 +14,7 @@ export default function Dashboard() {
   useEffect(() => { sessionStorage.setItem("dash_tab", tab) }, [tab])
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="bg-background text-foreground">
       <div className="p-4 border-b">
         <Buttons active={tab} onChange={setTab} />
       </div>
@@ -22,7 +23,7 @@ export default function Dashboard() {
         <div className="max-w-6xl mx-auto grid gap-6">
           {tab === "users" && <UserCards />}
           {tab === "payments" && <PaymentCards />}
-          {/*{tab === "usage" && <UsageCards />}*/}
+          {tab === "usage" && <UsageCards />}
         </div>
       </div>
     </div>

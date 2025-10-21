@@ -1,3 +1,4 @@
+// src/test/components/ShadcnAreaChart.tsx
 import * as React from "react"
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
@@ -6,21 +7,61 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 type Point = { x: string | number; y: number }
 
+// 멀티 시리즈 정의
+type SeriesDef = {
+  key: string            // 예: "pro", "enterprise"
+  name?: string          // 툴팁/범례용 이름
+  color?: string         // 기본선/그라디언트 색
+  strokeWidth?: number   // 선 두께
+  fillOpacity?: number   // 그라디언트 상단 불투명도(0~1)
+}
+
 export default function ShadcnAreaChart({
   title = "트래픽",
   data,
   height = 260,
   color = "#7E36F9",
   showGrid = true,
-    gradientId=""
+  gradientId = "",
+  // ⬇️ 신규(옵션): 멀티 시리즈용
+  xKey = "x",
+  series,                // 정의가 들어오면 멀티 시리즈 모드
+  overlap = false,       // true면 겹쳐 보이게(누적 X), false면 독립(기본)
+  showLegend = false,
+  tickFormatter,
+  valueLabel = "값",
 }: {
   title?: string
-  data: Point[]
+  data: any[] | Point[]                  // 멀티/단일 모두 수용
   height?: number
   color?: string
   showGrid?: boolean
-  gradientId?:string
+  gradientId?: string
+  // 신규
+  xKey?: string
+  series?: SeriesDef[]
+  overlap?: boolean
+  showLegend?: boolean
+  tickFormatter?: (v: any) => string
+  valueLabel?: string
 }) {
+  const gidBase = React.useId()
+  const gid = gradientId || gidBase
+
+  // 단일/멀티 판단
+  const isMulti = Array.isArray(series) && series.length > 0
+
+  // 멀티일 때 시리즈 색/옵션 기본값
+  const resolvedSeries: SeriesDef[] = isMulti
+    ? series!.map((s, i) => ({
+        key: s.key,
+        name: s.name ?? s.key,
+        color: s.color ?? color,       // 기본 동일 색
+        strokeWidth: s.strokeWidth ?? (i === 0 ? 2 : 2),
+        fillOpacity: s.fillOpacity ?? (i === 0 ? 0.55 : 0.25), // 첫 시리즈 좀 더 진하게
+      }))
+    : []
+
   return (
     <Card className="bg-card text-card-foreground">
       <CardHeader className="p-5 pb-2">
@@ -35,18 +76,30 @@ export default function ShadcnAreaChart({
               )}
 
               <defs>
-                <linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={color} stopOpacity={0.35} />
-                  <stop offset="100%" stopColor={color} stopOpacity={0} />
-                </linearGradient>
+                {isMulti
+                  ? resolvedSeries.map((s, i) => (
+                      <linearGradient key={s.key} id={`${gid}-fill-${i}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={s.color} stopOpacity={s.fillOpacity} />
+                        <stop offset="100%" stopColor={s.color} stopOpacity={0} />
+                      </linearGradient>
+                    ))
+                  : (
+                    <linearGradient id={`${gid}-fill`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={color} stopOpacity={0.35} />
+                      <stop offset="100%" stopColor={color} stopOpacity={0} />
+                    </linearGradient>
+                  )
+                }
               </defs>
 
               <XAxis
-                dataKey="x"
+                dataKey={xKey}
                 tickLine={false}
                 axisLine={false}
                 tickMargin={8}
                 stroke="hsl(var(--muted-foreground))"
+                interval="preserveStartEnd"
+                tickFormatter={tickFormatter}
               />
               <YAxis
                 width={36}
@@ -63,20 +116,40 @@ export default function ShadcnAreaChart({
                   borderRadius: 8,
                   padding: "6px 10px",
                 }}
-                labelFormatter={(v) => String(v)}
-                formatter={(val: number) => [val.toLocaleString(), "값"]}
+                labelFormatter={(v) => (tickFormatter ? tickFormatter(v) : String(v))}
+                formatter={(val: number, name) => [val.toLocaleString(), isMulti ? String(name) : valueLabel]}
               />
 
-              {/* ⬇ 부드러운 곡선 + 그라디언트 채우기 */}
-              <Area
-                type="monotone"
-                dataKey="y"
-                stroke={color}
-                strokeWidth={2}
-                fill="url(#areaFill)"
-                dot={false}
-                isAnimationActive={true}
-              />
+              {/* 단일 시리즈 (기존 그대로) */}
+              {!isMulti && (
+                <Area
+                  type="monotone"
+                  dataKey="y"
+                  stroke={color}
+                  strokeWidth={2}
+                  fill={`url(#${gid}-fill)`}
+                  dot={false}
+                  isAnimationActive
+                />
+              )}
+
+              {/* 멀티 시리즈 */}
+              {isMulti &&
+                resolvedSeries.map((s, i) => (
+                  <Area
+                    key={s.key}
+                    type="monotone"
+                    dataKey={s.key}
+                    name={s.name}
+                    stroke={s.color!}
+                    strokeWidth={s.strokeWidth}
+                    fill={`url(#${gid}-fill-${i})`}
+                    dot={false}
+                    isAnimationActive
+                    connectNulls
+                    {...(overlap ? {} : { stackId: undefined })} // overlap=true면 누적 안 함
+                  />
+                ))}
             </AreaChart>
           </ResponsiveContainer>
         </div>

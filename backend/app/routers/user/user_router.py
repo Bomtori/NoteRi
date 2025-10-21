@@ -60,6 +60,14 @@ def last_6m(db: Session = Depends(get_db)):
 def last_12m(db: Session = Depends(get_db)):
     return {"total": user_crud.get_last_12m_signups(db)}
 
+@router.get("/dod")
+def dod(db: Session = Depends(get_db)):
+    return user_crud.get_dod_signup_growth(db)
+
+@router.get("/wow")
+def wow(db: Session = Depends(get_db)):
+    return user_crud.get_wow_signup_growth(db)
+
 @router.get("/mom")
 def mom(db: Session = Depends(get_db)):
     return user_crud.get_mom_signup_growth(db)

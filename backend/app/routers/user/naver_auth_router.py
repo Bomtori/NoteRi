@@ -12,6 +12,7 @@ from backend.app.model import User
 from backend.app.deps.auth import get_current_user
 from backend.app.crud.auth_crud import get_or_create_user
 from backend.app.util.auth import create_access_token
+from backend.app.util.errors import OAuthProviderConflict
 
 router = APIRouter(prefix="/auth/naver", tags=["NaverAuth"])
 
@@ -38,45 +39,72 @@ async def login_naver(request: Request):
 
 @router.get("/callback", name="naver_callback")
 async def naver_callback(request: Request, db: Session = Depends(get_db)):
-    # 1) 액세스 토큰 교환
+    # 1) 토큰 교환
     token = await oauth.naver.authorize_access_token(request)
 
-    # 2) 사용자 정보 조회
+    # 2) 사용자 정보
     resp = await oauth.naver.get("me", token=token)
-    payload = resp.json()
-    user_info = (payload or {}).get("response")
+    payload = resp.json() or {}
+    user_info = payload.get("response")
     if not user_info:
-        return JSONResponse(status_code=400, content={"error": "Naver login failed", "raw": payload})
-
-    # 3) 필드 매핑
-    naver_id = str(user_info.get("id"))
-    email = user_info.get("email") or f"{naver_id}@naver.com"
-    name = user_info.get("name") or user_info.get("nickname")
-    nickname = user_info.get("nickname") or name
-    picture = user_info.get("profile_image")
-
-    # 4) 유저 생성/조회
-    db_user = get_or_create_user(
-        db=db,
-        provider="naver",
-        sub=naver_id,
-        email=email,
-        name=name,
-        nickname=nickname,
-        picture=picture,
-    )
-
-    if db_user and not db_user.is_active:
-        return JSONResponse(
-            status_code=status.HTTP_403_FORBIDDEN,
-            content={"detail": "이미 탈퇴된 계정입니다. 다시 가입하시겠습니까?"}
+        return RedirectResponse(
+            f"{FRONTEND_URL}/auth/callback?error=naver_login_failed",
+            status_code=302,
         )
 
-    # 5) 우리 서비스용 access_token 발급 후 프론트로 리다이렉트(쿼리)
+    provider = "naver"
+    naver_id = str(user_info.get("id") or "")
+    email = user_info.get("email")
+    # 정책상 이메일이 없을 수도 있으므로 서비스 정책에 맞춰 처리
+    if not email and naver_id:
+        # ① (정책 A) 가짜 이메일 생성: email = f"{naver_id}@naver.local"
+        # ② (정책 B) 프론트로 missing_email 리다이렉트 → 여기선 B로 통일
+        return RedirectResponse(
+            f"{FRONTEND_URL}/auth/callback?error=missing_email&provider={provider}",
+            status_code=302,
+        )
+
+    name = user_info.get("name") or user_info.get("nickname") or ""
+    nickname = user_info.get("nickname") or name
+    picture = user_info.get("profile_image") or ""
+
+    # 3) DB 처리 + provider 충돌 대응
+    try:
+        db_user = get_or_create_user(
+            db=db,
+            provider=provider,
+            sub=naver_id,
+            email=email,
+            name=name,
+            nickname=nickname,
+            picture=picture,
+        )
+    except OAuthProviderConflict as e:
+        registered = getattr(e, "detail", {}).get("registered_provider", "")
+        return RedirectResponse(
+            f"{FRONTEND_URL}/auth/callback"
+            f"?error=provider_conflict&registered_provider={registered}"
+            f"&email={quote(email or '')}&try_provider={provider}",
+            status_code=302,
+        )
+    except Exception:
+        return RedirectResponse(
+            f"{FRONTEND_URL}/auth/callback?error=internal_error",
+            status_code=302,
+        )
+
+    # 4) 탈퇴 계정
+    if db_user and not db_user.is_active:
+        return RedirectResponse(
+            f"{FRONTEND_URL}/auth/callback?error=deactivated&email={quote(email)}",
+            status_code=302,
+        )
+
+    # 5) 성공 → 토큰 발급 후 리다이렉트
     access_token = create_access_token({"sub": str(db_user.id), "email": db_user.email})
     redirect_to = f"{FRONTEND_URL}/auth/callback?access_token={quote(access_token)}"
     print("[NAVER_CALLBACK redirect_to]", redirect_to)
-    return RedirectResponse(redirect_to)
+    return RedirectResponse(redirect_to, status_code=302)
 
 @router.post("/rejoin")
 def naver_rejoin(

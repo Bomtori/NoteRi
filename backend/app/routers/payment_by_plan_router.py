@@ -11,7 +11,7 @@ from backend.app.crud.payment_by_plan_crud import (
     get_mom_growth_by_plan,
     get_yoy_growth_by_plan,
     get_revenue_share_by_plan,
-get_total_revenue_paid_plans
+    get_total_revenue_paid_plans, get_wow_growth_by_plan, get_dod_growth_by_plan
 )
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
@@ -30,6 +30,14 @@ def revenue_last_30d(db: Session = Depends(get_db)):
 @router.get("/revenue/last-365d")
 def revenue_last_365d(db: Session = Depends(get_db)):
     return get_last_365d_revenue_by_plan(db)
+
+@router.get("/revenue/dod")
+def revenue_dod(db: Session = Depends(get_db)):
+    return get_dod_growth_by_plan(db)
+
+@router.get("/revenue/wow")
+def revenue_wow(db: Session = Depends(get_db)):
+    return get_wow_growth_by_plan(db)
 
 # 플랜 별 전월 대비 성장률
 @router.get("/revenue/mom")

@@ -13,8 +13,12 @@ const COLORS: Record<string, string> = {
 
 export default function CardWithDonutGraph({
   providerUsers,
+  className = "",          // ✅ 추가
+  height = 220,           // ✅ 추가: 차트 높이
 }: {
   providerUsers: ProviderCounts | ProviderDatum[]
+  className?: string
+  height?: number
 }) {
   // 객체/배열 어떤 형태로 와도 Nivo용 배열로 통일
   const data = useMemo<ProviderDatum[]>(() => {
@@ -48,57 +52,49 @@ export default function CardWithDonutGraph({
     [data]
   )
 
-  return (
-    <div className="min-h-screen bg-background text-foreground p-6">
-      <div className="max-w-6xl mx-auto grid gap-6 grid-cols-1">
-        <Card className="bg-card text-card-foreground">
-          <CardHeader>
-            <CardTitle className="text-muted-foreground">
-              플랫폼 별 가입자 비율
-            </CardTitle>
-          </CardHeader>
+   return (
+    <Card className={`bg-card text-card-foreground ${className}`}>
+      <CardHeader className="p-5 pb-2">
+        <CardTitle className="text-muted-foreground">플랫폼 별 가입자 비율</CardTitle>
+      </CardHeader>
 
-          <CardContent className="p-5">
-            {/* 총합은 본문에서 표시 */}
-            <div className="text-3xl font-semibold mb-3">
-              {total.toLocaleString()} 명
-            </div>
+      <CardContent className="p-5 pt-0">
+        <div className="text-2xl font-semibold mb-3">
+          {total.toLocaleString()} 명
+        </div>
 
-            {/* Nivo 파이 차트: 부모 컨테이너 높이 필수 */}
-            <div className="w-full h-[320px] overflow-hidden">
-              <ResponsivePie
-                data={data}
-                margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
-                innerRadius={0.3}
-                padAngle={1.5}
-                cornerRadius={4}
-                activeOuterRadiusOffset={8}
-                colors={{ datum: "data.color" }}    // 각 데이터에 지정한 color 사용
-                borderWidth={2}
-                borderColor="hsl(var(--background))"
-                enableArcLinkLabels={false}
-                arcLabelsSkipAngle={10}
-                arcLabelsTextColor="hsl(var(--card-foreground))"
-                theme={{
-                  background: "transparent",
-                  legends: { text: { fill: "hsl(var(--foreground))" } },
-                  tooltip: { container: { background: "transparent" } },
-                }}
-                tooltip={({ datum }) => (
-                  <div className="rounded-md border border-border bg-popover text-popover-foreground px-3 py-2 text-sm shadow-sm">
-                    <div className="font-medium">{String(datum.id)}</div>
-                    <div className="text-muted-foreground">
-                      {Number(datum.value).toLocaleString()} (
-                      {total ? Math.round((Number(datum.value) / total) * 100) : 0}
-                      %)
-                    </div>
-                  </div>
-                )}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+        <div className="w-full overflow-hidden" style={{ height }}>
+          <ResponsivePie
+            data={data}
+            margin={{ top: 10, right: 10, bottom: 10, left: 10 }}
+            innerRadius={0.3}
+            padAngle={1.5}
+            cornerRadius={4}
+            activeOuterRadiusOffset={8}
+            colors={{ datum: "data.color" }}
+            borderWidth={2}
+            borderColor="hsl(var(--background))"
+            enableArcLinkLabels={false}
+            arcLabelsSkipAngle={10}
+            arcLabelsTextColor="hsl(var(--card-foreground))"
+            theme={{
+              background: "transparent",
+              legends: { text: { fill: "hsl(var(--foreground))" } },
+              tooltip: { container: { background: "transparent" } },
+            }}
+            tooltip={({ datum }) => (
+              <div className="rounded-md border border-border bg-popover text-popover-foreground px-3 py-2 text-sm shadow-sm">
+                <div className="font-medium">{String(datum.id)}</div>
+                <div className="text-muted-foreground">
+                  {Number(datum.value).toLocaleString()} (
+                  {total ? Math.round((Number(datum.value) / total) * 100) : 0}
+                  %)
+                </div>
+              </div>
+            )}
+          />
+        </div>
+      </CardContent>
+    </Card>
   )
 }

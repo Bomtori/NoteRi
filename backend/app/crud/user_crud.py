@@ -137,6 +137,48 @@ def get_last_12m_signups(db: Session) -> int:
     end = today + timedelta(days=1)
     return _count_signups(db, start_date=start, end_date=end)
 
+def get_dod_signup_growth(db: Session) -> dict:
+    """
+    오늘(00:00~내일 00:00) vs 어제(00:00~오늘 00:00) 가입자 수 비교.
+    반환: {"current": int, "previous": int, "growth_rate": float|None}
+    """
+    today = _today_local()
+
+    # 오늘 구간: [오늘 00시, 내일 00시)
+    cur_start = today
+    cur_end = today + timedelta(days=1)
+    current = _count_signups(db, start_date=cur_start, end_date=cur_end)
+
+    # 어제 구간: [어제 00시, 오늘 00시)
+    prev_start = today - timedelta(days=1)
+    prev_end = today
+    previous = _count_signups(db, start_date=prev_start, end_date=prev_end)
+
+    growth_rate = None if previous == 0 else (current - previous) / previous
+    return {"current": current, "previous": previous, "growth_rate": growth_rate}
+
+
+# ---------- 전주 대비 가입자 성장률 ----------
+def get_wow_signup_growth(db: Session) -> dict:
+    """
+    이번 주 누적(월요일~오늘 포함) vs 지난주 동일 요일까지 누적.
+    반환: {"current": int, "previous": int, "growth_rate": float|None}
+    """
+    today = _today_local()
+
+    # 이번 주 시작(월요일)
+    cur_week_start = today - timedelta(days=today.weekday())
+    cur_end = today + timedelta(days=1)  # 오늘 포함 (내일 00시)
+    current = _count_signups(db, start_date=cur_week_start, end_date=cur_end)
+
+    # 지난 주 시작 ~ 지난주 동일 요일까지
+    prev_week_start = cur_week_start - timedelta(days=7)
+    elapsed_days = (today - cur_week_start).days  # 월요일 기준 경과 일수
+    prev_end = prev_week_start + timedelta(days=elapsed_days + 1)
+    previous = _count_signups(db, start_date=prev_week_start, end_date=prev_end)
+
+    growth_rate = None if previous == 0 else (current - previous) / previous
+    return {"current": current, "previous": previous, "growth_rate": growth_rate}
 
 # ---------- 4) 전월 대비 가입자 성장률 ----------
 def get_mom_signup_growth(db: Session) -> dict:

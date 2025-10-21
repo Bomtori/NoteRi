@@ -5,7 +5,7 @@ from datetime import datetime
 import psycopg2
 import redis
 from backend.config import REDIS_URL, DATABASE_URL, resolve_board_id, resolve_user_id
-
+from backend.app.util.crypto_path import encrypt_path
 
 
 def _redis_client():
@@ -159,6 +159,7 @@ def ingest_one_session(prefix: str, sid: str):
         audio_path  = meta.get("audio_path")
         duration_ms = meta.get("duration_ms")
         language    = meta.get("language")
+        cipher_path = encrypt_path(audio_path)
 
         if audio_path:
             try:
@@ -169,10 +170,12 @@ def ingest_one_session(prefix: str, sid: str):
             cur.execute("""
                 INSERT INTO audio_data (board_id, recording_session_id, file_path, duration, language, created_at)
                 VALUES (%s, %s, %s, %s, %s, NOW());
-            """, (board_id, session_id, audio_path, duration_sec, language))
+            """, (board_id, session_id, cipher_path, duration_sec, language))
 
         conn.commit()
-        print(f"[OK] {sid} recording_results inserted={inserted_segments}, summaries inserted={inserted_summaries}, audio_data inserted")
+        print(f"[OK] {sid} recording_results inserted={inserted_segments}, "
+              f"summaries inserted={inserted_summaries}, "
+              f"audio_data inserted (encrypted)")
 
     except Exception:
         conn.rollback()

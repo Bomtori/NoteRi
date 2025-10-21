@@ -111,6 +111,68 @@ def ingest_one_session(prefix: str, sid: str):
 
         conn.commit()
         print(f"[OK] {sid} recording_results inserted={inserted_segments}")
+        # 2) summaries → summaries (session FK)
+        sum_entries = r.xrange(KEY_SUM, "-", "+")
+        inserted_summaries = 0
+        for _id, f in sum_entries:
+            summary_text = f.get("summary_text")
+            if not summary_text:
+                continue
+            # summary 메타(있으면 저장)
+            istart_ms = f.get("interval_start_ms")
+            iend_ms   = f.get("interval_end_ms")
+            model     = f.get("model")
+            # 토큰 수는 정수로 캐스팅(없으면 None)
+            try:
+                tokens_in  = int(f["tokens_input"])  if f.get("tokens_input")  else None
+            except Exception:
+                tokens_in  = None
+            try:
+                tokens_out = int(f["tokens_output"]) if f.get("tokens_output") else None
+            except Exception:
+                tokens_out = None
+
+            interval_start_at = _to_ts(base_ms + int(istart_ms)) if istart_ms is not None else None
+            interval_end_at   = _to_ts(base_ms + int(iend_ms))   if iend_ms   is not None else None
+
+            cur.execute("""
+                INSERT INTO summaries
+                  (recording_session_id, summary_type, content,
+                   interval_start_at, interval_end_at, model, tokens_input, tokens_output, created_at)
+                VALUES
+                  (%s, %s, %s, %s, %s, %s, %s, %s, NOW());
+            """, (
+                session_id,
+                'interval',
+                summary_text,
+                interval_start_at,
+                interval_end_at,
+                model,
+                tokens_in,
+                tokens_out
+            ))
+            inserted_summaries += 1
+
+        conn.commit()
+        print(f"[OK] {sid} recording_results inserted={inserted_segments}, summaries inserted={inserted_summaries}")
+
+        audio_path  = meta.get("audio_path")
+        duration_ms = meta.get("duration_ms")
+        language    = meta.get("language")
+
+        if audio_path:
+            try:
+                duration_sec = int(int(duration_ms) / 1000) if duration_ms is not None else None
+            except Exception:
+                duration_sec = None
+
+            cur.execute("""
+                INSERT INTO audio_data (board_id, recording_session_id, file_path, duration, language, created_at)
+                VALUES (%s, %s, %s, %s, %s, NOW());
+            """, (board_id, session_id, audio_path, duration_sec, language))
+
+        conn.commit()
+        print(f"[OK] {sid} recording_results inserted={inserted_segments}, summaries inserted={inserted_summaries}, audio_data inserted")
 
     except Exception:
         conn.rollback()

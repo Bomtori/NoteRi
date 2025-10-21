@@ -493,8 +493,29 @@ class STTPipeline:
 
         logger.info(f"Audio saved at: {filepath} (duration={duration:.2f}s)")
 
-        self.last_saved_file = filepath
-        self.last_saved_duration = duration
-        self.reset()
+        # ✅ Redis 메타에 오디오 파일 정보 기록 (비동기 환경 대응)
+        try:
+            from backend.app.util.redis_client import get_redis
+            import asyncio
 
-        return {"filepath": filepath, "duration": duration}
+            async def _save_meta():
+                r = await get_redis()
+                await r.hset(
+                    f"{self.redis_prefix}:{self.sid}:meta",
+                    mapping={
+                        "audio_path": filepath,
+                        "duration_ms": int(duration * 1000),
+                        "language": getattr(self, "lang", "ko")
+                    }
+                )
+
+            # 이미 루프 실행 중인지 확인
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.create_task(_save_meta())  # ✅ 현재 루프에 태스크로 등록
+            else:
+                loop.run_until_complete(_save_meta())
+
+            logger.info(f"🔖 Saved audio metadata to Redis for sid={self.sid}")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to write audio metadata to Redis: {e}")

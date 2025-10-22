@@ -189,6 +189,7 @@ class RecordingSession(Base):
     started_at = Column(TIMESTAMP, nullable=False)
     ended_at = Column(TIMESTAMP)
     created_at = Column(TIMESTAMP)
+    is_diarized = Column(Boolean, nullable=False, default=False)
 
     board = relationship("Board", back_populates="recording_sessions")
     results = relationship("RecordingResult", back_populates="session")

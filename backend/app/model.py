@@ -78,7 +78,7 @@ class Plan(Base):
     name = Column(Enum(PlanType), unique=True, nullable=False)  # free, pro, enterprise
     price = Column(Numeric(10, 2), nullable=False, default=0.00)  # ex) 0, 10000, 30000
     duration_days = Column(Integer, nullable=False, default=30)   # 구독 기간 (ex. 30일)
-    allocated_minutes = Column(Integer, nullable=False, default=300)  # 녹음 시간
+    allocated_seconds = Column(Integer, nullable=False, default=18000)  # 녹음 시간
     description = Column(Text)
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, onupdate=func.now())
@@ -114,8 +114,8 @@ class RecordingUsage(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     subscription_id = Column(Integer, ForeignKey("subscriptions.id", ondelete="CASCADE"), nullable=False)
-    allocated_minutes = Column(Integer)
-    used_minutes = Column(Integer, default=0)
+    allocated_seconds = Column(Integer, nullable=True)
+    used_seconds = Column(Integer, nullable=False, default=0)
     period_start = Column(Date, nullable=False)
     period_end = Column(Date, nullable=True)
     created_at = Column(TIMESTAMP)

@@ -103,7 +103,7 @@ def delete_board(
 from pydantic import BaseModel, constr
 
 class BoardPasswordVerify(BaseModel):
-    password: constr(regex=r"^\d{4}$")  # exactly 4 digits
+    password: constr(pattern=r"^\d{4}$")  # exactly 4 digits
 
 @router.post("/{board_id}/verify-password")
 def verify_board_password(

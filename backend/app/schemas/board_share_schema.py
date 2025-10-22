@@ -3,7 +3,7 @@ from typing import Optional
 from datetime import datetime
 
 # 권한 값 제한 (원하면 Literal["viewer","editor"]로 엄격화 가능)
-RoleStr = constr(strip_whitespace=True, to_lower=True, regex=r"^(viewer|editor)$")
+RoleStr = constr(strip_whitespace=True, to_lower=True, pattern=r"^(viewer|editor)$")
 
 class ShareCreateByEmail(BaseModel):
     email: EmailStr

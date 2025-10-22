@@ -1,20 +1,25 @@
-from datetime import date, datetime, timedelta, UTC, timedelta
+# backend/app/crud/recording_usage_crud.py
+from datetime import date, datetime, timedelta, UTC
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from backend.app.model import RecordingUsage, Subscription, User, Plan, PlanType
 from typing import Dict, Any, List, Tuple, Optional
+
+from backend.app.model import RecordingUsage, Subscription, Plan, PlanType, AudioData, Board
 from backend.app.util.day_calculation import (_today_local, _week_bounds, _month_bounds, _year_bounds)
+
+# 선택: 초과 에러 전용 예외
+class UsageExceededError(ValueError):
+    pass
+
 def create_or_update_usage(db: Session, user_id: int, subscription: Subscription):
     """
-    새 구독(Subscription) 발생 시 녹음 사용량(RecordingUsage) 생성 또는 갱신.
-    이전 구독의 남은 시간을 이월하고, 플랜 정보(기간, 분수)는 Plan 테이블 기반으로 계산.
+    새 구독 발생 시 녹음 사용량(초 단위) 생성 또는 갱신.
+    이전 구독의 '남은 초'를 이월하고, Plan의 allocated_minutes를 초 단위로 환산.
     """
-
-    plan = subscription.plan  # FK로 연결된 Plan 객체
+    plan = subscription.plan
     if not plan:
         raise ValueError("Subscription has no linked plan")
 
-    # 기존 사용 기록 중 가장 최근 기록 조회
     prev_usage = (
         db.query(RecordingUsage)
         .filter(RecordingUsage.user_id == user_id)
@@ -23,11 +28,14 @@ def create_or_update_usage(db: Session, user_id: int, subscription: Subscription
     )
 
     prev_remaining = 0
-    if prev_usage and prev_usage.allocated_minutes is not None:
-        prev_remaining = max(prev_usage.allocated_minutes - prev_usage.used_minutes, 0)
+    if prev_usage and prev_usage.allocated_seconds is not None:
+        prev_remaining = max(int(prev_usage.allocated_seconds) - int(prev_usage.used_seconds or 0), 0)
 
-    # 현재 플랜 기준 minutes
-    alloc = plan.allocated_minutes if plan.allocated_minutes >= 0 else None
+    # 분→초 환산 (None=무제한)
+    if plan.allocated_minutes is None or plan.allocated_minutes < 0:
+        alloc_seconds = None
+    else:
+        alloc_seconds = int(plan.allocated_minutes) * 60
 
     # free는 기간 무제한
     if plan.name == "free":
@@ -37,17 +45,17 @@ def create_or_update_usage(db: Session, user_id: int, subscription: Subscription
         period_start = date.today()
         period_end = date.today() + timedelta(days=plan.duration_days)
 
-    # enterprise는 무제한 minutes (allocated_minutes=None)
-    if alloc is None:
+    # 무제한이면 None 유지, 아니면 이월분 더하기
+    if alloc_seconds is None:
         total_alloc = None
     else:
-        total_alloc = alloc + prev_remaining  # 남은 시간 이월
+        total_alloc = alloc_seconds + prev_remaining
 
     new_usage = RecordingUsage(
         user_id=user_id,
         subscription_id=subscription.id,
-        allocated_minutes=total_alloc,
-        used_minutes=0,
+        allocated_seconds=total_alloc,
+        used_seconds=0,
         period_start=period_start,
         period_end=period_end,
         created_at=datetime.now(UTC),
@@ -56,74 +64,85 @@ def create_or_update_usage(db: Session, user_id: int, subscription: Subscription
     db.add(new_usage)
     db.commit()
     db.refresh(new_usage)
-
     return new_usage
 
 
-def use_minutes(db: Session, user_id: int, minutes: int):
+def use_seconds_from_audio_owner(db: Session, audio_id: int):
     """
-    사용자가 녹음할 때마다 minutes만큼 사용량 차감
-    (enterprise/free는 무제한이므로 차감 안함)
+    AudioData.duration(초)만큼, 해당 오디오가 속한 보드의 'owner'의 RecordingUsage를 차감.
+    - 무제한(allocated_seconds is None)이면 차감 없이 그대로 반환
+    - 활성 사용량: period_end가 NULL(무기한) 또는 오늘 이후(>= today)
     """
+    # 1) 오디오의 duration, board_id 가져오기
+    audio = (
+        db.query(AudioData.id, AudioData.duration, AudioData.board_id)
+        .filter(AudioData.id == audio_id)
+        .first()
+    )
+    if not audio:
+        raise ValueError("AudioData not found")
+    if audio.duration is None or int(audio.duration) <= 0:
+        raise ValueError("AudioData.duration 이 유효하지 않습니다.")
+
+    # 2) 보드의 owner 찾기
+    owner_id = (
+        db.query(Board.owner_id)
+        .filter(Board.id == audio.board_id)
+        .scalar()
+    )
+    if owner_id is None:
+        raise ValueError("Board owner를 찾을 수 없습니다.")
+
+    # 3) owner의 '활성' RecordingUsage 찾기 (가장 최신)
     usage = (
         db.query(RecordingUsage)
         .filter(
-            RecordingUsage.user_id == user_id,
+            RecordingUsage.user_id == owner_id,
             (RecordingUsage.period_end == None) | (RecordingUsage.period_end >= date.today()),
         )
         .order_by(RecordingUsage.created_at.desc())
         .first()
     )
-
     if not usage:
-        raise ValueError("No active recording usage found")
+        raise ValueError("No active recording usage found for board owner")
 
-    if usage.allocated_minutes is None:
-        # 무제한 플랜 (enterprise/free)
+    # 4) 무제한이면 차감 없이 반환
+    if usage.allocated_seconds is None:
         return usage
 
-    new_used = usage.used_minutes + minutes
-    if new_used > usage.allocated_minutes:
-        raise ValueError("Recording minutes exceeded plan limit")
+    # 5) 차감
+    seconds = int(audio.duration)
+    new_used = int(usage.used_seconds or 0) + seconds
+    if new_used > int(usage.allocated_seconds):
+        raise UsageExceededError("Recording seconds exceeded plan limit")
 
-    usage.used_minutes = new_used
+    usage.used_seconds = new_used
     db.commit()
     db.refresh(usage)
-
     return usage
 
 
-#### 모든 사용자의 사용량 조회
+# ===== 집계/통계도 전부 '초' 기준 =====
 
-def get_total_usage_all_users(db:Session) ->int:
-    total_usage = db.query(func.sum(RecordingUsage.used_minutes)).scalar()
-    return total_usage or 0
+def get_total_usage_all_users(db: Session) -> int:
+    total_usage = db.query(func.sum(RecordingUsage.used_seconds)).scalar()
+    return int(total_usage or 0)
 
-# 오늘 사용량
 def get_total_usage_today(db: Session) -> Dict[str, Any]:
     today = _today_local()
     total_usage_today = (
-        db.query(func.sum(RecordingUsage.used_minutes))
+        db.query(func.sum(RecordingUsage.used_seconds))
         .filter(func.date(RecordingUsage.created_at) == today)
         .scalar()
         or 0
     )
-
-    # ✅ 프론트에서 data.total 로 바로 접근 가능하게 구조 단순화
-    return {
-        "date": today.isoformat(),
-        "total": total_usage_today
-    }
+    return {"date": today.isoformat(), "total_seconds": int(total_usage_today)}
 
 def get_total_usage_last_7_days(db: Session) -> Dict[str, Any]:
-    """
-    최근 7일간의 총 사용량 (오늘 포함)
-    """
     today = _today_local()
     seven_days_ago = today - timedelta(days=6)
-
     total_usage_7d = (
-        db.query(func.sum(RecordingUsage.used_minutes))
+        db.query(func.sum(RecordingUsage.used_seconds))
         .filter(func.date(RecordingUsage.created_at) >= seven_days_ago)
         .filter(func.date(RecordingUsage.created_at) <= today)
         .scalar()
@@ -132,20 +151,15 @@ def get_total_usage_last_7_days(db: Session) -> Dict[str, Any]:
         "last_7_days": {
             "start_date": seven_days_ago.isoformat(),
             "end_date": today.isoformat(),
-            "total": total_usage_7d or 0
+            "total_seconds": int(total_usage_7d or 0),
         }
     }
 
-
 def get_total_usage_month(db: Session) -> Dict[str, Any]:
-    """
-    이번 달 총 사용량
-    """
     today = _today_local()
     start_of_month = today.replace(day=1)
-
     total_usage_month = (
-        db.query(func.sum(RecordingUsage.used_minutes))
+        db.query(func.sum(RecordingUsage.used_seconds))
         .filter(func.date(RecordingUsage.created_at) >= start_of_month)
         .filter(func.date(RecordingUsage.created_at) <= today)
         .scalar()
@@ -154,20 +168,15 @@ def get_total_usage_month(db: Session) -> Dict[str, Any]:
         "month": {
             "start_date": start_of_month.isoformat(),
             "end_date": today.isoformat(),
-            "total": total_usage_month or 0
+            "total_seconds": int(total_usage_month or 0),
         }
     }
 
-
 def get_total_usage_year(db: Session) -> Dict[str, Any]:
-    """
-    올해 총 사용량
-    """
     today = _today_local()
     start_of_year = today.replace(month=1, day=1)
-
     total_usage_year = (
-        db.query(func.sum(RecordingUsage.used_minutes))
+        db.query(func.sum(RecordingUsage.used_seconds))
         .filter(func.date(RecordingUsage.created_at) >= start_of_year)
         .filter(func.date(RecordingUsage.created_at) <= today)
         .scalar()
@@ -176,17 +185,13 @@ def get_total_usage_year(db: Session) -> Dict[str, Any]:
         "year": {
             "start_date": start_of_year.isoformat(),
             "end_date": today.isoformat(),
-            "total": total_usage_year or 0
+            "total_seconds": int(total_usage_year or 0),
         }
     }
 
-# 안전 합계 헬퍼
-def _sum_used_minutes_between(db: Session, start: date, end: date) -> int:
-    """
-    [start, end] (양끝 포함) 구간의 used_minutes 합계
-    """
+def _sum_used_seconds_between(db: Session, start: date, end: date) -> int:
     total = (
-        db.query(func.sum(RecordingUsage.used_minutes))
+        db.query(func.sum(RecordingUsage.used_seconds))
         .filter(func.date(RecordingUsage.created_at) >= start)
         .filter(func.date(RecordingUsage.created_at) <= end)
         .scalar()
@@ -194,128 +199,73 @@ def _sum_used_minutes_between(db: Session, start: date, end: date) -> int:
     return int(total or 0)
 
 def _delta(current: int, previous: int) -> Tuple[int, float]:
-    """
-    증감량과 증감률(%)을 반환. previous가 0이면 증감률은 0.0으로 처리.
-    """
     d = current - previous
     if previous == 0:
-        pct = 0.0 if current == 0 else 100.0  # 필요하면 정책에 맞게 조정
+        pct = 0.0 if current == 0 else 100.0
     else:
         pct = (d / previous) * 100.0
     return d, pct
 
 def get_usage_comparisons(db: Session) -> Dict[str, Any]:
-    """
-    전일/전주/전월/전년 대비 총 사용량 증감 요약.
-    반환 스키마:
-    {
-      "day":   {"current": X, "previous": Y, "delta": D, "pct": P, "range": {...}},
-      "week":  {...},
-      "month": {...},
-      "year":  {...}
-    }
-    """
     today: date = _today_local()
 
-    # ---- Day: 오늘 vs 어제 ----
+    # Day
     yesterday = today - timedelta(days=1)
-    cur_day = _sum_used_minutes_between(db, today, today)
-    prev_day = _sum_used_minutes_between(db, yesterday, yesterday)
+    cur_day = _sum_used_seconds_between(db, today, today)
+    prev_day = _sum_used_seconds_between(db, yesterday, yesterday)
     day_delta, day_pct = _delta(cur_day, prev_day)
 
-    # ---- Week: 최근 7일 vs 그 이전 7일 ----
-    # 현재주: [today-6, today], 이전주: [today-13, today-7]
+    # Week (7일)
     cur_w_start = today - timedelta(days=6)
     cur_w_end = today
     prev_w_start = today - timedelta(days=13)
     prev_w_end = today - timedelta(days=7)
-    cur_week = _sum_used_minutes_between(db, cur_w_start, cur_w_end)
-    prev_week = _sum_used_minutes_between(db, prev_w_start, prev_w_end)
+    cur_week = _sum_used_seconds_between(db, cur_w_start, cur_w_end)
+    prev_week = _sum_used_seconds_between(db, prev_w_start, prev_w_end)
     week_delta, week_pct = _delta(cur_week, prev_week)
 
-    # ---- Month: 이번 달 MTD vs 저번 달 동일 일수 MTD ----
-    # 이번 달 MTD: [월초, today]
+    # Month MTD vs prev month MTD(동일일수)
     start_of_month = today.replace(day=1)
-    cur_month = _sum_used_minutes_between(db, start_of_month, today)
-
-    # 저번 달의 동일 일수 MTD 구하기
-    # 지난달 월초
+    cur_month = _sum_used_seconds_between(db, start_of_month, today)
     if start_of_month.month == 1:
         prev_month_start = start_of_month.replace(year=start_of_month.year - 1, month=12)
     else:
         prev_month_start = start_of_month.replace(month=start_of_month.month - 1)
-
-    # "이번 달 경과 일수"만큼 지난달도 포함 (예: 10월 21일이면 9월 1~21일)
     days_passed = (today - start_of_month).days
     prev_month_end = prev_month_start + timedelta(days=days_passed)
-    cur_month = _sum_used_minutes_between(db, start_of_month, today)
-    prev_month_val = _sum_used_minutes_between(db, prev_month_start, prev_month_end)
+    prev_month_val = _sum_used_seconds_between(db, prev_month_start, prev_month_end)
     month_delta, month_pct = _delta(cur_month, prev_month_val)
 
-    # ---- Year: YTD vs 작년 YTD ----
+    # YTD vs LYTD
     start_of_year = today.replace(month=1, day=1)
-    cur_ytd = _sum_used_minutes_between(db, start_of_year, today)
-
+    cur_ytd = _sum_used_seconds_between(db, start_of_year, today)
     prev_year = today.year - 1
     prev_ytd_start = start_of_year.replace(year=prev_year)
-    # "올해 경과 일수"만큼 작년도 포함
     ytd_days_passed = (today - start_of_year).days
     prev_ytd_end = prev_ytd_start + timedelta(days=ytd_days_passed)
-    prev_ytd = _sum_used_minutes_between(db, prev_ytd_start, prev_ytd_end)
+    prev_ytd = _sum_used_seconds_between(db, prev_ytd_start, prev_ytd_end)
     year_delta, year_pct = _delta(cur_ytd, prev_ytd)
 
     return {
-        "day": {
-            "current": cur_day,
-            "previous": prev_day,
-            "delta": day_delta,
-            "pct": day_pct,
-            "range": {
-                "current": {"start": today.isoformat(), "end": today.isoformat()},
-                "previous": {"start": yesterday.isoformat(), "end": yesterday.isoformat()},
-            },
-        },
-        "week": {
-            "current": cur_week,
-            "previous": prev_week,
-            "delta": week_delta,
-            "pct": week_pct,
-            "range": {
-                "current": {"start": cur_w_start.isoformat(), "end": cur_w_end.isoformat()},
-                "previous": {"start": prev_w_start.isoformat(), "end": prev_w_end.isoformat()},
-            },
-        },
-        "month": {
-            "current": cur_month,
-            "previous": prev_month_val,
-            "delta": month_delta,
-            "pct": month_pct,
-            "range": {
-                "current": {"start": start_of_month.isoformat(), "end": today.isoformat()},
-                "previous": {"start": prev_month_start.isoformat(), "end": prev_month_end.isoformat()},
-            },
-        },
-        "year": {
-            "current": cur_ytd,
-            "previous": prev_ytd,
-            "delta": year_delta,
-            "pct": year_pct,
-            "range": {
-                "current": {"start": start_of_year.isoformat(), "end": today.isoformat()},
-                "previous": {"start": prev_ytd_start.isoformat(), "end": prev_ytd_end.isoformat()},
-            },
-        },
+        "day":   {"current_seconds": cur_day,  "previous_seconds": prev_day,  "delta_seconds": day_delta,  "pct": day_pct,
+                  "range": {"current": {"start": today.isoformat(), "end": today.isoformat()},
+                            "previous": {"start": yesterday.isoformat(), "end": yesterday.isoformat()}}},
+        "week":  {"current_seconds": cur_week,"previous_seconds": prev_week,"delta_seconds": week_delta,"pct": week_pct,
+                  "range": {"current": {"start": cur_w_start.isoformat(), "end": cur_w_end.isoformat()},
+                            "previous": {"start": prev_w_start.isoformat(), "end": prev_w_end.isoformat()}}},
+        "month": {"current_seconds": cur_month,"previous_seconds": prev_month_val,"delta_seconds": month_delta,"pct": month_pct,
+                  "range": {"current": {"start": start_of_month.isoformat(), "end": today.isoformat()},
+                            "previous": {"start": prev_month_start.isoformat(), "end": prev_month_end.isoformat()}}},
+        "year":  {"current_seconds": cur_ytd,"previous_seconds": prev_ytd,"delta_seconds": year_delta,"pct": year_pct,
+                  "range": {"current": {"start": start_of_year.isoformat(), "end": today.isoformat()},
+                            "previous": {"start": prev_ytd_start.isoformat(), "end": prev_ytd_end.isoformat()}}},
     }
 
-
 def get_avg_usage_by_plan(db: Session):
-    """
-    free / pro / enterprise 별 평균 사용시간(분) 계산
-    """
     rows = (
         db.query(
             Plan.name.label("plan_name"),
-            func.avg(RecordingUsage.used_minutes).label("avg_used_minutes"),
+            func.avg(RecordingUsage.used_seconds).label("avg_used_seconds"),
             func.count(RecordingUsage.id).label("sample_size"),
         )
         .join(Subscription, Subscription.id == RecordingUsage.subscription_id)
@@ -324,11 +274,10 @@ def get_avg_usage_by_plan(db: Session):
         .all()
     )
 
-    # JSON 직렬화하기 좋게 변환
     return [
         {
-            "plan": row.plan_name.value if isinstance(row.plan_name, PlanType) else str(row.plan_name),
-            "avg_used_minutes": round(float(row.avg_used_minutes or 0), 2),
+            "plan": getattr(row.plan_name, "value", str(row.plan_name)),
+            "avg_used_seconds": round(float(row.avg_used_seconds or 0), 2),
             "sample_size": row.sample_size,
         }
         for row in rows

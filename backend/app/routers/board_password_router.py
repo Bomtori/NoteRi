@@ -13,10 +13,10 @@ router = APIRouter(prefix="/boards", tags=["boards:password"])
 
 # 요청 스키마: 숫자 4자리만 허용
 class BoardPasswordSet(BaseModel):
-    password: constr(regex=r"^\d{4}$")  # exactly 4 digits
+    password: constr(pattern=r"^\d{4}$")  # exactly 4 digits
 
 class BoardPasswordVerify(BaseModel):
-    password: constr(regex=r"^\d{4}$")
+    password: constr(pattern=r"^\d{4}$")
 
 
 # ✅ 비밀번호 설정/변경 (오너만)

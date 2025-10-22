@@ -21,3 +21,7 @@ class UserResponse(BaseModel):
 
     class Config:
         orm_mode = True
+
+class PlanUserCount(BaseModel):
+    plan: str  # "free" | "pro" | "enterprise"
+    user_count: int

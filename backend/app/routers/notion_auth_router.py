@@ -1,14 +1,16 @@
 # app/routers/notion_oauth.py
 import os, urllib.parse, secrets
 import base64, requests
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from backend.app.db import get_db
-from backend.app.model import User
+from backend.app.model import User, NotionAuth
 from backend.app.deps.auth import get_current_user
-import backend.app.crud.notion_crud as crud
+import backend.app.crud.notion_crud as crud  # save_user_notion_token, get_user_notion_token
 import logging
+
 logger = logging.getLogger("uvicorn")
 
 router = APIRouter(prefix="/notion", tags=["Notion OAuth"])
@@ -18,10 +20,23 @@ REDIRECT_URI = os.getenv("NOTION_REDIRECT_URI")  # e.g. http://127.0.0.1:8001/no
 CLIENT_SECRET = os.getenv("NOTION_CLIENT_SECRET")
 NOTION_VERSION = os.getenv("NOTION_VERSION", "2022-06-28")
 
+
+def notion_headers(token: str):
+    return {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Notion-Version": NOTION_VERSION,
+    }
+
+
 @router.get("/login")
 def notion_login(current_user: User = Depends(get_current_user)):
-    state = state = f"{current_user.id}:{secrets.token_urlsafe(16)}"  # CSRF/원래 요청 복원용
-    # state는 Redis/DB/세션 등에 저장해두고 callback에서 검증
+    """
+    사용자를 Notion OAuth 동의화면으로 리다이렉트.
+    state에 user_id와 랜덤 시드를 포함. (실서비스에선 state 검증을 반드시 구현)
+    """
+    state = f"{current_user.id}:{secrets.token_urlsafe(16)}"
+    # TODO: state를 Redis/DB/서버세션 등에 저장하고 callback에서 검증하세요.
     params = {
         "client_id": CLIENT_ID,
         "response_type": "code",
@@ -34,30 +49,28 @@ def notion_login(current_user: User = Depends(get_current_user)):
 
 
 @router.get("/callback", include_in_schema=False)
-def notion_callback(code: str, state: str, db: Session = Depends(get_db), user_id: int = 1):
-    # 1) state 검증 (생략 시 보안 취약)
-    # ex: if not valid_state(state): raise HTTPException(400, "Invalid state")
-    logger.info(f"DEBUG CLIENT_ID={CLIENT_ID}, CLIENT_SECRET={CLIENT_SECRET}, REDIRECT_URI={REDIRECT_URI}")
-    user_id, _ = state.split(":", 1)
-    user_id = int(user_id)
+def notion_callback(code: str, state: str, db: Session = Depends(get_db)):
+    """
+    Notion OAuth 콜백. code 교환 → 토큰 저장
+    """
+    # 1) state 검증 (실서비스 필수)
+    try:
+        user_id_str, _ = state.split(":", 1)
+        user_id = int(user_id_str)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid state")
 
     basic = base64.b64encode(f"{CLIENT_ID}:{CLIENT_SECRET}".encode()).decode()
-    headers = {
-        "Authorization": f"Basic {basic}",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
-    payload = {
-        "grant_type": "authorization_code",
-        "code": code,
-        "redirect_uri": REDIRECT_URI,  # 설정에 따라 필수
-    }
+    headers = {"Authorization": f"Basic {basic}", "Content-Type": "application/json", "Accept": "application/json"}
+    payload = {"grant_type": "authorization_code", "code": code, "redirect_uri": REDIRECT_URI}
+
     r = requests.post("https://api.notion.com/v1/oauth/token", headers=headers, json=payload)
     logger.info(f"DEBUG Notion response {r.status_code}: {r.text}")
-    print("DEBUG Notion token response", r.status_code, r.text)
-    # if r.status_code != 200:
-    #     raise HTTPException(r.status_code, detail=r.json())
     data = r.json()
+
+    if r.status_code != 200:
+        raise HTTPException(status_code=r.status_code, detail=data)
+
     crud.save_user_notion_token(
         db=db,
         user_id=user_id,
@@ -66,34 +79,25 @@ def notion_callback(code: str, state: str, db: Session = Depends(get_db), user_i
         workspace_id=data.get("workspace_id"),
         workspace_name=data.get("workspace_name"),
     )
-    # data: access_token, refresh_token, bot_id, workspace_id, workspace_name, owner 등
-    # → DB에 user_id와 함께 저장
-    # save_notion_tokens(user_id, data)
+    return {"ok": True, "workspace_id": data.get("workspace_id"), "workspace_name": data.get("workspace_name")}
 
-    return {"debug_status": r.status_code, "debug_text": r.text}
-
-
-def notion_headers(token: str):
-    return {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "Notion-Version": NOTION_VERSION,
-    }
 
 @router.post("/upload")
-def upload_to_notion(user_id: int,
-                     title: str,
-                     content: str,
-                     parent_id: str,
-                     parent_type: str = "database",
-                     db: Session = Depends(get_db)):
+def upload_to_notion(
+    title: str = Body(..., embed=True),
+    content: str = Body(..., embed=True),
+    parent_id: str = Body(..., embed=True),
+    parent_type: str = Body("database", embed=True),  # 'database' | 'page'
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    token: Optional[str] = Depends(crud.get_user_notion_token),  # JWT에서 user_id→DB조회로 주입
+):
     """
     parent_type: 'database' | 'page'
     parent_id: 사용자가 선택한 데이터베이스ID or 페이지ID
     """
-    token = crud.get_user_notion_token(db, user_id)  # DB에서 불러오기
     if not token:
-        raise HTTPException(400, "Notion 계정이 연결되지 않았습니다.")
+        raise HTTPException(status_code=400, detail="Notion 계정이 연결되지 않았습니다.")
 
     parent = {"database_id": parent_id} if parent_type == "database" else {"page_id": parent_id}
     body = {
@@ -111,11 +115,42 @@ def upload_to_notion(user_id: int,
         ],
     }
     r = requests.post("https://api.notion.com/v1/pages", headers=notion_headers(token), json=body)
+
     if r.status_code == 401:
-        # 필요 시 refresh_token 사용해 토큰 갱신 시도 후 재호출
-        # refresh_notion_token(user_id); 다시 요청 ...
-        pass
+        # 필요 시 refresh_token 사용해 토큰 갱신 시도 후 재호출 로직을 붙일 수 있습니다.
+        # 예: refresh_notion_token(db, current_user.id); 그 후 재시도
+        raise HTTPException(status_code=401, detail="Notion 토큰이 만료되었습니다. 다시 연결해주세요.")
+
     if r.status_code != 200:
-        raise HTTPException(r.status_code, r.json())
+        try:
+            raise HTTPException(status_code=r.status_code, detail=r.json())
+        except Exception:
+            raise HTTPException(status_code=r.status_code, detail=r.text)
+
     page = r.json()
     return {"id": page["id"], "url": page["url"]}
+
+
+@router.delete("/disconnect", status_code=status.HTTP_204_NO_CONTENT)
+def disconnect_notion(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    노션 연동 해제:
+    - 로컬 DB에서 해당 사용자의 NotionAuth 레코드를 삭제(또는 access_token을 무효화)
+    - Notion API에 별도의 토큰 revoke 엔드포인트는 없으므로(공식 제공 없음),
+      사용자가 Notion > Settings & members > Connections에서 수동 해제할 수 있게 안내 권장.
+    """
+    auth: Optional[NotionAuth] = (
+        db.query(NotionAuth).filter(NotionAuth.user_id == current_user.id).first()
+    )
+
+    if not auth:
+        # 이미 해제된 상태
+        return
+
+    # 필요 시 완전 삭제 대신 토큰만 무효화(빈 문자열)로 남기는 방식도 가능
+    db.delete(auth)
+    db.commit()
+    return

@@ -1,4 +1,5 @@
 # routers/payment_router.py
+import logging
 import os
 import uuid
 from typing import Optional
@@ -8,6 +9,7 @@ import base64
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+
 from backend.app.deps.auth import get_current_user
 from backend.app.model import User
 from backend.app.db import get_db
@@ -22,8 +24,13 @@ from backend.app.crud.payment_crud import (
     get_payment_last_6_months_by_plan,
     get_payment_last_5_years_by_plan,
     get_my_payments,
-    get_my_payment_detail
+    get_my_payment_detail, get_total_revenue_by_plan, get_total_payment_amount
+, get_this_week_total_revenue,
+    get_this_month_total_revenue,
+    get_this_year_total_revenue, _sum_total_amount,
 )
+from backend.app.util.day_calculation import _today_local
+
 
 class PaymentRequest(BaseModel):
     plan: PlanType
@@ -67,7 +74,7 @@ def request_payment(
         "amount": amount,
         "orderName": f"{plan.name} plan subscription",
         "customerEmail": current_user.email,
-        "successUrl": f"{SUCCESS_URL}?orderId={order_id}&plan={plan.name}",
+        "successUrl": f"{SUCCESS_URL}?plan={plan.name}",
         "failUrl": FAIL_URL,
     }
 
@@ -154,27 +161,65 @@ async def confirm_payment(
         },
     }
 # 추이 그래프
+logger = logging.getLogger(__name__)
+
 @router.get("/today")
-def today(db: Session = Depends(get_db)):
-    return get_payment_today_by_plan(db)
+def get_payments_today(db: Session = Depends(get_db)):
+    try:
+        start = _today_local()            # 오늘 00:00 (로컬)
+        end   = start + timedelta(days=1) # 내일 00:00 (배타)
+
+        total = _sum_total_amount(db, start_date=start, end_date=end)
+        return {"ok": True, "total": int(total or 0)}   # ← total_amount 아님!
+    except Exception:
+        logger.exception("GET /payments/today failed")
+        raise HTTPException(status_code=500, detail="PAYMENTS_TODAY_FAILED")
+
+def _collapse_rows_to_xy(rows):
+    series = []
+    for r in rows or []:
+        x = getattr(r, "x", None) or getattr(r, "label", None) or getattr(r, "date", None) \
+            or getattr(r, "week", None) or getattr(r, "month", None) or getattr(r, "year", None) or ""
+        y = getattr(r, "y", None) or getattr(r, "count", None) or getattr(r, "value", None) \
+            or getattr(r, "total", None) or 0
+        series.append({"x": str(x), "y": int(y) if y is not None else 0})
+    return series
 
 @router.get("/last-7-days")
 def last_7_days(db: Session = Depends(get_db)):
-    return get_payment_last_7_days_by_plan(db)
+    try:
+        items = get_payment_last_7_days_by_plan(db)
+        return {"ok": True, "items": items}
+    except Exception:
+        logger.exception("GET /payments/last-7-days failed")
+        raise HTTPException(status_code=500, detail="PAYMENTS_LAST_7_DAYS_FAILED")
 
 @router.get("/last-5-weeks")
 def last_5_weeks(db: Session = Depends(get_db)):
-    return get_payment_last_5_weeks_by_plan(db )
+    try:
+        items = get_payment_last_5_weeks_by_plan(db)
+        return {"ok": True, "items": items}
+    except Exception:
+        logger.exception("GET /payments/last-5-weeks failed")
+        raise HTTPException(status_code=500, detail="PAYMENTS_LAST_5_WEEKS_FAILED")
 
 @router.get("/last-6-months")
-def last_6_months(db: Session = Depends(get_db) ):
-    return get_payment_last_6_months_by_plan(db )
+def last_6_months(db: Session = Depends(get_db)):
+    try:
+        items = get_payment_last_6_months_by_plan(db)
+        return {"ok": True, "items": items}
+    except Exception:
+        logger.exception("GET /payments/last-6-months failed")
+        raise HTTPException(status_code=500, detail="PAYMENTS_LAST_6_MONTHS_FAILED")
 
 @router.get("/last-5-years")
-def last_5_years(db: Session = Depends(get_db) ):
-    return get_payment_last_5_years_by_plan(db )
-
-
+def last_5_years(db: Session = Depends(get_db)):
+    try:
+        items = get_payment_last_5_years_by_plan(db)
+        return {"ok": True, "items": items}
+    except Exception:
+        logger.exception("GET /payments/last-5-years failed")
+        raise HTTPException(status_code=500, detail="PAYMENTS_LAST_5_YEARS_FAILED")
 
 @router.get("/me/payments", response_model=PaymentListResponse)
 def list_my_payments(
@@ -235,3 +280,31 @@ def get_my_payment(
         subscription_id=p.subscription_id,
         plan_name=getattr(p, "plan_name", None),
     )
+
+# 플랜 별 총 매출
+@router.get("/revenue/plan")
+def read_revenue_by_plan(db: Session = Depends(get_db)):
+    return get_total_revenue_by_plan(db)
+
+# 총 매출
+@router.get("/total/amount")
+def read_total_payment(db: Session = Depends(get_db)):
+    """
+    전체 기간 총 매출 (SUCCESS만).
+    """
+    return {"total": get_total_payment_amount(db)}
+
+@router.get("/total/week")
+def read_total_week(db: Session = Depends(get_db)):
+    """이번 주 총매출 (월~오늘, 내일 0시 미만)"""
+    return {"total": get_this_week_total_revenue(db)}
+
+@router.get("/total/month")
+def read_total_month(db: Session = Depends(get_db)):
+    """이번 달 총매출 (1일~오늘, 내일 0시 미만)"""
+    return {"total": get_this_month_total_revenue(db)}
+
+@router.get("/total/year")
+def read_total_year(db: Session = Depends(get_db)):
+    """이번 년도 총매출 (YTD: 1/1~오늘, 내일 0시 미만)"""
+    return {"total": get_this_year_total_revenue(db)}

@@ -8,7 +8,7 @@ function getToken() {
   return localStorage.getItem("access_token");
 }
 
-export default function GeminiChatBox() {
+export default function ChatBox() {
   const [prompt, setPrompt] = useState("");
   const [response, setResponse] = useState("");
   const [history, setHistory] = useState([]);
@@ -68,32 +68,46 @@ export default function GeminiChatBox() {
   };
 
   return (
-    <div style={{ maxWidth: 700, margin: "40px auto", padding: 20 }}>
-      <h2>Gemini Chat</h2>
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <textarea rows={3} value={prompt} onChange={(e) => setPrompt(e.target.value)} />
-        <button type="submit" disabled={loading}>{loading ? "생성 중..." : "보내기"}</button>
+    <div className="max-w-[700px] mx-auto my-10 p-5 rounded-2xl border border-border bg-card text-card-foreground shadow-sm font-sans">
+      <h2 className="text-xl font-semibold text-center">Gemini Chat</h2>
+
+      <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-2">
+        <textarea
+          rows={3}
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          className="w-full min-h-[96px] rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background resize-y"
+        />
+        <button
+          type="submit"
+          disabled={loading}
+          className="self-end inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium transition-colors hover:bg-primary/90 disabled:opacity-50 disabled:pointer-events-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background"
+        >
+          {loading ? "생성 중..." : "보내기"}
+        </button>
       </form>
 
-      {error && <p style={{ color: "crimson" }}>{error}</p>}
+      {error && <p className="text-destructive mt-2">{error}</p>}
 
       {response && (
-        <div style={{ marginTop: 16, padding: 12, background: "#f6f7f9", borderRadius: 8 }}>
-          <strong>응답</strong>
+        <div className="mt-4 rounded-lg border border-border bg-muted/30 p-3">
+          <strong className="block mb-1">응답</strong>
           <div>{response}</div>
         </div>
       )}
 
-      <div style={{ marginTop: 24 }}>
-        <h3>이전 대화</h3>
+      <div className="mt-6">
+        <h3 className="text-base font-semibold">이전 대화</h3>
         {history.length === 0 ? (
-          <div style={{ color: "#666" }}>기록 없음</div>
+          <div className="text-muted-foreground">기록 없음</div>
         ) : (
           history.map((item) => (
-            <div key={item.id} style={{ borderTop: "1px solid #eee", padding: "8px 0" }}>
+            <div key={item.id} className="border-t border-border py-2.5">
               <div><b>Q:</b> {item.prompt_text}</div>
               <div><b>A:</b> {item.response_text || "(빈 응답)"}</div>
-              <div style={{ fontSize: 12, color: "#888" }}>{new Date(item.created_at).toLocaleString()}</div>
+              <div className="text-xs text-muted-foreground mt-1">
+                {new Date(item.created_at).toLocaleString()}
+              </div>
             </div>
           ))
         )}
@@ -101,57 +115,3 @@ export default function GeminiChatBox() {
     </div>
   );
 }
-
-
-const styles = {
-  container: {
-    maxWidth: "700px",
-    margin: "40px auto",
-    padding: "20px",
-    border: "1px solid #ddd",
-    borderRadius: "12px",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-    fontFamily: "Inter, sans-serif",
-  },
-  header: { textAlign: "center" },
-  logoutBtn: {
-    float: "right",
-    background: "#ef4444",
-    color: "white",
-    border: "none",
-    padding: "6px 12px",
-    borderRadius: 6,
-    cursor: "pointer",
-  },
-  form: { display: "flex", flexDirection: "column", gap: "10px" },
-  textarea: {
-    width: "100%",
-    padding: "10px",
-    borderRadius: "8px",
-    border: "1px solid #ccc",
-    resize: "vertical",
-    fontSize: "14px",
-  },
-  button: {
-    alignSelf: "flex-end",
-    padding: "8px 16px",
-    borderRadius: "8px",
-    backgroundColor: "#2563eb",
-    color: "#fff",
-    border: "none",
-    cursor: "pointer",
-  },
-  error: { color: "red", marginTop: "10px" },
-  responseBox: {
-    backgroundColor: "#f8fafc",
-    borderRadius: "8px",
-    padding: "12px",
-    marginTop: "20px",
-    border: "1px solid #e2e8f0",
-  },
-  historyBox: { marginTop: "30px" },
-  historyItem: { borderTop: "1px solid #eee", padding: "10px 0" },
-  prompt: { fontWeight: "bold", color: "#111" },
-  answer: { color: "#333", marginTop: "4px" },
-  time: { color: "#999", fontSize: "12px", marginTop: "4px" },
-};

@@ -103,17 +103,40 @@ def get_current_usage(
         period_end=usage.period_end,
     )
 
-RangeType = Literal["week", "month", "custom"]
+@router.get("/total")
+def get_total_usage(db: Session = Depends(get_db)):
+    total = recording_usage_crud.get_total_usage_all_users(db)
+    return {"total": total}
 
-@router.get("/recordings/summary")
-def get_recording_summary(
-    db: Session = Depends(get_db),
-    range: RangeType = Query("week"),
-    start_date: Optional[date] = Query(None),
-    end_date: Optional[date] = Query(None),
-):
-    return recording_usage_crud.get_summary(db, range, start_date, end_date)
+@router.get("/total/today")
+def read_total_usage_today(db: Session = Depends(get_db)):
+    return recording_usage_crud.get_total_usage_today(db)
 
-#GET /admin/analytics/recordings/summary?range=week
-#GET /admin/analytics/recordings/summary?range=month
-#GET /admin/analytics/recordings/users?range=custom&start_date=2025-10-01&end_date=2025-10-14
+@router.get("/total/7d")
+def read_total_usage_7d(db: Session = Depends(get_db)):
+    return recording_usage_crud.get_total_usage_last_7_days(db)
+
+
+@router.get("/total/month")
+def read_total_usage_month(db: Session = Depends(get_db)):
+    return recording_usage_crud.get_total_usage_month(db)
+
+
+@router.get("/total/year")
+def read_total_usage_year(db: Session = Depends(get_db)):
+    return recording_usage_crud.get_total_usage_year(db)
+
+@router.get("/compare")
+def read_usage_comparisons(db: Session = Depends(get_db)):
+    """
+    전일/전주/전월/전년 대비 총 사용량 증감 요약
+    """
+    return recording_usage_crud.get_usage_comparisons(db)
+
+@router.get("/avg")
+def read_avg_usage_by_plan(db: Session = Depends(get_db)):
+    """
+    free / pro / enterprise 별 평균 사용시간 분석
+    """
+    data = recording_usage_crud.get_avg_usage_by_plan(db)
+    return {"plans": data}

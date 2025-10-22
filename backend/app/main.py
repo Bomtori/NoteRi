@@ -65,7 +65,6 @@ app.add_middleware(
 register_routers(app)  # 한 줄로 끝
 
 pipeline = STTPipeline()
-diarizer = DiarizationService()
 
 @app.websocket("/ws/stt")
 async def websocket_endpoint(websocket: WebSocket):

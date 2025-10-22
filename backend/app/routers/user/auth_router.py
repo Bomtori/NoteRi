@@ -13,7 +13,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN", None)
 KAKAO_CLIENT_ID = os.getenv("KAKAO_CLIENT_ID")
 KAKAO_LOGOUT_REDIRECT = os.getenv("KAKAO_LOGOUT_REDIRECT", "http://localhost:5173/logout")
-FRONTEND_LOGOUT_REDIRECT = os.getenv("FRONTEND_LOGOUT_REDIRECT", "http://localhost:5173/logout")
+FRONTEND_LOGOUT_REDIRECT = os.getenv("FRONTEND_LOGOUT_REDIRECT", "http://localhost:5173")
 
 @router.post("/refresh")
 def refresh_access_token(
@@ -62,17 +62,17 @@ async def logout(provider: str | None = Query(default=None, description="google,
     resp.delete_cookie("refresh_token", domain=COOKIE_DOMAIN, path="/")
     resp.delete_cookie("access_token", domain=COOKIE_DOMAIN, path="/")
 
-    # ✅ Provider별 외부 로그아웃 처리
-    if provider == "kakao":
-        url = (
-            f"https://kauth.kakao.com/oauth/logout"
-            f"?client_id={KAKAO_CLIENT_ID}"
-            f"&logout_redirect_uri={KAKAO_LOGOUT_REDIRECT}"
-        )
-        return RedirectResponse(url)
-    elif provider == "google":
+    # # ✅ Provider별 외부 로그아웃 처리
+    # if provider == "kakao":
+    #     url = (
+    #         f"https://kauth.kakao.com/oauth/logout"
+    #         f"?client_id={KAKAO_CLIENT_ID}"
+    #         f"&logout_redirect_uri={KAKAO_LOGOUT_REDIRECT}"
+    #     )
+    #     return RedirectResponse(url)
+    if provider == "google":
         return RedirectResponse("https://accounts.google.com/Logout")
-    elif provider == "naver":
+    elif provider == ("naver" or "kakao"):
         # 네이버는 공식 로그아웃 URL이 없지만,
         # 프론트 로그아웃 페이지로 리다이렉트
         return RedirectResponse(FRONTEND_LOGOUT_REDIRECT)

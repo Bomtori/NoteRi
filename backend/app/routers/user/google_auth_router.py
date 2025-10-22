@@ -114,7 +114,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
         path="/",
     )
 
-    return RedirectResponse(redirect_to, status_code=302)
+    return resp
 
 @router.post("/rejoin")
 def google_rejoin(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

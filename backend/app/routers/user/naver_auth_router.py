@@ -121,7 +121,7 @@ async def naver_callback(request: Request, db: Session = Depends(get_db)):
         path="/",
     )
 
-    return RedirectResponse(redirect_to, status_code=302)
+    return resp
 
 @router.post("/rejoin")
 def naver_rejoin(

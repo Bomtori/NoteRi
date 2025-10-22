@@ -12,7 +12,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN", None)
 KAKAO_CLIENT_ID = os.getenv("KAKAO_CLIENT_ID")
-KAKAO_LOGOUT_REDIRECT = os.getenv("http://localhost:5173/logout")  # ex)
+KAKAO_LOGOUT_REDIRECT = os.getenv("KAKAO_LOGOUT_REDIRECT", "http://localhost:5173/logout")
 FRONTEND_LOGOUT_REDIRECT = os.getenv("FRONTEND_LOGOUT_REDIRECT", "http://localhost:5173/logout")
 
 @router.post("/refresh")

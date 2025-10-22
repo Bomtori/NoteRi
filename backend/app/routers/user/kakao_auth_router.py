@@ -1,5 +1,5 @@
 # backend/app/routers/kakao_auth_router.py
-from fastapi import APIRouter, Request, Depends, status
+from fastapi import APIRouter, Request, Depends, status, Cookie, HTTPException
 from sqlalchemy.orm import Session
 from authlib.integrations.starlette_client import OAuth
 from fastapi.responses import RedirectResponse, JSONResponse
@@ -11,7 +11,7 @@ from backend.app.db import get_db
 from backend.app.model import User
 from backend.app.deps.auth import get_current_user
 from backend.app.crud.auth_crud import get_or_create_user
-from backend.app.util.auth import create_access_token, create_refresh_token
+from backend.app.util.auth import create_access_token, create_refresh_token, verify_token
 from backend.app.util.errors import OAuthProviderConflict
 
 router = APIRouter(prefix="/auth/kakao", tags=["KakaoAuth"])
@@ -117,10 +117,10 @@ async def kakao_callback(request: Request, db: Session = Depends(get_db)):
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=SECURE_COOKIE,
-        samesite="lax",
+        secure=False,  # 로컬 HTTP는 False, 운영 HTTPS에서는 True
+        samesite="lax",  # 서로 다른 '사이트'라면 None+Secure 필요
+        domain=None,  # 로컬은 지정하지 않기 (Domain 속성 제거)
         max_age=REFRESH_MAX_AGE,
-        domain=COOKIE_DOMAIN,
         path="/",
     )
     return RedirectResponse(redirect_to, status_code=302)
@@ -164,17 +164,3 @@ def kakao_rejoin(
             "picture": current_user.picture,
         },
     })
-
-
-# ✅ 로그아웃 (Kakao 공식 로그아웃 + 프론트 리다이렉트)
-@router.get("/logout")
-async def kakao_logout():
-    resp = JSONResponse({"ok": True})
-    resp.delete_cookie("refresh_token", domain=COOKIE_DOMAIN, path="/")
-    resp.delete_cookie("access_token", domain=COOKIE_DOMAIN, path="/")
-    url = (
-        f"https://kauth.kakao.com/oauth/logout"
-        f"?client_id={KAKAO_CLIENT_ID}"
-        f"&logout_redirect_uri={KAKAO_LOGOUT_REDIRECT}"
-    )
-    return RedirectResponse(url)

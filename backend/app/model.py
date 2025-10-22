@@ -128,7 +128,7 @@ class Folder(Base):
     id = Column(Integer, primary_key=True)
     parent_id = Column(Integer, ForeignKey("folders.id"))
     name = Column(String, nullable=False)
-    color = Column(String(7), nullable=False, default="#7E36F9")
+    color = Column(String(7), nullable=True, default="#7E36F9")
     created_at = Column(TIMESTAMP)
     updated_at = Column(TIMESTAMP)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))

@@ -125,6 +125,10 @@ class STTPipeline:
             )
         except Exception as e:
             logger.warning(f"init_session_meta({source}) failed: {e}")
+
+        # ✅ 프론트가 “이번 세션”을 정확히 추적할 수 있도록 SID 알림
+        await self._safe_send_json({"event": "session_started", "sid": self.sid})
+
     async def begin_session(self, websocket):
         """WS 수락 직후 호출: 타이머 즉시 시작(오디오 유무 무관)."""
         await self._start_session(websocket, source="manual")
@@ -173,6 +177,14 @@ class STTPipeline:
                     await r.setex(f"stt:last_session_id:{self.sid}", 3600, str(session_id))
                 except Exception as _:
                     pass
+
+                # ✅ 세션ID를 SID 키로 1시간 보관 → 프론트가 by-sid로 정확히 찾게 함
+                try:
+                    from backend.app.util.redis_client import get_redis
+                    r = await get_redis()
+                    await r.setex(f"stt:last_session_id:{self.sid}", 3600, str(session_id))
+                except Exception:
+                    logger.warning("failed to cache last_session_id in redis")
 
                 logger.info(f"[DB] Redis→Postgres ingest done. sid={self.sid}, session_id={session_id}")
             except Exception as e:

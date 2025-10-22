@@ -123,7 +123,7 @@ async def kakao_callback(request: Request, db: Session = Depends(get_db)):
         max_age=REFRESH_MAX_AGE,
         path="/",
     )
-    return RedirectResponse(redirect_to, status_code=302)
+    return resp
 
 
 # ✅ 재가입 처리 (비활성 유저 복구)

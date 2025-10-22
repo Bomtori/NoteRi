@@ -1,6 +1,6 @@
 from sqlalchemy import (
     Column, Integer, String, Date, Text, Boolean,
-    ForeignKey, Enum, Float, JSON, TIMESTAMP, Numeric
+    ForeignKey, Enum, Float, JSON, TIMESTAMP, Numeric, UniqueConstraint
 )
 from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy.sql import func
@@ -50,6 +50,8 @@ class User(Base):
     notifications = relationship("Notification", back_populates="user")
     recording_usage = relationship("RecordingUsage", back_populates="user")
     ai_gemini = relationship("AIGemini", back_populates="user")
+    shared_boards = relationship("BoardShare", back_populates="user", cascade="all, delete-orphan")
+
 
 class Subscription(Base):
     __tablename__ = "subscriptions"
@@ -150,6 +152,7 @@ class Board(Base):
     invite_token = Column(String, nullable=True)
     invite_role = Column(String, default="editor")
     invite_expires_at = Column(TIMESTAMP, nullable=True)
+    password_hash = Column(String(255), nullable=True)  # ✅ 비밀번호 해시 저장
     created_at = Column(TIMESTAMP)
     updated_at = Column(TIMESTAMP)
 
@@ -160,6 +163,7 @@ class Board(Base):
     audios = relationship("AudioData", back_populates="board", cascade="all, delete-orphan")
     memos = relationship("Memo", back_populates="board", cascade="all, delete-orphan")
     transcripts = relationship("Transcript", back_populates="board", cascade="all, delete-orphan")
+    shared_users = relationship("BoardShare", back_populates="board", cascade="all, delete-orphan")
 
     # 기존 recording_sessions 유지
     recording_sessions = relationship("RecordingSession", back_populates="board")
@@ -319,3 +323,18 @@ class AIGemini(Base):
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), index=True)
 
     user = relationship("User", lazy="joined")
+
+class BoardShare(Base):
+    __tablename__ = "board_shares"
+
+    id = Column(Integer, primary_key=True)
+    board_id = Column(Integer, ForeignKey("boards.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    role = Column(String, default="viewer")  # viewer | editor
+    created_at = Column(TIMESTAMP, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("board_id", "user_id", name="uq_board_shares_board_user"),
+    )
+    board = relationship("Board", back_populates="shared_users")
+    user = relationship("User", back_populates="shared_boards")

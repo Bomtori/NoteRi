@@ -66,16 +66,13 @@ class BoardCreate(BaseModel):
     folder_id: int
     title: str
     description: Optional[str] = None
-    invite_token: Optional[str] = None
-    invite_role: Optional[str] = "editor"
-    invite_expires_at: Optional[datetime] = None
+    password: Optional[str] = None  # ✅ 비밀번호 보호 기능용
 
 
 class BoardUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
-    invite_role: Optional[str] = None
-    invite_expires_at: Optional[datetime] = None
+    password: Optional[str] = None  # ✅ 비밀번호 수정/해제용
 
 
 # -----------------------------
@@ -83,13 +80,10 @@ class BoardUpdate(BaseModel):
 # -----------------------------
 class BoardResponse(BaseModel):
     id: int
-    folder_id: int
+    folder_id: Optional[int]
     owner_id: int
     title: str
     description: Optional[str]
-    invite_token: Optional[str]
-    invite_role: Optional[str]
-    invite_expires_at: Optional[datetime]
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
 
@@ -110,5 +104,8 @@ class BoardListResponse(BaseModel):
     boards: List[BoardResponse]
 
 
+# -----------------------------
+# Board Move
+# -----------------------------
 class BoardMove(BaseModel):
     folder_id: int

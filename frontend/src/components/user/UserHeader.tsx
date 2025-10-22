@@ -15,30 +15,23 @@ export default function UserHeader({ user }: Props) {
     const [nickname, setNickname] = useState(user.nickname);
     const [preview, setPreview] = useState(user.picture);
 
-    // ✅ 프로필 이미지 변경 및 업로드
+    // ✅ 프로필 이미지 변경
     const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
-        // 미리보기 즉시 반영
         const localPreview = URL.createObjectURL(file);
         setPreview(localPreview);
 
         try {
-            // 1️⃣ 파일을 form-data로 서버에 업로드
             const formData = new FormData();
             formData.append("file", file);
-
             const uploadRes = await apiClient.post("/upload", formData, {
                 headers: { "Content-Type": "multipart/form-data" },
             });
 
-            const uploadedUrl = uploadRes.data.url; // 절대경로
-            console.log("📸 업로드 완료:", uploadedUrl);
-
-            // 2️⃣ 사용자 프로필 picture 업데이트
+            const uploadedUrl = uploadRes.data.url;
             await apiClient.patch("/users/me", { picture: uploadedUrl });
-
             alert("프로필 사진이 변경되었습니다 ✅");
         } catch (err) {
             console.error("이미지 업로드 실패:", err);
@@ -56,13 +49,15 @@ export default function UserHeader({ user }: Props) {
         }
     };
 
-    // ✅ 로그아웃
+    // ✅ 통합 로그아웃
     const handleLogout = async () => {
         try {
+            await apiClient.get(`/auth/logout?provider=${user.oauth_provider}`);
             localStorage.removeItem("access_token");
+            localStorage.removeItem("user");
             window.location.href = "/login";
-        } catch {
-            console.error("로그아웃 실패");
+        } catch (err) {
+            console.error("로그아웃 실패:", err);
         }
     };
 

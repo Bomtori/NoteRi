@@ -1,23 +1,47 @@
 import HeroSection from "../components/landing/HeroSection";
-import FeatureSection from "../components/landing/FeatureSection";
-import { useNavigate } from "react-router-dom";
-
+import FeatureRecordSection from "../components/landing/FeatureRecordSection";
+import FeatureSummarySection from "../components/landing/FeatureSummarySection";
+import FeatureChatbotSection from "../components/landing/FeatureChatbotSection";
+import PricingSection from "../components/landing/PricingSection";
+import FAQSection from "../components/landing/FAQSection";
+import FinalCTASection from "../components/landing/FinalCTASection";
+import LandingTopNav from "../components/landing/LandingTopNav";
+import { LandingFooter } from "../components/landing/LandingFooter.jsx";
 
 export default function LandingPage() {
-    const navigate = useNavigate();
-
     return (
-        <div className="min-h-screen bg-white flex flex-col">
-            {/* Hero 영역 */}
-            <HeroSection onStart={() => navigate("/login")} />
+        <div className="w-full min-h-screen flex flex-col bg-white">
+            {/* ✅ 상단 네비게이션 */}
+            <LandingTopNav />
 
-            {/* 기능 소개 영역 */}
-            <FeatureSection />
+            {/* ✅ Hero Section */}
+            <section id="hero">
+                <HeroSection />
+            </section>
 
-            {/* 푸터 (간단히) */}
-            <footer className="text-center py-6 text-gray-400 text-sm border-t mt-auto">
-                © 2025 NoteRi. All rights reserved.
-            </footer>
+            {/* ✅ 기능 소개 (3개 컴포넌트로 분리) */}
+            <section id="features">
+                <FeatureRecordSection />
+                <FeatureSummarySection />
+                <FeatureChatbotSection />
+            </section>
+
+            {/* ✅ 요금제 */}
+            <section id="pricing">
+                <PricingSection />
+            </section>
+
+            {/* ✅ FAQ */}
+            <section id="faq">
+                <FAQSection />
+            </section>
+
+            {/* ✅ CTA + Footer */}
+            <section id="cta">
+                <FinalCTASection />
+            </section>
+
+            <LandingFooter />
         </div>
     );
 }

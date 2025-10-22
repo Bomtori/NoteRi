@@ -114,7 +114,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
         path="/",
     )
 
-    return RedirectResponse(redirect_to, status_code=302)
+    return resp
 
 @router.post("/rejoin")
 def google_rejoin(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -151,24 +151,3 @@ def google_rejoin(db: Session = Depends(get_db), current_user: User = Depends(ge
             "picture": current_user.picture,
         }
     })
-
-@router.post("/refresh")
-def refresh_access_token(
-    db: Session = Depends(get_db),
-    refresh_token: str | None = Cookie(default=None)
-    # 또는 Body/Authorization 헤더로 받으려면 파라미터를 바꾸세요.
-):
-    if not refresh_token:
-        raise HTTPException(status_code=401, detail="Refresh token missing")
-
-    payload = verify_token(refresh_token, token_type="refresh")
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
-
-    user_id = int(payload["sub"])
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    new_access = create_access_token({"sub": str(user.id), "email": user.email})
-    return {"access_token": new_access, "token_type": "bearer"}

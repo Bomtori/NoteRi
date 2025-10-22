@@ -1,68 +1,92 @@
 # backend/services/diarization.py
-from pyannote.audio import Pipeline
+from __future__ import annotations
+import os
 import torchaudio
-import os, torch
+from typing import List, Tuple
+from sqlalchemy.orm import Session
+from backend.app.db import SessionLocal
+from backend.app.model import RecordingSession, RecordingResult, AudioData
+from backend.ml.diarization.diarization_model import DiarizationModel
+# 네 프로젝트의 복호화 유틸 경로에 맞게 import
+from backend.app.util.crypto_path import decrypt_path
 
-class DiarizationService:
-    def __init__(self):
-        token = os.getenv("HF_TOKEN")
-        if not token:
-            raise RuntimeError("HF_TOKEN env var not set")
+ABC = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-        # 4.x에서 정상 접근 가능한 공개 파이프라인
-        self.pipeline = Pipeline.from_pretrained(
-            "pyannote/speaker-diarization-community-1",
-            token=token
-        )
-        if torch.cuda.is_available():
-            self.pipeline.to(torch.device("cuda"))
+def _to_mono_16k(waveform, sample_rate):
+    # 채널 평균으로 mono
+    if waveform.ndim == 2 and waveform.size(0) > 1:
+        waveform = waveform.mean(dim=0, keepdim=True)
+    # 필요시 16k 리샘플
+    target_sr = 16000
+    if sample_rate != target_sr:
+        resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=target_sr)
+        waveform = resampler(waveform)
+        sample_rate = target_sr
+    return waveform, sample_rate
 
-    def diarize(self, filepath, num_speakers=None, min_speakers=None, max_speakers=None):
-        # torchcodec 우회: 파일을 메모리로 읽어서 전달
-        waveform, sample_rate = torchaudio.load(filepath)
+def _map_keys_to_ABC(turns: List[Tuple[int,int,str]]):
+    # turns: (start_ms, end_ms, "SPEAKER_00")
+    order, next_idx = {}, 0
+    labeled = []
+    for s,e,k in sorted(turns, key=lambda x:x[0]):
+        if k not in order:
+            order[k] = ABC[next_idx]
+            next_idx += 1
+        labeled.append((s,e,order[k],k))
+    return labeled  # (s,e,"A","SPEAKER_00")
 
-        result = self.pipeline(
-            {"waveform": waveform, "sample_rate": sample_rate},
-            num_speakers=num_speakers,
-            min_speakers=min_speakers,
-            max_speakers=max_speakers
-        )
+def _best_label_for_segment(s_ms:int, e_ms:int, diar_labeled):
+    best_label, best_ov = "U", -1
+    for ts,te,label,_ in diar_labeled:
+        ov = max(0, min(e_ms, te) - max(s_ms, ts))
+        if ov > best_ov:
+            best_label, best_ov = label, ov
+    if best_ov <= 0:
+        # 겹침 없으면 가장 가까운 턴 라벨
+        closest = min(diar_labeled, key=lambda t: min(abs(s_ms - t[0]), abs(e_ms - t[1])))
+        return closest[2]
+    return best_label
 
-        # 4.x: DiarizeOutput 안에 annotation이 들어있음
-        annotation = getattr(result, "annotation", result)
+def _update_results_with_labels(db: Session, session_id:int, diar_labeled):
+    rows: list[RecordingResult] = (
+        db.query(RecordingResult)
+          .filter(RecordingResult.recording_session_id == session_id)
+          .order_by(RecordingResult.started_at.asc())
+          .all()
+    )
+    for r in rows:
+        if not r.started_at or not r.ended_at:
+            continue
+        s = int(r.started_at.timestamp()*1000)
+        e = int(r.ended_at.timestamp()*1000)
+        r.speaker_label = _best_label_for_segment(s, e, diar_labeled)
+    db.commit()
 
-        items = []
-        # 2.x/3.x 방식 (여전히 Annotation에 있음)
-        if hasattr(annotation, "itertracks"):
-            for turn, _, speaker in annotation.itertracks(yield_label=True):
-                items.append({
-                    "speaker": speaker,
-                    "start": round(float(turn.start), 2),
-                    "end": round(float(turn.end), 2),
-                })
-            return items
+async def run_diarization_for_session(session_id: int):
+    with SessionLocal() as db:
+        sess: RecordingSession | None = db.query(RecordingSession).get(session_id)
+        if not sess or sess.is_diarized:
+            return
+        audio: AudioData | None = sess.audio
+        if not audio or not audio.file_path:
+            return
 
-        # 폴백: itersegments + __getitem__ 조합
-        # (겹치는 트랙 있을 때도 speaker 라벨 가져올 수 있음)
-        if hasattr(annotation, "itersegments"):
-            for seg in annotation.itersegments():
-                try:
-                    label = annotation[seg]  # 겹침 없을 때
-                    items.append({
-                        "speaker": str(label),
-                        "start": round(float(seg.start), 2),
-                        "end": round(float(seg.end), 2),
-                    })
-                except Exception:
-                    # 겹치는 트랙이 있을 경우 (segment, track) 키로 조회
-                    if hasattr(annotation, "get_timeline"):
-                        # 가능한 트랙을 추정할 수 없으면 구간만 리턴 (라벨 Unknown)
-                        items.append({
-                            "speaker": "Unknown",
-                            "start": round(float(seg.start), 2),
-                            "end": round(float(seg.end), 2),
-                        })
-            return items
+        real_path = decrypt_path(audio.file_path)  # 암호화 경로 복호화 → 실제 파일경로
+        # 파일이 이미 WAV/16k/mono면 infer_file로 바로:
+        model = DiarizationModel.get()
+        turns = model.infer_file(real_path)  # (ms,ms,key)
 
-        # 정말 예외적인 경우: 구조를 모를 때는 문자열로라도 덤프
-        return [{"speaker": "Unknown", "start": 0.0, "end": 0.0}]
+        # 필요 시 메모리 로딩(코덱 이슈 회피) 버전:
+        # waveform, sr = torchaudio.load(real_path)
+        # waveform, sr = _to_mono_16k(waveform, sr)
+        # turns = model.infer_mem(waveform, sr)  # infer_mem 구현 시
+
+        if not turns:
+            return
+        diar_labeled = _map_keys_to_ABC(turns)
+
+        _update_results_with_labels(db, session_id, diar_labeled)
+
+        sess.is_diarized = True
+        db.commit()
+

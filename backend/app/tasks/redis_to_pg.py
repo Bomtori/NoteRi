@@ -74,10 +74,10 @@ def ingest_one_session(prefix: str, sid: str):
         #  - created_at : 지금 시각(NOW())로 채워서 NOT NULL 충족
         cur.execute("""
             INSERT INTO recording_sessions
-              (board_id, user_id, status, started_at, ended_at, created_at)
+            (board_id, user_id, status, started_at, ended_at, created_at, is_diarized)
             VALUES
-              (%s, %s, 'saved',
-               to_timestamp(%s/1000.0), to_timestamp(%s/1000.0), NOW())
+            (%s, %s, 'saved',
+            to_timestamp(%s/1000.0), to_timestamp(%s/1000.0), NOW(), FALSE)
             RETURNING id;
         """, (board_id, user_id, base_ms, ended_ms))
         session_id = cur.fetchone()[0]

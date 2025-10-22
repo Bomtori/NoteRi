@@ -164,8 +164,17 @@ class STTPipeline:
         # ✅ 종료 후 Redis→Postgres 적재 (이벤트 루프 블로킹 방지: 스레드로 실행)
         if self.sid and self.redis_prefix:
             try:
-                await asyncio.to_thread(ingest_one_session, self.redis_prefix, self.sid)
-                logger.info(f"[DB] Redis→Postgres ingest done. sid={self.sid}")
+                session_id = await asyncio.to_thread(ingest_one_session, self.redis_prefix, self.sid)
+                self.last_session_id = session_id          # 👈 프론트에서 참조할 수 있게 보관(선택)
+                # 필요하면 Redis에도 써두기(세션 id 조회용)
+                try:
+                    from backend.app.util.redis_client import get_redis
+                    r = await get_redis()
+                    await r.setex(f"stt:last_session_id:{self.sid}", 3600, str(session_id))
+                except Exception as _:
+                    pass
+
+                logger.info(f"[DB] Redis→Postgres ingest done. sid={self.sid}, session_id={session_id}")
             except Exception as e:
                 logger.warning(f"[DB] ingest failed for sid={self.sid}: {e}")
 

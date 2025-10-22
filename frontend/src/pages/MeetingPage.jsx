@@ -19,6 +19,7 @@ export default function MeetingPage() {
   const [summaries, setSummaries] = useState([]);
   const [speakers, setSpeakers] = useState([]);
   const [merged, setMerged] = useState([]);
+  const [sessionId, setSessionId] = useState(null);
 
   // idle | recording | paused
   const [recordingState, setRecordingState] = useState("idle");
@@ -37,6 +38,7 @@ export default function MeetingPage() {
 
   const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8000/ws/stt";
   const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   useEffect(() => {
     if (historyEndRef.current) historyEndRef.current.scrollIntoView({ behavior: "smooth" });
@@ -51,6 +53,22 @@ export default function MeetingPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 최신 세션 ID 조회(녹음 종료 직후 한 번 호출)
+  const fetchLatestSessionId = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/sessions/latest`);
+      if (!res.ok) throw new Error(`latest session fetch failed: ${res.status}`);
+      const data = await res.json();
+      if (data?.id) {
+        setSessionId(data.id);
+        return data.id;
+      }
+    } catch (e) {
+      console.error("❌ fetchLatestSessionId:", e);
+    }
+    return null;
+  };
 
   const startRecording = async () => {
     if (recordingState !== "idle") return;
@@ -144,7 +162,7 @@ export default function MeetingPage() {
     setRecordingState("recording");
   };
 
-  const stopRecording = () => {
+  const stopRecording = async () => {
     if (recordingState === "idle") return;
     setRecordingState("idle");
     pausedRef.current = false;
@@ -176,34 +194,53 @@ export default function MeetingPage() {
       wsRef.current.close(1000, "Normal Closure");
     }
     wsRef.current = null;
+    
+    // 🔹 백엔드가 Redis→Postgres 적재를 마친 뒤 최신 세션ID 확보
+    // (WS close 후 파일 저장/ingest가 수행되므로 약간의 지연이 있을 수 있음)
+    // 간단 폴링: 최대 10초, 500ms 간격
+    let tries = 0;
+    while (tries++ < 20) {
+      const sid = await fetchLatestSessionId();
+      if (sid) break;
+      await sleep(500);
+    }
   };
 
   const runDiarization = async () => {
+    // 세션 기반 다이어라이즈: /sessions/{id}/diarize → /sessions/{id} 폴링 → /sessions/{id}/results 조회
+    if (!sessionId) {
+      alert("세션을 찾을 수 없습니다. 녹음을 종료한 뒤 다시 시도하세요.");
+      return;
+    }
     try {
-      const params = new URLSearchParams({ num_speakers: "2" });
-      const res = await fetch(`${API_BASE}/diarize/latest?${params.toString()}`, { method: "GET" });
-      if (!res.ok) throw new Error(`Failed to diarize: ${res.status}`);
-      const data = await res.json();
+      // 1) 다이어라이즈 시작
+      const start = await fetch(`${API_BASE}/sessions/${sessionId}/diarize`, { method: "POST" });
+      if (!start.ok) throw new Error(`diarize start failed: ${start.status}`);
 
-      // 백엔드가 {file, diarization} 형태라면 아래처럼 맞춰서 파싱
-      const diarArray = Array.isArray(data) ? data : data.diarization || [];
-      const formatted = diarArray.map((d) => ({
-        start: d.start,
-        end: d.end,
-        speaker: d.speaker,
-        text: d.text || "",
+      // 2) is_diarized가 true 될 때까지 폴링 (최대 60초)
+      let tries = 0;
+      while (tries++ < 60) {
+        const s = await fetch(`${API_BASE}/sessions/${sessionId}`);
+        const sj = await s.json();
+        if (sj?.is_diarized) break;
+        await sleep(1000);
+      }
+
+      // 3) 결과 조회 → speakers로 렌더
+      const res = await fetch(`${API_BASE}/sessions/${sessionId}/results`);
+      if (!res.ok) throw new Error(`results fetch failed: ${res.status}`);
+      const rows = await res.json(); // [{raw_text, speaker_label, started_at, ended_at}, ...]
+      const formatted = rows.map((r) => ({
+        speaker: r.speaker_label || "U",
+        text: r.raw_text || "",
+        start: typeof r.offset_start_sec === "number" ? r.offset_start_sec : undefined,
+        end:   typeof r.offset_end_sec   === "number" ? r.offset_end_sec   : undefined,
       }));
       setSpeakers(formatted);
-
-      const res2 = await fetch(`${API_BASE}/diarize/merge-latest`, { method: "GET" });
-      if (res2.ok) {
-        const mergedData = await res2.json();
-        setMerged(Array.isArray(mergedData) ? mergedData : []);
-      } else {
-        setMerged([]);
-      }
-    } catch (err) {
-      console.error("❌ Diarization error:", err);
+      // 병합 뷰가 필요 없다면 setMerged([])로 초기화
+      setMerged([]);
+    } catch (e) {
+      console.error("❌ Diarization error:", e);
       setSpeakers([]);
       setMerged([]);
     }
@@ -249,7 +286,10 @@ export default function MeetingPage() {
           ⏹️ 종료
         </button>
 
-        <button onClick={runDiarization} className="px-4 py-2 rounded bg-blue-600 text-white">
+        <button
+          onClick={runDiarization}
+          className="px-4 py-2 rounded bg-blue-600 text-white"
+        >
           🗣️ 화자 분리 실행
         </button>
       </div>

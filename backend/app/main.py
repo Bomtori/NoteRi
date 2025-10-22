@@ -18,7 +18,8 @@ from starlette.websockets import WebSocketState, WebSocketDisconnect
 # 🧠 Services (STT, Diarization)
 # ============================================
 from backend.services.stt_pipeline import STTPipeline
-from backend.services.diarization import DiarizationService
+from backend.app.routers.sessions_router import router as sessions_router
+
 
 # ============================================
 # 🗓 Scheduler & DB 초기화
@@ -34,6 +35,8 @@ app = FastAPI()
 
 # 세션 (OAuth redirect 시 필요할 수 있음)
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("APP_SECRET_KEY"))
+app.include_router(sessions_router)
+
 # ============================================
 # 💾 Redis 관련
 # ============================================
@@ -62,7 +65,6 @@ app.add_middleware(
 register_routers(app)  # 한 줄로 끝
 
 pipeline = STTPipeline()
-diarizer = DiarizationService()
 
 @app.websocket("/ws/stt")
 async def websocket_endpoint(websocket: WebSocket):

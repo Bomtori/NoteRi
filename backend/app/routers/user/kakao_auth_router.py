@@ -125,7 +125,6 @@ async def kakao_callback(request: Request, db: Session = Depends(get_db)):
     )
     return resp
 
-
 # ✅ 재가입 처리 (비활성 유저 복구)
 @router.post("/rejoin")
 def kakao_rejoin(

@@ -11,7 +11,8 @@ from backend.app.db import get_db
 from backend.app.model import User
 from backend.app.deps.auth import get_current_user
 from backend.app.crud.auth_crud import get_or_create_user
-from backend.app.util.auth import create_access_token
+from backend.app.util.auth import create_access_token, create_refresh_token
+from backend.app.util.errors import OAuthProviderConflict
 
 router = APIRouter(prefix="/auth/kakao", tags=["KakaoAuth"])
 
@@ -19,6 +20,10 @@ router = APIRouter(prefix="/auth/kakao", tags=["KakaoAuth"])
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 KAKAO_CLIENT_ID = os.getenv("KAKAO_CLIENT_ID")
 KAKAO_LOGOUT_REDIRECT = f"{FRONTEND_URL}/login"
+COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN", None)
+ACCESS_TOKEN_MAX_AGE = 3600  # 초
+SECURE_COOKIE = os.getenv("SECURE_COOKIE", "false").lower() == "true"
+REFRESH_MAX_AGE = 60 * 60 * 24 * 14  # 14일
 
 # ✅ Kakao OAuth 설정
 oauth = OAuth()
@@ -42,39 +47,83 @@ async def login_kakao(request: Request):
 # ✅ 콜백 (Kakao → 백엔드)
 @router.get("/callback", name="kakao_callback")
 async def kakao_callback(request: Request, db: Session = Depends(get_db)):
+    # 1) 토큰/유저 정보
     token = await oauth.kakao.authorize_access_token(request)
     resp = await oauth.kakao.get("user/me", token=token)
-    user_info = resp.json()
+    user_info = resp.json() or {}
 
-    kakao_id = str(user_info.get("id"))
-    kakao_account = user_info.get("kakao_account", {})
-    profile = kakao_account.get("profile", {})
+    kakao_id = str(user_info.get("id") or "")
+    kakao_account = user_info.get("kakao_account", {}) or {}
+    profile = kakao_account.get("profile", {}) or {}
 
-    # ✅ DB 등록 or 조회
-    db_user = get_or_create_user(
-        db=db,
-        provider="kakao",
-        sub=kakao_id,
-        email=kakao_account.get("email"),
-        name=profile.get("nickname"),
-        nickname=profile.get("nickname"),
-        picture=profile.get("profile_image_url"),
-    )
+    provider = "kakao"
+    email = kakao_account.get("email")  # 카카오는 동의 범위에 따라 없을 수 있음
+    name = profile.get("nickname") or ""
+    nickname = profile.get("nickname") or name
+    picture = profile.get("profile_image_url") or ""
 
-    # ✅ 비활성 유저 예외 처리
-    if db_user and not db_user.is_active:
-        return JSONResponse(
-            status_code=status.HTTP_403_FORBIDDEN,
-            content={"detail": "이미 탈퇴된 계정입니다. 다시 가입하시겠습니까?"}
+    # 2) 이메일 누락 시: 에러로 리다이렉트 (혹은 서비스 정책에 맞춰 가짜 이메일 생성)
+    if not kakao_id:
+        return RedirectResponse(
+            f"{FRONTEND_URL}/auth/callback?error=kakao_login_failed",
+            status_code=302,
+        )
+    if not email:
+        # 프론트에서 '이메일 제공 동의 필요' 라우팅
+        return RedirectResponse(
+            f"{FRONTEND_URL}/auth/callback?error=missing_email&provider={provider}",
+            status_code=302,
         )
 
-    # ✅ 토큰 발급
-    access_token = create_access_token({"sub": str(db_user.id), "email": db_user.email})
+    # 3) DB 처리 + provider 충돌 대응
+    try:
+        db_user = get_or_create_user(
+            db=db,
+            provider=provider,
+            sub=kakao_id,
+            email=email,
+            name=name,
+            nickname=nickname,
+            picture=picture,
+        )
+    except OAuthProviderConflict as e:
+        registered = getattr(e, "detail", {}).get("registered_provider", "")
+        return RedirectResponse(
+            f"{FRONTEND_URL}/auth/callback"
+            f"?error=provider_conflict&registered_provider={registered}"
+            f"&email={quote(email)}&try_provider={provider}",
+            status_code=302,
+        )
+    except Exception:
+        return RedirectResponse(
+            f"{FRONTEND_URL}/auth/callback?error=internal_error",
+            status_code=302,
+        )
 
-    # ✅ 프론트로 access_token 전달 (쿼리로)
+    # 4) 탈퇴 계정
+    if db_user and not db_user.is_active:
+        return RedirectResponse(
+            f"{FRONTEND_URL}/auth/callback?error=deactivated&email={quote(email)}",
+            status_code=302,
+        )
+
+    # 5) 성공 → 토큰 발급 후 리다이렉트
+    access_token = create_access_token({"sub": str(db_user.id), "email": db_user.email})
+    refresh_token = create_refresh_token({"sub": str(db_user.id), "email": db_user.email})
+
     redirect_to = f"{FRONTEND_URL}/auth/callback?access_token={quote(access_token)}"
-    print("[KAKAO_CALLBACK redirect_to]", redirect_to)
-    return RedirectResponse(redirect_to)
+    resp = RedirectResponse(url=redirect_to, status_code=status.HTTP_302_FOUND)
+    resp.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=SECURE_COOKIE,
+        samesite="lax",
+        max_age=REFRESH_MAX_AGE,
+        domain=COOKIE_DOMAIN,
+        path="/",
+    )
+    return RedirectResponse(redirect_to, status_code=302)
 
 
 # ✅ 재가입 처리 (비활성 유저 복구)
@@ -120,6 +169,9 @@ def kakao_rejoin(
 # ✅ 로그아웃 (Kakao 공식 로그아웃 + 프론트 리다이렉트)
 @router.get("/logout")
 async def kakao_logout():
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie("refresh_token", domain=COOKIE_DOMAIN, path="/")
+    resp.delete_cookie("access_token", domain=COOKIE_DOMAIN, path="/")
     url = (
         f"https://kauth.kakao.com/oauth/logout"
         f"?client_id={KAKAO_CLIENT_ID}"

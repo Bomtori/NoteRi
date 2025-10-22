@@ -1,15 +1,14 @@
-# app/crud/notion_auth_router.py
+# app/crud/notion_crud.py
 from __future__ import annotations
 
 from typing import Optional
 
 from fastapi import Depends, HTTPException, Header, status
-from jose import jwt, JWTError
 from sqlalchemy.orm import Session
 
 from backend.app.db import get_db
 from backend.app.model import NotionAuth
-from backend.app.util.auth import SECRET_KEY, ALGORITHM  # 프로젝트에 이미 있음 (create_access_token 쓰던 곳)
+from backend.app.util.auth import verify_token  # ✅ 분리된 키 구조에 맞춘 검증기 사용
 
 
 # -----------------------------
@@ -38,10 +37,10 @@ def _extract_bearer_token(authorization: str = Header(..., alias="Authorization"
 def _user_id_from_jwt(token: str) -> int:
     """
     JWT 디코드하여 user_id(sub)를 획득.
+    Access/Refresh 분리 구조: 반드시 access 토큰으로만 검증.
     """
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    except JWTError:
+    payload = verify_token(token, token_type="access")
+    if not payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
@@ -54,7 +53,6 @@ def _user_id_from_jwt(token: str) -> int:
             detail="Invalid token: missing 'sub'",
         )
 
-    # sub가 문자열일 수 있으므로 int 캐스팅 시도
     try:
         return int(user_id)
     except (TypeError, ValueError):

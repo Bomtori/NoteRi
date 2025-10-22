@@ -5,9 +5,8 @@ from fastapi.responses import JSONResponse
 from fastapi import status
 
 from backend.app.model import User, Subscription, Plan, PlanType  # PlanType 꼭 import
-from backend.app.util.auth import create_access_token
 from backend.app.util.errors import OAuthProviderConflict
-
+from backend.app.util.auth import create_access_token, create_refresh_token
 
 def get_or_create_user(
     db: Session,
@@ -122,9 +121,12 @@ def get_or_create_user(
 
 
 def generate_login_response(db_user: User):
-    token = create_access_token({"sub": str(db_user.id), "email": db_user.email})
-    return JSONResponse({
-        "access_token": token,
+    access_token = create_access_token({"sub": str(db_user.id), "email": db_user.email})
+    refresh_token = create_refresh_token({"sub": str(db_user.id), "email": db_user.email})
+
+    response = JSONResponse({
+        "access_token": access_token,
+        "refresh_token": refresh_token,
         "token_type": "bearer",
         "user": {
             "id": db_user.id,
@@ -132,5 +134,16 @@ def generate_login_response(db_user: User):
             "name": db_user.name,
             "nickname": db_user.nickname,
             "picture": db_user.picture,
-        }
+        },
     })
+
+    # 쿠키에 저장 (옵션)
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=False,  # HTTPS일 때 True로
+        samesite="lax",
+        max_age=60 * 60 * 24 * 14,
+    )
+    return response

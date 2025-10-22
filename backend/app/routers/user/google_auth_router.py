@@ -8,7 +8,7 @@ from datetime import datetime, UTC
 from starlette.responses import JSONResponse
 from backend.app.deps.auth import get_current_user
 from backend.app.crud.auth_crud import get_or_create_user, generate_login_response
-from backend.app.util.auth import create_access_token
+from backend.app.util.auth import create_access_token, create_refresh_token
 from backend.app.db import get_db
 from backend.app.model import User
 from backend.app.util.errors import OAuthProviderConflict
@@ -27,6 +27,9 @@ oauth.register(
 COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN", None)
 ACCESS_TOKEN_MAX_AGE = 3600  # 초
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+SECURE_COOKIE = os.getenv("SECURE_COOKIE", "false").lower() == "true"
+REFRESH_MAX_AGE = 60 * 60 * 24 * 14  # 14일
+
 @router.get("/login")
 async def login_google(request: Request):
     redirect_uri = request.url_for("google_callback")
@@ -96,7 +99,21 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
 
     # 4) 성공 → 액세스 토큰을 쿼리파라미터로 전달
     access_token = create_access_token({"sub": str(db_user.id), "email": db_user.email})
+    refresh_token = create_refresh_token({"sub": str(db_user.id), "email": db_user.email})
+
     redirect_to = f"{FRONTEND_URL}/auth/callback?access_token={quote(access_token)}"
+    resp = RedirectResponse(url=redirect_to, status_code=status.HTTP_302_FOUND)
+    resp.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=SECURE_COOKIE,
+        samesite="lax",
+        max_age=REFRESH_MAX_AGE,
+        domain=COOKIE_DOMAIN,
+        path="/",
+    )
+
     return RedirectResponse(redirect_to, status_code=302)
 
 @router.post("/rejoin")
@@ -137,4 +154,7 @@ def google_rejoin(db: Session = Depends(get_db), current_user: User = Depends(ge
 
 @router.get("/logout")
 async def google_logout():
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie("refresh_token", domain=COOKIE_DOMAIN, path="/")
+    resp.delete_cookie("access_token", domain=COOKIE_DOMAIN, path="/")
     return RedirectResponse("https://accounts.google.com/Logout")

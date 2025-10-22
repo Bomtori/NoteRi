@@ -14,7 +14,7 @@ def get_current_user(
     cookie_token: str | None = Cookie(default=None, alias="access_token")
 ):
     token_to_use = token or cookie_token
-    payload = verify_token(token_to_use) if token_to_use else None
+    payload = verify_token(token_to_use, token_type="access") if token_to_use else None
     if payload is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

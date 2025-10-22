@@ -11,7 +11,7 @@ from backend.app.db import get_db
 from backend.app.model import User
 from backend.app.deps.auth import get_current_user
 from backend.app.crud.auth_crud import get_or_create_user
-from backend.app.util.auth import create_access_token
+from backend.app.util.auth import create_access_token, create_refresh_token
 from backend.app.util.errors import OAuthProviderConflict
 
 router = APIRouter(prefix="/auth/naver", tags=["NaverAuth"])
@@ -20,6 +20,10 @@ router = APIRouter(prefix="/auth/naver", tags=["NaverAuth"])
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 NAVER_CLIENT_ID = os.getenv("NAVER_CLIENT_ID")
 NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET")
+SECURE_COOKIE = os.getenv("SECURE_COOKIE", "false").lower() == "true"
+REFRESH_MAX_AGE = 60 * 60 * 24 * 14  # 14일
+COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN", None)
+ACCESS_TOKEN_MAX_AGE = 3600  # 초
 
 oauth = OAuth()
 oauth.register(
@@ -102,8 +106,21 @@ async def naver_callback(request: Request, db: Session = Depends(get_db)):
 
     # 5) 성공 → 토큰 발급 후 리다이렉트
     access_token = create_access_token({"sub": str(db_user.id), "email": db_user.email})
+    refresh_token = create_refresh_token({"sub": str(db_user.id), "email": db_user.email})
+
     redirect_to = f"{FRONTEND_URL}/auth/callback?access_token={quote(access_token)}"
-    print("[NAVER_CALLBACK redirect_to]", redirect_to)
+    resp = RedirectResponse(url=redirect_to, status_code=status.HTTP_302_FOUND)
+    resp.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=SECURE_COOKIE,
+        samesite="lax",
+        max_age=REFRESH_MAX_AGE,
+        domain=COOKIE_DOMAIN,
+        path="/",
+    )
+
     return RedirectResponse(redirect_to, status_code=302)
 
 @router.post("/rejoin")

@@ -197,7 +197,7 @@ async def confirm_payment(
         method=payment_result.get("method", ""),
 
         status=payment_result.get("status", "") or "SUCCESS",
-        transaction_key=payment_result.get("transactionKey") or None
+        transaction_key=payment_result.get("transactionKey") or None,
 
         approved_at=payment_result.get("approvedAt"),
         fail_reason=payment_result.get("failReason"),

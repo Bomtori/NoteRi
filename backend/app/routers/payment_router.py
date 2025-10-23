@@ -2,7 +2,7 @@
 import logging
 import os
 import uuid
-from typing import Optional
+from typing import Optional, List, Tuple
 
 import httpx
 import base64
@@ -54,6 +54,21 @@ class PaymentConfirmRequest(BaseModel):
     amount: int
     plan_name: str  # 동일하게 plan_name
 
+class SortBy:
+    # 필요 시 approved_at, created_at 등 확장
+    APPROVED_AT = "approved_at"
+    CREATED_AT = "created_at"
+
+def _parse_statuses(status: Optional[str]) -> Optional[List[str]]:
+    """
+    status=SUCCESS or 'SUCCESS,FAIL' 처럼 들어온 값을 ['SUCCESS','FAIL']로 변환.
+    None이면 필터 미적용.
+    """
+    if not status:
+        return None
+    # 공백 제거 + 빈 문자열 필터링
+    arr = [s.strip() for s in status.split(",") if s.strip()]
+    return arr or None
 
 # ✅ 1️⃣ 결제 요청 API (프론트 → 토스 결제창으로 이동하기 전에 호출)
 @router.post("/request")

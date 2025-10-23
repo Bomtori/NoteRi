@@ -64,7 +64,7 @@ Pin = Annotated[str, StringConstraints(pattern=r"^\d{4}$")]
 # Board (Create / Update)
 # -----------------------------
 class BoardCreate(BaseModel):
-    folder_id: int
+    folder_id: Optional[int] = None  # 🍒 수정 10.23 frontend /int 필수제외
     title: str
     description: Optional[str] = None
     password: Optional[Pin] = None
@@ -86,10 +86,11 @@ class BoardResponse(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
-    audios: List[AudioResponse] = Field(default_factory=list)
-    memos: List[MemoResponse] = Field(default_factory=list)
+    # ✅ 1:1 관계 → 단일 객체 or None
+    audios: Optional[AudioResponse] = None
+    memos: Optional[MemoResponse] = None
     transcripts: List[TranscriptResponse] = Field(default_factory=list)
-    summaries: List[SummaryResponse] = Field(default_factory=list)
+    summaries: List[SummaryResponse] = Field(default_factory=list)    # ✅ Relationships
 
     model_config = ConfigDict(from_attributes=True)
 

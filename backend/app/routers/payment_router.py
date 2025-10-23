@@ -159,6 +159,7 @@ async def confirm_payment(
         .first()
     )
 
+
     today = date.today()
     new_end = today + timedelta(days=plan.duration_days)
 
@@ -194,8 +195,10 @@ async def confirm_payment(
         order_id=req.orderId,
         amount=req.amount,
         method=payment_result.get("method", ""),
+
         status=payment_result.get("status", "") or "SUCCESS",
-        transaction_key=payment_result.get("transactionKey", ""),
+        transaction_key=payment_result.get("transactionKey") or None
+
         approved_at=payment_result.get("approvedAt"),
         fail_reason=payment_result.get("failReason"),
         raw_response=payment_result,

@@ -1,0 +1,126 @@
+{
+  "version": 2,
+  "canvas": {
+    "width": 2400,
+    "height": 1400,
+    "scroll": { "x": 0, "y": 0 },
+    "zoomLevel": 1.0
+  },
+  "tables": [
+    {
+      "name": "users",
+      "columns": [
+        { "name": "id", "dataType": "integer", "primaryKey": true, "notNull": true },
+        { "name": "email", "dataType": "varchar", "notNull": true },
+        { "name": "name", "dataType": "varchar" },
+        { "name": "nickname", "dataType": "varchar(100)" },
+        { "name": "picture", "dataType": "varchar(500)" },
+        { "name": "oauth_provider", "dataType": "varchar" },
+        { "name": "oauth_sub", "dataType": "varchar" },
+        { "name": "role", "dataType": "varchar" },
+        { "name": "is_active", "dataType": "boolean" },
+        { "name": "created_at", "dataType": "timestamp" },
+        { "name": "updated_at", "dataType": "timestamp" }
+      ],
+      "ui": { "x": 150, "y": 100 }
+    },
+    {
+      "name": "boards",
+      "columns": [
+        { "name": "id", "dataType": "integer", "primaryKey": true, "notNull": true },
+        { "name": "folder_id", "dataType": "integer" },
+        { "name": "owner_id", "dataType": "integer", "notNull": true, "references": "users.id" },
+        { "name": "title", "dataType": "varchar", "notNull": true },
+        { "name": "description", "dataType": "text" },
+        { "name": "invite_token", "dataType": "varchar" },
+        { "name": "invite_role", "dataType": "varchar" },
+        { "name": "invite_expires_at", "dataType": "timestamp" },
+        { "name": "created_at", "dataType": "timestamp" },
+        { "name": "updated_at", "dataType": "timestamp" }
+      ],
+      "ui": { "x": 150, "y": 400 }
+    },
+    {
+      "name": "recording_sessions",
+      "columns": [
+        { "name": "id", "dataType": "integer", "primaryKey": true, "notNull": true },
+        { "name": "board_id", "dataType": "integer", "notNull": true, "references": "boards.id" },
+        { "name": "user_id", "dataType": "integer", "notNull": true, "references": "users.id" },
+        { "name": "status", "dataType": "recordingtype", "notNull": true },
+        { "name": "started_at", "dataType": "timestamp", "notNull": true },
+        { "name": "ended_at", "dataType": "timestamp" },
+        { "name": "created_at", "dataType": "timestamp" },
+        { "name": "is_diarized", "dataType": "boolean", "default": "false" }
+      ],
+      "ui": { "x": 550, "y": 250 }
+    },
+    {
+      "name": "recording_results",
+      "columns": [
+        { "name": "id", "dataType": "integer", "primaryKey": true, "notNull": true },
+        { "name": "recording_session_id", "dataType": "integer", "notNull": true, "references": "recording_sessions.id" },
+        { "name": "speaker_label", "dataType": "varchar" },
+        { "name": "raw_text", "dataType": "text", "notNull": true },
+        { "name": "started_at", "dataType": "timestamp" },
+        { "name": "ended_at", "dataType": "timestamp" },
+        { "name": "created_at", "dataType": "timestamp" }
+      ],
+      "ui": { "x": 950, "y": 100 }
+    },
+    {
+      "name": "summaries",
+      "columns": [
+        { "name": "id", "dataType": "integer", "primaryKey": true, "notNull": true },
+        { "name": "summary_type", "dataType": "varchar" },
+        { "name": "content", "dataType": "text", "notNull": true },
+        { "name": "rating", "dataType": "boolean" },
+        { "name": "recording_session_id", "dataType": "integer", "notNull": true, "references": "recording_sessions.id" },
+        { "name": "interval_start_at", "dataType": "timestamp" },
+        { "name": "interval_end_at", "dataType": "timestamp" },
+        { "name": "model", "dataType": "varchar" },
+        { "name": "tokens_input", "dataType": "integer" },
+        { "name": "tokens_output", "dataType": "integer" },
+        { "name": "created_at", "dataType": "timestamp", "default": "now()" }
+      ],
+      "ui": { "x": 950, "y": 350 }
+    },
+    {
+      "name": "audio_data",
+      "columns": [
+        { "name": "id", "dataType": "integer", "primaryKey": true, "notNull": true },
+        { "name": "board_id", "dataType": "integer", "notNull": true, "references": "boards.id" },
+        { "name": "file_path", "dataType": "varchar", "notNull": true },
+        { "name": "duration", "dataType": "integer" },
+        { "name": "language", "dataType": "varchar" },
+        { "name": "created_at", "dataType": "timestamp", "default": "now()" },
+        { "name": "recording_session_id", "dataType": "integer", "notNull": true, "references": "recording_sessions.id" }
+      ],
+      "ui": { "x": 950, "y": 600 }
+    },
+    {
+      "name": "transcripts",
+      "columns": [
+        { "name": "id", "dataType": "integer", "primaryKey": true, "notNull": true },
+        { "name": "result_id", "dataType": "integer", "notNull": true, "references": "recording_results.id" },
+        { "name": "board_id", "dataType": "integer", "notNull": true, "references": "boards.id" },
+        { "name": "speaker_label", "dataType": "varchar" },
+        { "name": "start_time", "dataType": "double precision" },
+        { "name": "end_time", "dataType": "double precision" },
+        { "name": "text", "dataType": "text", "notNull": true },
+        { "name": "created_at", "dataType": "timestamp" }
+      ],
+      "ui": { "x": 1350, "y": 200 }
+    }
+  ],
+  "relationships": [
+    { "name": "fk_boards_owner", "startTable": "users", "endTable": "boards", "startColumn": "id", "endColumn": "owner_id", "relationshipType": "one-to-many" },
+    { "name": "fk_sessions_user", "startTable": "users", "endTable": "recording_sessions", "startColumn": "id", "endColumn": "user_id", "relationshipType": "one-to-many" },
+    { "name": "fk_sessions_board", "startTable": "boards", "endTable": "recording_sessions", "startColumn": "id", "endColumn": "board_id", "relationshipType": "one-to-many" },
+    { "name": "fk_results_session", "startTable": "recording_sessions", "endTable": "recording_results", "startColumn": "id", "endColumn": "recording_session_id", "relationshipType": "one-to-many" },
+    { "name": "fk_summaries_session", "startTable": "recording_sessions", "endTable": "summaries", "startColumn": "id", "endColumn": "recording_session_id", "relationshipType": "one-to-many" },
+    { "name": "fk_audio_session", "startTable": "recording_sessions", "endTable": "audio_data", "startColumn": "id", "endColumn": "recording_session_id", "relationshipType": "one-to-many" },
+    { "name": "fk_audio_board", "startTable": "boards", "endTable": "audio_data", "startColumn": "id", "endColumn": "board_id", "relationshipType": "one-to-many" },
+    { "name": "fk_transcripts_board", "startTable": "boards", "endTable": "transcripts", "startColumn": "id", "endColumn": "board_id", "relationshipType": "one-to-many" },
+    { "name": "fk_transcripts_result", "startTable": "recording_results", "endTable": "transcripts", "startColumn": "id", "endColumn": "result_id", "relationshipType": "one-to-many" }
+  ]
+}

@@ -1,4 +1,5 @@
 # backend/app/routers/sessions_router.py
+
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from backend.app.util.redis_client import get_redis
 from sqlalchemy import desc
@@ -74,7 +75,7 @@ def start_diarization(session_id: int, bg: BackgroundTasks):
             return {"ok": True, "session_id": session_id, "queued": False, "msg": "already diarized"}
 
     bg.add_task(run_diarization_for_session, session_id)
-    return {"ok": True, "session_id": session_id, "queued": True}
+    return {"ok": True, "session_id": session_id, "queued": True, "msg": "diarization started"}
 
 @router.get("/by-sid/{sid}")
 async def get_session_id_by_sid(sid: str):
@@ -82,6 +83,6 @@ async def get_session_id_by_sid(sid: str):
     key = f"stt:last_session_id:{sid}"
     val = await r.get(key)
     if not val:
-        # 아직 ingest가 안 끝났을 수 있으니 404를 주되, 프론트는 폴링하도록 설계
-        raise HTTPException(status_code=404, detail="session id not found for sid")
-    return {"id": int(val)}
+        # ⏳ 아직 매핑 전: 202(Processing)로 상태를 돌려주면 프론트가 부드럽게 계속 기다릴 수 있음
+        return {"status": "pending"}, 202
+    return {"id": int(val), "status": "ready"}

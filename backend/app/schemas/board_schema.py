@@ -63,7 +63,7 @@ class SummaryResponse(BaseModel):
 # Board (Create / Update)
 # -----------------------------
 class BoardCreate(BaseModel):
-    folder_id: int
+    folder_id: Optional[int] = None  # 🍒 수정 10.23 frontend /int 필수제외
     title: str
     description: Optional[str] = None
     invite_token: Optional[str] = None
@@ -83,7 +83,8 @@ class BoardUpdate(BaseModel):
 # -----------------------------
 class BoardResponse(BaseModel):
     id: int
-    folder_id: int
+    # folder_id: int
+    folder_id: Optional[int] = None  # 🍒 10.23 front/ FastAPI가 응답을 직렬화 에러로 변경!
     owner_id: int
     title: str
     description: Optional[str]
@@ -94,10 +95,14 @@ class BoardResponse(BaseModel):
     updated_at: Optional[datetime]
 
     # ✅ Relationships
-    audios: List[AudioResponse] = []
-    memos: List[MemoResponse] = []
-    transcripts: List[TranscriptResponse] = []
-    summaries: List[SummaryResponse] = []
+    # audios: List[AudioResponse] = []
+    # memos: List[MemoResponse] = []
+    # transcripts: List[TranscriptResponse] = []
+    # summaries: List[SummaryResponse] = []
+    audios: Optional[List[AudioResponse]] = [] # 🍒 10.23 front/ None 타입 필드를 List로 변환하다가 오류
+    memos: Optional[List[MemoResponse]] = []
+    transcripts: Optional[List[TranscriptResponse]] = []
+    summaries: Optional[List[SummaryResponse]] = []
 
     class Config:
         orm_mode = True

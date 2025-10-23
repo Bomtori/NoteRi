@@ -18,6 +18,7 @@ from backend.ml.postprocess.silence_segmenter import SilenceSegmenter
 from backend.ml.postprocess.timestamp_deduplicator import TimestampDeduplicator
 from backend.ml.summarizer import ThreeLineSummarizer
 from backend.config import VAD_THRESHOLD, VAD_SAMPLE_RATE
+from backend.services.diarization import run_diarization_for_session
 
 # ✅ Redis 퍼블리셔 (요구사항 반영: session_id 필드 미사용, raw_text/speaker_label 사용)
 from backend.app.util.redis_publisher import (
@@ -166,6 +167,8 @@ class STTPipeline:
         self.reset_all()
 
         # ✅ 종료 후 Redis→Postgres 적재 (이벤트 루프 블로킹 방지: 스레드로 실행)
+        session_id = None  # ✅ 추가
+        
         if self.sid and self.redis_prefix:
             try:
                 session_id = await asyncio.to_thread(ingest_one_session, self.redis_prefix, self.sid)
@@ -189,7 +192,11 @@ class STTPipeline:
                 logger.info(f"[DB] Redis→Postgres ingest done. sid={self.sid}, session_id={session_id}")
             except Exception as e:
                 logger.warning(f"[DB] ingest failed for sid={self.sid}: {e}")
-
+        try:
+            await run_diarization_for_session(session_id)
+            logger.info(f"🗣️ Diarization done for session_id={session_id}")
+        except Exception as e:
+            logger.warning(f"diarization failed: {e}")
 
     # ---------------------------------------------------------------------
     # 내부 타이머 루프 & 요약 로직
@@ -362,7 +369,7 @@ class STTPipeline:
                             sid=self.sid,
                             prefix=self.redis_prefix,
                             raw_text=finalized,
-                            speaker_label="A",
+                            speaker_label=None,
                             ts_start_ms=ts_start_ms,
                             ts_end_ms=ts_end_ms,
                         )
@@ -418,7 +425,6 @@ class STTPipeline:
             self.paragraph_buffer.append((time.time(), finalized))
             logger.info(f"Finalized: {finalized}")
 
-            # ✅ Redis로 확정 히스토리 적재 (raw_text / speaker_label='A')
             if self.sid:
                 try:
                     now_ms = int(((time.time() - (self.session_start_ts or time.time())) * 1000))
@@ -432,7 +438,7 @@ class STTPipeline:
                         sid=self.sid,
                         prefix=self.redis_prefix,
                         raw_text=finalized,
-                        speaker_label="A",
+                        speaker_label=None,
                         ts_start_ms=ts_start_ms,
                         ts_end_ms=ts_end_ms,
                     )

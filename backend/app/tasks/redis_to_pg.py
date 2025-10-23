@@ -54,6 +54,10 @@ def ingest_one_session(prefix: str, sid: str):
     """
     KEY_SEG, KEY_SUM, KEY_META = _keys(prefix, sid)
     r = _redis_client()
+    # ✅ 이미 적재된 SID면 바로 해당 session_id 반환 (멱등)
+    cached = r.get(f"{prefix}:{sid}:ingested_session_id")
+    if cached:
+        return int(cached)
     conn = _pg_connect()
     conn.autocommit = False
     cur = conn.cursor()
@@ -85,7 +89,7 @@ def ingest_one_session(prefix: str, sid: str):
         inserted_segments = 0
         for _id, f in seg_entries:
             raw_text      = f.get("raw_text")
-            speaker_label = f.get("speaker_label") or "A"
+            speaker_label = f.get("speaker_label") or None
             ts_start_ms   = f.get("ts_start_ms")
             ts_end_ms     = f.get("ts_end_ms")
             if not raw_text or ts_start_ms is None or ts_end_ms is None:
@@ -168,7 +172,21 @@ def ingest_one_session(prefix: str, sid: str):
               f"summaries inserted={inserted_summaries}, "
               f"audio_data inserted (encrypted)")
 
-        # ✅ 여기서 세션 PK를 반환한다
+        # ✅ 재실행 방지: 세션ID를 SID에 매핑해 캐시(7일) + 원본 키는 TTL만 부여(디버깅 편의)
+            # 🔸 기존엔 rename으로 사라져 보였음 → 디버깅 위해 그대로 두되 TTL만 걸어둠
+        try:
+            r.setex(f"{prefix}:{sid}:ingested_session_id", 7 * 24 * 3600, str(session_id))
+            ttl = 24 * 3600  # 24h 보존
+            try:
+                r.expire(KEY_SEG, ttl)
+                r.expire(KEY_SUM, ttl)
+                r.expire(KEY_META, ttl)
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+        # ✅ 이 세션의 PK 반환
         return session_id
 
     except Exception:

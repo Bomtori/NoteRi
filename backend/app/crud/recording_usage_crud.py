@@ -12,7 +12,9 @@ def create_or_update_usage(db: Session, user_id: int, subscription: Subscription
 
     plan = subscription.plan  # FK로 연결된 Plan 객체
     if not plan:
-        raise ValueError("Subscription has no linked plan")
+        # raise ValueError("Subscription has no linked plan")
+        raise ValueError(f"Subscription {subscription.id} has no linked plan") # 🍒 10.22 front결제오류로 수정
+
 
     # 기존 사용 기록 중 가장 최근 기록 조회
     prev_usage = (

@@ -14,7 +14,7 @@ from backend.app.schemas.recording_usage_schema import (
 )
 from backend.app.crud import recording_usage_crud
 
-router = APIRouter(prefix="/recordings/usage", tags=["recordings"])
+router = APIRouter(prefix="/recordings", tags=["recordings"])
 
 
 @router.post("/use", response_model=RecordingUseResponse)

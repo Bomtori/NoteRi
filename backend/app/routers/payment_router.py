@@ -119,6 +119,26 @@ async def confirm_payment(
     db.commit()
     db.refresh(new_sub)
 
+    # 기존 활성 구독 비활성화 처리 🍒 10.22 기존플랜 비활성화 추가 -> free에서 pro결제시 free만보이는 오류
+    db.query(Subscription).filter(
+        Subscription.user_id == current_user.id,
+        Subscription.is_active == True
+    ).update({"is_active": False})
+    db.commit()
+
+    # 새 구독 생성 🍒 10.22 새 플랜 구독생성 추가
+    new_sub = Subscription(
+        user_id=current_user.id,
+        plan_id=plan.id,
+        start_date=date.today(),
+        end_date=date.today() + timedelta(days=plan.duration_days),
+        is_active=True
+    )
+    db.add(new_sub)
+    db.commit()
+    db.refresh(new_sub)
+
+
     # ----- ✅ ④ 녹음 사용량 자동 생성 -----
     recording_usage_crud.create_or_update_usage(db, current_user.id, new_sub)
 
@@ -130,7 +150,8 @@ async def confirm_payment(
         amount=req.amount,
         method=payment_result.get("method", ""),
         status=payment_result.get("status", ""),
-        transaction_key=payment_result.get("transactionKey", ""),
+        # transaction_key=payment_result.get("transactionKey", ""),
+        transaction_key=payment_result.get("transactionKey") or None, # 10.22 front400에러 추가수정
         approved_at=payment_result.get("approvedAt"),
         fail_reason=payment_result.get("failReason"),
         raw_response=payment_result,
@@ -240,23 +261,51 @@ def list_my_payments(
         limit=limit,
         offset=offset,
     )
-    # Pydantic 변환: PaymentItem(orm_mode=True) 사용
-    payload_items = [
-        PaymentItem(
-            id=p.id,
-            order_id=p.order_id,
-            amount=p.amount,
-            method=p.method,
-            status=p.status,
-            transaction_key=p.transaction_key,
-            approved_at=p.approved_at,
-            canceled_at=p.canceled_at,
-            subscription_id=p.subscription_id,
-            plan_name=getattr(p, "plan_name", None),
+    # Pydantic 변환: PaymentItem(orm_mode=True) 사용 🍒 10.22 front코드수정 아래 원본코드 주석
+    # payload_items = [
+    #     PaymentItem(
+    #         id=p.id,
+    #         order_id=p.order_id,
+    #         amount=p.amount,
+    #         method=p.method,
+    #         status=p.status,
+    #         transaction_key=p.transaction_key,
+    #         approved_at=p.approved_at,
+    #         canceled_at=p.canceled_at,
+    #         subscription_id=p.subscription_id,
+    #         plan_name=getattr(p, "plan_name", None),
+    #     )
+    #     for p in items
+    # ]
+    # return {"total": total, "items": payload_items}
+    # 🍒10.22 front 조인 추가, 현재 결제내역 못불러옴 오류
+    enriched_items = []
+    for p in items:
+        sub = (
+            db.query(Subscription)
+            .options(joinedload(Subscription.plan))
+            .filter(Subscription.id == p.subscription_id)
+            .first()
         )
-        for p in items
-    ]
-    return {"total": total, "items": payload_items}
+
+        plan_name = sub.plan.name.value if sub and sub.plan else None
+
+        enriched_items.append(
+            PaymentItem(
+                id=p.id,
+                order_id=p.order_id,
+                amount=p.amount,
+                method=p.method,
+                status=p.status,
+                transaction_key=p.transaction_key,
+                approved_at=p.approved_at,
+                canceled_at=p.canceled_at,
+                subscription_id=p.subscription_id,
+                plan_name=plan_name,  # 실제 plan.name 값으로 교체됨
+            )
+        )    
+    return {"total": total, "items": enriched_items}
+    # 🍒10.22 front 조인 추가, 현재 결제내역 못불러옴 오류
 
 
 @router.get("/{payment_id}", response_model=PaymentItem)

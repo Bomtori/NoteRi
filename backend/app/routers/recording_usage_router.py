@@ -38,7 +38,7 @@ def use_by_audio_owner(
         period_end=usage.period_end,
     )
 
-@router.get("/usage", response_model=RecordingUseResponse)
+@router.get("/", response_model=RecordingUseResponse)
 def get_current_usage(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

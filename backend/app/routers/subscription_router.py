@@ -40,18 +40,14 @@ def list_subscriptions(
 
 
 # ✅ 구독 단건 조회
-@router.get("/{sub_id}", response_model=SubscriptionResponse)
-def get_subscription(
-    sub_id: int,
+@router.get("/me", response_model=SubscriptionResponse)
+def get_my_subscription(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     sub = (
         db.query(Subscription)
-        .filter(
-            Subscription.id == sub_id,
-            Subscription.user_id == current_user.id
-        )
+        .filter(Subscription.user_id == current_user.id)
         .first()
     )
     if not sub:
@@ -65,22 +61,16 @@ def get_subscription(
         end_date=sub.end_date,
         is_active=sub.is_active,
     )
-
-
-# ✅ 구독 수정
-@router.patch("/{sub_id}", response_model=SubscriptionResponse)
-def update_subscription(
-    sub_id: int,
+# ✅ 구독 수정 (플랜 변경 or 활성 상태 토글)
+@router.patch("/me", response_model=SubscriptionResponse)
+def update_my_subscription(
     update: SubscriptionUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     sub = (
         db.query(Subscription)
-        .filter(
-            Subscription.id == sub_id,
-            Subscription.user_id == current_user.id
-        )
+        .filter(Subscription.user_id == current_user.id)
         .first()
     )
     if not sub:
@@ -88,7 +78,7 @@ def update_subscription(
 
     update_data = update.dict(exclude_unset=True)
 
-    # 플랜 변경 시 새 기간 및 plan_id 갱신
+    # ✅ 플랜 변경 시
     if "plan_name" in update_data:
         new_plan = db.query(Plan).filter(Plan.name == update_data["plan_name"]).first()
         if not new_plan:
@@ -98,7 +88,7 @@ def update_subscription(
         sub.start_date = date.today()
         sub.end_date = date.today() + timedelta(days=new_plan.duration_days)
 
-    # 활성 상태 변경
+    # ✅ 활성 상태 변경 (자동갱신 끄기 포함)
     if "is_active" in update_data:
         sub.is_active = update_data["is_active"]
 
@@ -115,19 +105,15 @@ def update_subscription(
     )
 
 
-# ✅ 구독 취소
-@router.patch("/{sub_id}/cancel", response_model=SubscriptionResponse)
-def cancel_subscription(
-    sub_id: int,
+# ✅ 구독 취소 (자동갱신만 해제, end_date까지 유지)
+@router.patch("/me/cancel", response_model=SubscriptionResponse)
+def cancel_my_subscription(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     sub = (
         db.query(Subscription)
-        .filter(
-            Subscription.id == sub_id,
-            Subscription.user_id == current_user.id
-        )
+        .filter(Subscription.user_id == current_user.id)
         .first()
     )
     if not sub:
@@ -136,8 +122,7 @@ def cancel_subscription(
     if not sub.is_active:
         raise HTTPException(status_code=400, detail="Subscription already inactive")
 
-    # ✅ 자동 갱신만 끊고, end_date까지는 유지
-    sub.is_active = False
+    sub.is_active = False  # ✅ end_date까지는 유지
     db.commit()
     db.refresh(sub)
 

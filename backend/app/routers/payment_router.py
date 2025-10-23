@@ -102,34 +102,84 @@ async def confirm_payment(
 
     payment_result = response.json()
 
+    # ----- (옵션) 멱등성: 같은 orderId로 이미 성공 기록이 있다면 바로 응답 -----
+    already = (
+        db.query(Payment)
+        .filter(Payment.order_id == req.orderId, Payment.status.in_(["SUCCESS", "DONE"]))
+        .first()
+    )
+    if already:
+        sub = (
+            db.query(Subscription)
+            .filter(Subscription.user_id == current_user.id)
+            .first()
+        )
+        plan = db.query(Plan).filter(Plan.id == sub.plan_id).first() if sub else None
+        return {
+            "message": "Payment already processed",
+            "subscription": {
+                "subscription_id": sub.id if sub else None,
+                "plan_name": plan.name if plan else None,
+                "start_date": str(sub.start_date) if sub else None,
+                "end_date": str(sub.end_date) if sub else None,
+                "is_active": sub.is_active if sub else None,
+            },
+            "payment": {
+                "payment_id": already.id,
+                "order_id": already.order_id,
+                "amount": float(already.amount),
+                "status": already.status,
+            },
+        }
+
     # ----- ② 플랜 조회 -----
     plan = db.query(Plan).filter(Plan.name == req.plan_name).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Invalid plan")
 
-    # ----- ③ 구독 생성 -----
-    new_sub = Subscription(
-        user_id=current_user.id,
-        plan_id=plan.id,
-        start_date=date.today(),
-        end_date=date.today() + timedelta(days=plan.duration_days),
-        is_active=True
+    # ----- ③ 구독 '수정' (없으면 생성) -----
+    sub = (
+        db.query(Subscription)
+        .filter(Subscription.user_id == current_user.id)
+        .first()
     )
-    db.add(new_sub)
-    db.commit()
-    db.refresh(new_sub)
 
-    # ----- ✅ ④ 녹음 사용량 자동 생성 -----
-    recording_usage_crud.create_or_update_usage(db, current_user.id, new_sub)
+    today = date.today()
+    new_end = today + timedelta(days=plan.duration_days)
+
+    if sub:
+        # ✅ 기존 구독 업데이트
+        sub.plan_id = plan.id
+        sub.start_date = today
+        sub.end_date = new_end
+        sub.is_active = True  # 결제 성공 시 자동갱신/활성화 정책에 맞게 조정
+        # (auto_renew / next_renew_on 같은 컬럼을 쓰신다면 여기서 함께 갱신)
+        db.commit()
+        db.refresh(sub)
+    else:
+        # ✅ 첫 결제인 경우만 새로 생성 (안전 upsert)
+        sub = Subscription(
+            user_id=current_user.id,
+            plan_id=plan.id,
+            start_date=today,
+            end_date=new_end,
+            is_active=True,
+        )
+        db.add(sub)
+        db.commit()
+        db.refresh(sub)
+
+    # ----- ④ 녹음 사용량 초기화/갱신 -----
+    recording_usage_crud.create_or_update_usage(db, current_user.id, sub)
 
     # ----- ⑤ 결제 내역 기록 -----
     new_payment = Payment(
         user_id=current_user.id,
-        subscription_id=new_sub.id,
+        subscription_id=sub.id,
         order_id=req.orderId,
         amount=req.amount,
         method=payment_result.get("method", ""),
-        status=payment_result.get("status", ""),
+        status=payment_result.get("status", "") or "SUCCESS",
         transaction_key=payment_result.get("transactionKey", ""),
         approved_at=payment_result.get("approvedAt"),
         fail_reason=payment_result.get("failReason"),
@@ -143,15 +193,15 @@ async def confirm_payment(
     return {
         "message": "Payment successful",
         "subscription": {
-            "subscription_id": new_sub.id,
+            "subscription_id": sub.id,
             "plan_name": plan.name,
-            "start_date": str(new_sub.start_date),
-            "end_date": str(new_sub.end_date),
-            "is_active": new_sub.is_active,
+            "start_date": str(sub.start_date),
+            "end_date": str(sub.end_date),
+            "is_active": sub.is_active,
         },
         "usage": {
-            "allocated_minutes": new_sub.plan.allocated_minutes,
-            "duration_days": new_sub.plan.duration_days,
+            "allocated_minutes": sub.plan.allocated_minutes,
+            "duration_days": sub.plan.duration_days,
         },
         "payment": {
             "payment_id": new_payment.id,

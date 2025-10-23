@@ -311,7 +311,7 @@ def list_my_payments_simple(
     for p in payments:
         p.plan_name = p.subscription.plan.name if p.subscription and p.subscription.plan else None
 
-    return [PaymentItem.model_validate(p) for p in payments]
+    return [PaymentItem.model_validate(p, from_attributes=True) for p in payments]
 
 @router.get("/me/{payment_id}", response_model=PaymentItem)
 def get_my_payment(

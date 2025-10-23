@@ -15,8 +15,8 @@ class PaymentItem(BaseModel):
     canceled_at: Optional[datetime]
     subscription_id: Optional[int]
     plan_name: Optional[str]
-
     model_config = {"from_attributes": True}
+    
 class PaymentListResponse(BaseModel):
     total: int
     items: List[PaymentItem]

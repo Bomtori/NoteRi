@@ -271,65 +271,68 @@ def last_5_years(db: Session = Depends(get_db)):
         logger.exception("GET /payments/last-5-years failed")
         raise HTTPException(status_code=500, detail="PAYMENTS_LAST_5_YEARS_FAILED")
 
-@router.get("/me/payments", response_model=PaymentListResponse)
+@router.get("/me", response_model=PaymentListResponse)
 def list_my_payments(
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-    date_from: Optional[date] = Query(None),
-    date_to: Optional[date] = Query(None),
-    status: Optional[str] = Query("SUCCESS", description="SUCCESS|PENDING|FAIL|CANCELED 등"),
+    current_user: User = Depends(get_current_user),
+    # 필터
+    date_from: Optional[date] = Query(None, description="포함(inclusive) 시작일"),
+    date_to: Optional[date] = Query(None, description="포함(inclusive) 종료일"),
+    status: Optional[str] = Query("SUCCESS", description="예: SUCCESS | SUCCESS,FAIL"),
+    # 정렬/페이지네이션
+    sort_by: str = Query(SortBy.APPROVED_AT, regex="^(approved_at|created_at)$"),
+    sort_dir: str = Query("desc", regex="^(asc|desc)$"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
+    """
+    - 날짜 필터는 [date_from, date_to] 둘 다 '포함'으로 처리.
+      구현 편의상 CRUD에서 date_to+1을 '미만'(<)으로 넘겨 주면 안전함.
+    - status는 콤마로 여러 개 허용.
+    - sort_by: approved_at|created_at / sort_dir: asc|desc
+    """
+    statuses = _parse_statuses(status)
+
+    # inclusive end → half-open [from, to+1)
+    date_to_exclusive = (date_to + timedelta(days=1)) if date_to else None
+
     total, items = get_my_payments(
         db,
         user_id=current_user.id,
         date_from=date_from,
-        date_to=date_to,
-        status=status,
+        date_to=date_to_exclusive,   # CRUD에서는 < date_to_exclusive 로 처리
+        statuses=statuses,           # 기존 단일 status -> 복수 허용으로 확장
+        sort_by=sort_by,
+        sort_dir=sort_dir,
         limit=limit,
         offset=offset,
     )
-    # Pydantic 변환: PaymentItem(orm_mode=True) 사용
-    payload_items = [
-        PaymentItem(
-            id=p.id,
-            order_id=p.order_id,
-            amount=p.amount,
-            method=p.method,
-            status=p.status,
-            transaction_key=p.transaction_key,
-            approved_at=p.approved_at,
-            canceled_at=p.canceled_at,
-            subscription_id=p.subscription_id,
-            plan_name=getattr(p, "plan_name", None),
-        )
-        for p in items
-    ]
-    return {"total": total, "items": payload_items}
+
+    # Pydantic 매핑 (from_attributes=True 전제)
+    items_payload = [PaymentItem.model_validate(p) for p in items]
+
+    # 다음 페이지 계산
+    next_offset = offset + len(items_payload)
+    has_more = next_offset < total
+
+    return PaymentListResponse(
+        total=total,
+        items=items_payload,
+        has_more=has_more,
+        next_offset=next_offset if has_more else None,
+    )
 
 
-@router.get("/{payment_id}", response_model=PaymentItem)
+@router.get("/me/{payment_id}", response_model=PaymentItem)
 def get_my_payment(
     payment_id: int,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     p = get_my_payment_detail(db, current_user.id, payment_id)
     if not p:
         raise HTTPException(status_code=404, detail="Payment not found")
-    return PaymentItem(
-        id=p.id,
-        order_id=p.order_id,
-        amount=p.amount,
-        method=p.method,
-        status=p.status,
-        transaction_key=p.transaction_key,
-        approved_at=p.approved_at,
-        canceled_at=p.canceled_at,
-        subscription_id=p.subscription_id,
-        plan_name=getattr(p, "plan_name", None),
-    )
+    return PaymentItem.model_validate(p)
 
 # 플랜 별 총 매출
 @router.get("/revenue/plan")

@@ -81,53 +81,64 @@ def get_payment_last_5_years_by_plan(db: Session):
 
 def get_my_payments(
     db: Session,
-    user_id: int,
     *,
-    date_from: Optional[date] = None,
-    date_to: Optional[date] = None,
-    status: Optional[str] = "SUCCESS",
+    user_id: int,
+    date_from=None,
+    date_to=None,            # 반열림: approved_at < date_to
+    statuses: list[str] | None = None,
+    sort_by: str = "approved_at",
+    sort_dir: str = "desc",
     limit: int = 20,
     offset: int = 0,
-) -> Tuple[int, List[Payment]]:   # ✅ (int, list[Payment])
+):
     q = (
-        db.query(Payment)
-        .outerjoin(Subscription, Payment.subscription_id == Subscription.id)
-        .outerjoin(Plan, Subscription.plan_id == Plan.id)
+        db.query(
+            Payment,
+            Plan.name.label("plan_name"),
+        )
+        .join(Subscription, Subscription.id == Payment.subscription_id, isouter=True)
+        .join(Plan, Plan.id == Subscription.plan_id, isouter=True)
         .filter(Payment.user_id == user_id)
     )
-    if status:
-        q = q.filter(Payment.status == status)
+
+    if statuses:
+        q = q.filter(Payment.status.in_(statuses))
     if date_from:
-        q = q.filter(func.date(Payment.approved_at) >= date_from)
+        q = q.filter(Payment.approved_at >= date_from)
     if date_to:
-        q = q.filter(func.date(Payment.approved_at) <= date_to)
+        q = q.filter(Payment.approved_at < date_to)  # 반열림
 
-    total = q.count()
+    # total
+    total = q.with_entities(func.count()).scalar() or 0
 
-    items = (
-        q.order_by(Payment.approved_at.desc().nullslast(), Payment.created_at.desc())
-         .limit(limit)
-         .offset(offset)
-         .all()
-    )
-    for p in items:
-        p.plan_name = p.subscription.plan.name if (p.subscription and p.subscription.plan) else None
+    # sort
+    sort_col = Payment.approved_at if sort_by == "approved_at" else Payment.created_at
+    q = q.order_by(asc(sort_col) if sort_dir == "asc" else desc(sort_col))
+
+    rows = q.limit(limit).offset(offset).all()
+
+    # rows는 (Payment, plan_name) 튜플 → Payment 객체에 동적으로 attr 부여
+    items = []
+    for payment, plan_name in rows:
+        setattr(payment, "plan_name", plan_name)
+        items.append(payment)
+
     return total, items
 
 
-def get_my_payment_detail(
-    db: Session, user_id: int, payment_id: int
-) -> Optional[Payment]:          # ✅ Payment | None
-    p = (
-        db.query(Payment)
-        .outerjoin(Subscription, Payment.subscription_id == Subscription.id)
-        .outerjoin(Plan, Subscription.plan_id == Plan.id)
+def get_my_payment_detail(db: Session, user_id: int, payment_id: int):
+    row = (
+        db.query(Payment, Plan.name.label("plan_name"))
+        .join(Subscription, Subscription.id == Payment.subscription_id, isouter=True)
+        .join(Plan, Plan.id == Subscription.plan_id, isouter=True)
         .filter(Payment.user_id == user_id, Payment.id == payment_id)
         .first()
     )
-    if p:
-        p.plan_name = p.subscription.plan.name if (p.subscription and p.subscription.plan) else None
-    return p
+    if not row:
+        return None
+    payment, plan_name = row
+    setattr(payment, "plan_name", plan_name)
+    return payment
 
 # 플랜별 총 매출
 

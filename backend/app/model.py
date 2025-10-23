@@ -22,9 +22,11 @@ class RecordingType(enum.Enum):
     stopped = "stopped"
     saved = "saved"
 
-
-
-
+updated_at = Column(
+    TIMESTAMP(timezone=True),
+    server_default=func.now(),  # 생성 시
+    onupdate=func.now(),   # ORM 업데이트 시 자동
+)
 
 # Users
 class User(Base):
@@ -63,6 +65,7 @@ class Subscription(Base):
     end_date = Column(Date, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP, server_default=func.now())
 
     user = relationship("User", back_populates="subscriptions")
     plan = relationship("Plan", back_populates="subscriptions")

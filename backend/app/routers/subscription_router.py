@@ -1,19 +1,18 @@
 # routers/subscription_router.py
-from fastapi import APIRouter, Depends, HTTPException,Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func  # ✅ 추가
 from typing import List, Optional
+from datetime import date, timedelta
+
 from backend.app.db import get_db
 from backend.app.model import Subscription, Plan, User
 from backend.app.schemas.subscription_schema import SubscriptionResponse, SubscriptionUpdate
 from backend.app.deps.auth import get_current_user
 from backend.app.crud.subscription_crud import get_subscription_count_by_plan
-from backend.app.crud import subscription_crud
-from datetime import date, timedelta
-
 from backend.app.schemas.user_schema import PlanUserCount
 
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
-
 
 # ✅ 구독 목록 조회
 @router.get("/", response_model=List[SubscriptionResponse])
@@ -33,11 +32,11 @@ def list_subscriptions(
             plan_name=s.plan.name if s.plan else "unknown",
             start_date=s.start_date,
             end_date=s.end_date,
+            updated_at=s.updated_at,  # ✅ 포함
             is_active=s.is_active,
         )
         for s in subs
     ]
-
 
 # ✅ 구독 단건 조회
 @router.get("/me", response_model=SubscriptionResponse)
@@ -59,8 +58,10 @@ def get_my_subscription(
         plan_name=sub.plan.name if sub.plan else "unknown",
         start_date=sub.start_date,
         end_date=sub.end_date,
+        updated_at=sub.updated_at,  # ✅ 포함
         is_active=sub.is_active,
     )
+
 # ✅ 구독 수정 (플랜 변경 or 활성 상태 토글)
 @router.patch("/me", response_model=SubscriptionResponse)
 def update_my_subscription(
@@ -92,6 +93,9 @@ def update_my_subscription(
     if "is_active" in update_data:
         sub.is_active = update_data["is_active"]
 
+    # ✅ 업데이트 타임스탬프 보정(모델에 onupdate가 없다면)
+    sub.updated_at = func.now()
+
     db.commit()
     db.refresh(sub)
 
@@ -101,9 +105,9 @@ def update_my_subscription(
         plan_name=sub.plan.name if sub.plan else "unknown",
         start_date=sub.start_date,
         end_date=sub.end_date,
+        updated_at=sub.updated_at,  # ✅ 포함
         is_active=sub.is_active,
     )
-
 
 # ✅ 구독 취소 (자동갱신만 해제, end_date까지 유지)
 @router.patch("/me/cancel", response_model=SubscriptionResponse)
@@ -122,7 +126,9 @@ def cancel_my_subscription(
     if not sub.is_active:
         raise HTTPException(status_code=400, detail="Subscription already inactive")
 
-    sub.is_active = False  # ✅ end_date까지는 유지
+    sub.is_active = False
+    sub.updated_at = func.now()  # ✅ 보정
+
     db.commit()
     db.refresh(sub)
 
@@ -132,24 +138,6 @@ def cancel_my_subscription(
         plan_name=sub.plan.name if sub.plan else "unknown",
         start_date=sub.start_date,
         end_date=sub.end_date,
+        updated_at=sub.updated_at,  # ✅ 포함
         is_active=sub.is_active,
     )
-
-@router.get("/count/plan", response_model=List[PlanUserCount])
-async def get_plan_user_counts(
-    db: Session = Depends(get_db),
-    # 필요 시 인증 걸고 싶으면 아래 주석 해제
-    # _user=Depends(get_current_user),
-    as_of: Optional[date] = Query(None, description="이 날짜에 유효한 구독만 집계"),
-    active_only: bool = Query(True, description="is_active=True만 집계"),
-    date_from: Optional[date] = Query(None, description="구간 시작 (start_date 기준)"),
-    date_to: Optional[date] = Query(None, description="구간 끝 (start_date 기준)"),
-):
-    rows = get_subscription_count_by_plan(
-        db,
-        as_of=as_of,
-        active_only=active_only,
-        date_from=date_from,
-        date_to=date_to,
-    )
-    return [{"plan": plan, "user_count": cnt} for plan, cnt in rows]

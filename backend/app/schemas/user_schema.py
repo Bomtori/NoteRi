@@ -15,7 +15,7 @@ class UserResponse(BaseModel):
     picture: Optional[str] = None
     oauth_provider: Optional[str] = None
     is_active: bool
-    role = str
+    role = Optional[str]
     created_at: datetime
     updated_at: datetime
     plan_name: Optional[str] = None

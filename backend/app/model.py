@@ -341,3 +341,17 @@ class BoardShare(Base):
     )
     board = relationship("Board", back_populates="shared_users")
     user = relationship("User", back_populates="shared_boards")
+
+class RecordingUsageLog(Base):
+    __tablename__ = "recording_usage_logs"
+    id = Column(Integer, primary_key=True)
+    usage_id = Column(Integer, ForeignKey("recording_usage.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    board_id = Column(Integer, ForeignKey("boards.id", ondelete="CASCADE"), nullable=False)
+    audio_id = Column(Integer, ForeignKey("audio_data.id", ondelete="CASCADE"), nullable=False,
+                      unique=True)  # 오디오 1회만 차감
+    seconds = Column(Integer, nullable=False)
+    before_used = Column(Integer, nullable=False)
+    after_used = Column(Integer, nullable=False)
+    reason = Column(String(50), nullable=True)  # "audio_duration"
+    created_at = Column(TIMESTAMP, server_default=func.now())

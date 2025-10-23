@@ -2,9 +2,10 @@
 from datetime import date, datetime, timedelta, UTC
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from typing import Dict, Any, List, Tuple, Optional
 
-from backend.app.model import RecordingUsage, Subscription, Plan, PlanType, AudioData, Board
+from backend.app.model import RecordingUsage, Subscription, Plan, PlanType, AudioData, Board, RecordingUsageLog
 from backend.app.util.day_calculation import (_today_local, _week_bounds, _month_bounds, _year_bounds)
 
 # 선택: 초과 에러 전용 예외
@@ -70,32 +71,27 @@ def create_or_update_usage(db: Session, user_id: int, subscription: Subscription
 
 
 def use_seconds_from_audio_owner(db: Session, audio_id: int):
-    """
-    AudioData.duration(초)만큼, 해당 오디오가 속한 보드의 'owner'의 RecordingUsage를 차감.
-    - 무제한(allocated_seconds is None)이면 차감 없이 그대로 반환
-    - 활성 사용량: period_end가 NULL(무기한) 또는 오늘 이후(>= today)
-    """
-    # 1) 오디오의 duration, board_id 가져오기
+    # 1) 오디오 조회(+ 보드)
     audio = (
-        db.query(AudioData.id, AudioData.duration, AudioData.board_id)
+        db.query(AudioData.id, AudioData.duration, AudioData.board_id, AudioData.debited_at)
         .filter(AudioData.id == audio_id)
+        .with_for_update()  # 오디오 행도 잠깐 락(중복 차감 방지 강화)
         .first()
     )
     if not audio:
         raise ValueError("AudioData not found")
     if audio.duration is None or int(audio.duration) <= 0:
         raise ValueError("AudioData.duration 이 유효하지 않습니다.")
+    if audio.debited_at is not None:
+        # 이미 차감된 오디오
+        raise ValueError("이미 차감 처리된 Audio 입니다.")
 
     # 2) 보드의 owner 찾기
-    owner_id = (
-        db.query(Board.owner_id)
-        .filter(Board.id == audio.board_id)
-        .scalar()
-    )
+    owner_id = db.query(Board.owner_id).filter(Board.id == audio.board_id).scalar()
     if owner_id is None:
         raise ValueError("Board owner를 찾을 수 없습니다.")
 
-    # 3) owner의 '활성' RecordingUsage 찾기 (가장 최신)
+    # 3) owner의 '활성' RecordingUsage (가장 최신) 잠금
     usage = (
         db.query(RecordingUsage)
         .filter(
@@ -103,23 +99,58 @@ def use_seconds_from_audio_owner(db: Session, audio_id: int):
             (RecordingUsage.period_end == None) | (RecordingUsage.period_end >= date.today()),
         )
         .order_by(RecordingUsage.created_at.desc())
+        .with_for_update()  # 🔒 사용량 집계 락
         .first()
     )
     if not usage:
         raise ValueError("No active recording usage found for board owner")
 
-    # 4) 무제한이면 차감 없이 반환
+    # 4) 무제한이면 로그만(원하면) 남기고 반환
+    seconds = int(audio.duration)
     if usage.allocated_seconds is None:
+        # 필요시 무제한도 로그를 남기려면 여기에서 insert
+        # log = RecordingUsageLog(..., before_used=usage.used_seconds or 0, after_used=usage.used_seconds or 0)
+        # db.add(log)
+        # audio.debited_at = func.now()
+        # db.commit(); db.refresh(usage)
+        audio_row = db.query(AudioData).get(audio_id)
+        audio_row.debited_at = func.now()
+        db.commit()
+        db.refresh(usage)
         return usage
 
-    # 5) 차감
-    seconds = int(audio.duration)
-    new_used = int(usage.used_seconds or 0) + seconds
-    if new_used > int(usage.allocated_seconds):
+    # 5) 차감 계산
+    before_used = int(usage.used_seconds or 0)
+    after_used = before_used + seconds
+    if after_used > int(usage.allocated_seconds):
         raise UsageExceededError("Recording seconds exceeded plan limit")
 
-    usage.used_seconds = new_used
-    db.commit()
+    # 6) 반영 + 로그
+    usage.used_seconds = after_used
+    log = RecordingUsageLog(
+        usage_id=usage.id,
+        user_id=owner_id,
+        board_id=audio.board_id,
+        audio_id=audio_id,
+        seconds=seconds,
+        before_used=before_used,
+        after_used=after_used,
+        reason="audio_duration",
+    )
+    db.add(log)
+
+    # 7) 중복 차감 방지 플래그
+    audio_row = db.query(AudioData).get(audio_id)
+    audio_row.debited_at = func.now()
+
+    # 8) 커밋
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        # audio_id unique 제약에 걸린 경우(중복 차감 시도)
+        raise ValueError("이미 차감 처리된 Audio 입니다.")
+
     db.refresh(usage)
     return usage
 

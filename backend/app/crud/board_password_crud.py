@@ -3,7 +3,7 @@ from datetime import datetime, UTC
 import re
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-from passlib.hash import bcrypt
+from passlib.hash import argon2
 import backend.app.model as model
 
 _PIN_RE = re.compile(r"^\d{4}$")
@@ -26,7 +26,7 @@ def set_board_password(db: Session, board_id: int, current_user_id: int, pin_4di
         return None
 
     try:
-        board.password_hash = bcrypt.hash(pin_4digits)
+        board.password_hash = argon2.hash(pin_4digits)
         board.updated_at = _now()
         db.commit()
         db.refresh(board)
@@ -68,6 +68,6 @@ def verify_board_password(db: Session, board_id: int, pin_4digits: str) -> bool:
     if not board or not board.password_hash:
         return False
     try:
-        return bcrypt.verify(pin_4digits, board.password_hash)
+        return argon2.verify(pin_4digits, board.password_hash)
     except Exception:
         return False

@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, StringConstraints, ConfigDict, Field
+from typing import Optional, List, Annotated
 from datetime import datetime
 
 # -----------------------------
@@ -57,7 +57,8 @@ class SummaryResponse(BaseModel):
 
     class Config:
         orm_mode = True
-
+# 4자리 숫자 PIN
+Pin = Annotated[str, StringConstraints(pattern=r"^\d{4}$")]
 
 # -----------------------------
 # Board (Create / Update)
@@ -66,51 +67,36 @@ class BoardCreate(BaseModel):
     folder_id: Optional[int] = None  # 🍒 수정 10.23 frontend /int 필수제외
     title: str
     description: Optional[str] = None
-    password: Optional[str] = None  # ✅ 비밀번호 보호 기능용
-
+    password: Optional[Pin] = None
 
 class BoardUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
-    password: Optional[str] = None  # ✅ 비밀번호 수정/해제용
-
+    password: Optional[Pin] = None
 
 # -----------------------------
 # Board (Response)
 # -----------------------------
 class BoardResponse(BaseModel):
     id: int
-    # folder_id: int
-    folder_id: Optional[int] = None  # 🍒 10.23 front/ FastAPI가 응답을 직렬화 에러로 변경!
+    folder_id: Optional[int] = None
     owner_id: int
     title: str
-    description: Optional[str]
-    created_at: Optional[datetime]
-    updated_at: Optional[datetime]
+    description: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
-    # ✅ Relationships
-    # audios: List[AudioResponse] = []
-    # memos: List[MemoResponse] = []
-    # transcripts: List[TranscriptResponse] = []
-    # summaries: List[SummaryResponse] = []
-    audios: Optional[List[AudioResponse]] = [] # 🍒 10.23 front/ None 타입 필드를 List로 변환하다가 오류
-    memos: Optional[List[MemoResponse]] = []
-    transcripts: Optional[List[TranscriptResponse]] = []
-    summaries: Optional[List[SummaryResponse]] = []
+    # ✅ 1:1 관계 → 단일 객체 or None
+    audios: Optional[AudioResponse] = None
+    memos: Optional[MemoResponse] = None
+    transcripts: List[TranscriptResponse] = Field(default_factory=list)
+    summaries: List[SummaryResponse] = Field(default_factory=list)    # ✅ Relationships
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
-
-# -----------------------------
-# Board List Response
-# -----------------------------
 class BoardListResponse(BaseModel):
     boards: List[BoardResponse]
+    model_config = ConfigDict(from_attributes=True)
 
-
-# -----------------------------
-# Board Move
-# -----------------------------
 class BoardMove(BaseModel):
     folder_id: int

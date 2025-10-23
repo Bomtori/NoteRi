@@ -6,8 +6,8 @@ from typing import Optional
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
-from passlib.hash import bcrypt
-
+from passlib.hash import argon2
+import re
 import backend.app.model as model
 from backend.app.schemas import board_schema as schemas
 
@@ -15,6 +15,8 @@ from backend.app.schemas import board_schema as schemas
 # -----------------------------
 # Helpers
 # -----------------------------
+_PIN_RE = re.compile(r"^\d{4}$")
+
 def _now():
     return datetime.now(UTC)
 
@@ -41,6 +43,9 @@ def _can_edit(db: Session, board: model.Board, user_id: int) -> bool:
     role = _shared_role(db, board.id, user_id)
     return role in ("editor", "owner")
 
+def _normalize_pin(pin: str) -> str:
+    # 공백/개행 제거, 문자열화
+    return str(pin).strip()
 
 # -----------------------------
 # Create (owner는 항상 JWT의 current_user.id)
@@ -48,25 +53,27 @@ def _can_edit(db: Session, board: model.Board, user_id: int) -> bool:
 def create_board(db: Session, current_user_id: int, data: schemas.BoardCreate):
     new_board = model.Board(
         folder_id=data.folder_id,
-        owner_id=current_user_id,  # 👈 JWT에서만 결정
+        owner_id=current_user_id,
         title=data.title,
         description=data.description,
         created_at=_now(),
         updated_at=_now(),
     )
 
-    # 선택: 4자리 PIN 비밀번호(있다면) → 해시 저장
+    # ✅ 이중 방어: 전처리 + fullmatch + 길이 체크
     if getattr(data, "password", None):
-        new_board.password_hash = bcrypt.hash(data.password)
-
+        raw = data.password
+        # ✅ 디버그 로그
+        print("DEBUG create_board raw password:", repr(raw), "len:", len(str(raw)))
+        pin = _normalize_pin(raw)
+        print("DEBUG create_board normalized pin:", repr(pin), "len:", len(pin))
+        # ✅ 실패 시 원인을 메시지로 알려주기
+        if not _PIN_RE.fullmatch(pin):
+            raise ValueError(f"Password must be exactly 4 digits (got={repr(pin)}, len={len(pin)})")
+        new_board.password_hash = argon2.hash(pin)
     db.add(new_board)
     db.commit()
     db.refresh(new_board)
-
-    # 기본 메모 생성(프로젝트 기존 로직 유지)
-    from backend.app.crud import memo_crud
-    memo_crud.create_default_memo(db, new_board.id, current_user_id)
-
     return new_board
 
 
@@ -126,11 +133,13 @@ def update_board(db: Session, board_id: int, current_user: model.User, update: s
 
         payload = update.dict(exclude_unset=True)
 
-        # 4자리 PIN 비밀번호 변경/해제
         if "password" in payload:
-            pwd = payload.pop("password")
-            if pwd:
-                board.password_hash = bcrypt.hash(pwd)
+            raw = payload.pop("password")
+            if raw:
+                pin = _normalize_pin(raw)
+                if not _PIN_RE.fullmatch(pin) or len(pin) != 4:
+                    raise ValueError("Password must be exactly 4 digits.")
+                board.password_hash = argon2.hash(pin)
             else:
                 board.password_hash = None
 
@@ -181,6 +190,6 @@ def verify_board_password(db: Session, board_id: int, pin4: str) -> bool:
         return False
     try:
         # PIN 형식 검사는 라우터에서 수행(정규식) — 여기선 해시 검증만
-        return bcrypt.verify(pin4, board.password_hash)
+        return argon2.verify(pin4, board.password_hash)
     except Exception:
         return False

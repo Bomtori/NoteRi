@@ -1,7 +1,7 @@
 from typing import Optional, Tuple, List  # ✅ 확인
 from datetime import date, timedelta
 from decimal import Decimal
-from sqlalchemy import func, text
+from sqlalchemy import func, text, asc, desc
 from sqlalchemy.orm import Session
 from backend.app.model import Payment, Subscription, Plan, PlanType
 from backend.app.util.trend import trend_series

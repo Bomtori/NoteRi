@@ -313,7 +313,6 @@ def list_my_payments_simple(
 
     return [PaymentItem.model_validate(p, from_attributes=True) for p in payments]
 
-
 @router.get("/me/{payment_id}", response_model=PaymentItem)
 def get_my_payment(
     payment_id: int,

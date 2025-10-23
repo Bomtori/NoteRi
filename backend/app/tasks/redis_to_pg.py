@@ -48,36 +48,38 @@ def ingest_one_session(prefix: str, sid: str):
     """
     지정 세션(prefix, sid) 하나를 Postgres로 적재한다.
     - recording_sessions row 생성 후 id 확보
-    - segments → recording_results (절대 epoch으로 변환)
-    (summaries는 B안 마이그레이션 완료 후 추가)
+    - segments → recording_results
+    - summaries → summaries
+    - audio_data → audio_data
     """
     KEY_SEG, KEY_SUM, KEY_META = _keys(prefix, sid)
     r = _redis_client()
+    # ✅ 이미 적재된 SID면 바로 해당 session_id 반환 (멱등)
+    cached = r.get(f"{prefix}:{sid}:ingested_session_id")
+    if cached:
+        return int(cached)
     conn = _pg_connect()
     conn.autocommit = False
     cur = conn.cursor()
 
     try:
-        # 0) meta 읽기 (세션 절대 시계)
-        meta = r.hgetall(KEY_META)  # { started_at_ms, ended_at_ms, ... }
+        # 0) meta
+        meta = r.hgetall(KEY_META)
         if not meta or "started_at_ms" not in meta:
             raise RuntimeError(f"Meta missing: {KEY_META} (need started_at_ms)")
-        base_ms  = int(meta["started_at_ms"])                 # 세션 시작 epoch(ms) — NOT NULL
-        ended_ms = int(meta.get("ended_at_ms", base_ms))      # 종료 ms (없으면 시작 시각으로 일단 맞춤)
-        # board_id 결정 (meta > DEFAULT)
+
+        base_ms  = int(meta["started_at_ms"])
+        ended_ms = int(meta.get("ended_at_ms", base_ms))
         board_id = resolve_board_id(meta)
         user_id  = resolve_user_id(meta)
 
-        # 0-1) recording_sessions row 생성
-        #  - status : ingest 시점 = 이미 종료된 세션 → 'saved'
-        #  - started_at/ended_at : Redis meta의 epoch(ms) 사용
-        #  - created_at : 지금 시각(NOW())로 채워서 NOT NULL 충족
+        # 0-1) recording_sessions
         cur.execute("""
             INSERT INTO recording_sessions
-            (board_id, user_id, status, started_at, ended_at, created_at, is_diarized)
+              (board_id, user_id, status, started_at, ended_at, created_at, is_diarized)
             VALUES
-            (%s, %s, 'saved',
-            to_timestamp(%s/1000.0), to_timestamp(%s/1000.0), NOW(), FALSE)
+              (%s, %s, 'saved',
+               to_timestamp(%s/1000.0), to_timestamp(%s/1000.0), NOW(), FALSE)
             RETURNING id;
         """, (board_id, user_id, base_ms, ended_ms))
         session_id = cur.fetchone()[0]
@@ -85,20 +87,16 @@ def ingest_one_session(prefix: str, sid: str):
         # 1) segments → recording_results
         seg_entries = r.xrange(KEY_SEG, "-", "+")
         inserted_segments = 0
-
         for _id, f in seg_entries:
             raw_text      = f.get("raw_text")
-            speaker_label = f.get("speaker_label") or "A"
+            speaker_label = f.get("speaker_label") or None
             ts_start_ms   = f.get("ts_start_ms")
             ts_end_ms     = f.get("ts_end_ms")
             if not raw_text or ts_start_ms is None or ts_end_ms is None:
                 continue
 
-            # 절대 epoch(ms): 세션 시작 epoch + 상대 ms
-            started_epoch_ms = base_ms + int(ts_start_ms)
-            ended_epoch_ms   = base_ms + int(ts_end_ms)
-            started_at = _to_ts(started_epoch_ms)
-            ended_at   = _to_ts(ended_epoch_ms)
+            started_at = _to_ts(base_ms + int(ts_start_ms))
+            ended_at   = _to_ts(base_ms + int(ts_end_ms))
             if not started_at or not ended_at:
                 continue
 
@@ -111,18 +109,19 @@ def ingest_one_session(prefix: str, sid: str):
 
         conn.commit()
         print(f"[OK] {sid} recording_results inserted={inserted_segments}")
-        # 2) summaries → summaries (session FK)
+
+        # 2) summaries
         sum_entries = r.xrange(KEY_SUM, "-", "+")
         inserted_summaries = 0
         for _id, f in sum_entries:
             summary_text = f.get("summary_text")
             if not summary_text:
                 continue
-            # summary 메타(있으면 저장)
+
             istart_ms = f.get("interval_start_ms")
             iend_ms   = f.get("interval_end_ms")
             model     = f.get("model")
-            # 토큰 수는 정수로 캐스팅(없으면 None)
+
             try:
                 tokens_in  = int(f["tokens_input"])  if f.get("tokens_input")  else None
             except Exception:
@@ -142,20 +141,16 @@ def ingest_one_session(prefix: str, sid: str):
                 VALUES
                   (%s, %s, %s, %s, %s, %s, %s, %s, NOW());
             """, (
-                session_id,
-                'interval',
-                summary_text,
-                interval_start_at,
-                interval_end_at,
-                model,
-                tokens_in,
-                tokens_out
+                session_id, 'interval', summary_text,
+                interval_start_at, interval_end_at,
+                model, tokens_in, tokens_out
             ))
             inserted_summaries += 1
 
         conn.commit()
         print(f"[OK] {sid} recording_results inserted={inserted_segments}, summaries inserted={inserted_summaries}")
 
+        # 3) audio_data
         audio_path  = meta.get("audio_path")
         duration_ms = meta.get("duration_ms")
         language    = meta.get("language")
@@ -176,6 +171,23 @@ def ingest_one_session(prefix: str, sid: str):
         print(f"[OK] {sid} recording_results inserted={inserted_segments}, "
               f"summaries inserted={inserted_summaries}, "
               f"audio_data inserted (encrypted)")
+
+        # ✅ 재실행 방지: 세션ID를 SID에 매핑해 캐시(7일) + 원본 키는 TTL만 부여(디버깅 편의)
+            # 🔸 기존엔 rename으로 사라져 보였음 → 디버깅 위해 그대로 두되 TTL만 걸어둠
+        try:
+            r.setex(f"{prefix}:{sid}:ingested_session_id", 7 * 24 * 3600, str(session_id))
+            ttl = 24 * 3600  # 24h 보존
+            try:
+                r.expire(KEY_SEG, ttl)
+                r.expire(KEY_SUM, ttl)
+                r.expire(KEY_META, ttl)
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+        # ✅ 이 세션의 PK 반환
+        return session_id
 
     except Exception:
         conn.rollback()

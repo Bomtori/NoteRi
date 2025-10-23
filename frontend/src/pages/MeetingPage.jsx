@@ -23,14 +23,14 @@ export default function MeetingPage() {
 
   // idle | recording | paused
   const [recordingState, setRecordingState] = useState("idle");
+  const [pendingMapping, setPendingMapping] = useState(false); // ✅ 세션 매핑 대기 표시
 
   const wsRef = useRef(null);
+  const sidRef = useRef(null); // ✅ 서버가 준 세션 SID 저장
   const audioContextRef = useRef(null);
   const processorRef = useRef(null);
   const streamRef = useRef(null);
   const sourceRef = useRef(null);
-
-  // 일시중지 여부(onaudioprocess에서 빠르게 참조)
   const pausedRef = useRef(false);
 
   const historyEndRef = useRef(null);
@@ -54,22 +54,6 @@ export default function MeetingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 최신 세션 ID 조회(녹음 종료 직후 한 번 호출)
-  const fetchLatestSessionId = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/sessions/latest`);
-      if (!res.ok) throw new Error(`latest session fetch failed: ${res.status}`);
-      const data = await res.json();
-      if (data?.id) {
-        setSessionId(data.id);
-        return data.id;
-      }
-    } catch (e) {
-      console.error("❌ fetchLatestSessionId:", e);
-    }
-    return null;
-  };
-
   const startRecording = async () => {
     if (recordingState !== "idle") return;
 
@@ -79,6 +63,8 @@ export default function MeetingPage() {
     setSummaries([]);
     setSpeakers([]);
     setMerged([]);
+    setSessionId(null);
+    setPendingMapping(false);
 
     setRecordingState("recording");
     pausedRef.current = false;
@@ -92,6 +78,10 @@ export default function MeetingPage() {
     wsRef.current.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
+        if (msg.event === "session_started" && msg.sid) {
+          sidRef.current = msg.sid;
+          console.log("🎙️ sid assigned:", msg.sid);
+        }
         if (msg.realtime) setLiveText(msg.realtime);
         if (msg.append) setHistory((prev) => [...prev, msg.append]);
         if (msg.paragraph || msg.summary) {
@@ -116,7 +106,6 @@ export default function MeetingPage() {
 
     processorRef.current = audioContextRef.current.createScriptProcessor(16384, 1, 1);
     processorRef.current.onaudioprocess = (e) => {
-      // 일시중지 중이면 전송 안 함
       if (pausedRef.current) return;
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
@@ -134,7 +123,6 @@ export default function MeetingPage() {
     pausedRef.current = true;
     setRecordingState("paused");
 
-    // 그래프 자체를 멈춰 전송 0 (onaudioprocess도 중단됨)
     if (audioContextRef.current && audioContextRef.current.state === "running") {
       try {
         await audioContextRef.current.suspend();
@@ -143,14 +131,12 @@ export default function MeetingPage() {
         console.warn("suspend failed:", e);
       }
     }
-    // ✅ WS는 열어둡니다(같은 파일/세션 유지)
   };
 
   const resumeRecording = async () => {
     if (recordingState !== "paused") return;
     pausedRef.current = false;
 
-    // 그래프 재개
     if (audioContextRef.current && audioContextRef.current.state === "suspended") {
       try {
         await audioContextRef.current.resume();
@@ -189,35 +175,71 @@ export default function MeetingPage() {
       console.warn("⚠️ cleanup warning:", e);
     }
 
-    // ⛔ stop에서만 WS 닫기 → 백엔드가 save_raw_audio() 수행
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.close(1000, "Normal Closure");
     }
     wsRef.current = null;
-    
-    // 🔹 백엔드가 Redis→Postgres 적재를 마친 뒤 최신 세션ID 확보
-    // (WS close 후 파일 저장/ingest가 수행되므로 약간의 지연이 있을 수 있음)
-    // 간단 폴링: 최대 10초, 500ms 간격
-    let tries = 0;
-    while (tries++ < 20) {
-      const sid = await fetchLatestSessionId();
-      if (sid) break;
-      await sleep(500);
+
+    // ⏳ Redis→Postgres 적재 후 sid→session_id 매핑 대기
+    if (sidRef?.current) {
+      setPendingMapping(true);
+      const sid = sidRef.current;
+      let tries = 0;
+      while (tries++ < 40) { // 최대 20초
+        try {
+          const res = await fetch(`${API_BASE}/sessions/by-sid/${sid}`);
+          if (res.status === 202) {
+            // pending: 계속 대기
+          } else if (res.ok) {
+            const data = await res.json();
+            console.log("✅ 세션 매핑 완료:", data.id);
+            setSessionId(data.id);
+            setPendingMapping(false);
+            break;
+          } else {
+            console.warn("by-sid unexpected status:", res.status);
+          }
+        } catch (e) {
+          console.warn("waiting for session id mapping...", e);
+        }
+        await sleep(500);
+      }
+      // 그래도 못 받았으면 안내만
+      if (!sessionId) setPendingMapping(false);
     }
   };
 
+  // 필요 시: diarization 버튼 누를 때도 마지막 보정 폴링 한번 더
+  const ensureSessionId = async () => {
+    if (sessionId) return true;
+    if (!sidRef.current) return false;
+    let tries = 0;
+    while (tries++ < 20) {
+      const res = await fetch(`${API_BASE}/sessions/by-sid/${sidRef.current}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSessionId(data.id);
+        return true;
+      }
+      await sleep(500);
+    }
+    return false;
+  };
+
   const runDiarization = async () => {
-    // 세션 기반 다이어라이즈: /sessions/{id}/diarize → /sessions/{id} 폴링 → /sessions/{id}/results 조회
     if (!sessionId) {
-      alert("세션을 찾을 수 없습니다. 녹음을 종료한 뒤 다시 시도하세요.");
-      return;
+      const ok = await ensureSessionId();
+      if (!ok) {
+        alert("세션을 찾을 수 없습니다. 녹음을 종료한 뒤 다시 시도하세요.");
+        return;
+      }
     }
     try {
-      // 1) 다이어라이즈 시작
+      console.log("🧩 diarization 요청 sessionId:", sessionId);
       const start = await fetch(`${API_BASE}/sessions/${sessionId}/diarize`, { method: "POST" });
       if (!start.ok) throw new Error(`diarize start failed: ${start.status}`);
 
-      // 2) is_diarized가 true 될 때까지 폴링 (최대 60초)
+      // diarization 완료될 때까지 폴링
       let tries = 0;
       while (tries++ < 60) {
         const s = await fetch(`${API_BASE}/sessions/${sessionId}`);
@@ -226,18 +248,16 @@ export default function MeetingPage() {
         await sleep(1000);
       }
 
-      // 3) 결과 조회 → speakers로 렌더
       const res = await fetch(`${API_BASE}/sessions/${sessionId}/results`);
       if (!res.ok) throw new Error(`results fetch failed: ${res.status}`);
-      const rows = await res.json(); // [{raw_text, speaker_label, started_at, ended_at}, ...]
+      const rows = await res.json();
       const formatted = rows.map((r) => ({
         speaker: r.speaker_label || "U",
         text: r.raw_text || "",
         start: typeof r.offset_start_sec === "number" ? r.offset_start_sec : undefined,
-        end:   typeof r.offset_end_sec   === "number" ? r.offset_end_sec   : undefined,
+        end: typeof r.offset_end_sec === "number" ? r.offset_end_sec : undefined,
       }));
       setSpeakers(formatted);
-      // 병합 뷰가 필요 없다면 setMerged([])로 초기화
       setMerged([]);
     } catch (e) {
       console.error("❌ Diarization error:", e);
@@ -261,19 +281,13 @@ export default function MeetingPage() {
         </button>
 
         {recordingState === "recording" && (
-          <button
-            onClick={pauseRecording}
-            className="px-4 py-2 rounded bg-yellow-500 text-white"
-          >
+          <button onClick={pauseRecording} className="px-4 py-2 rounded bg-yellow-500 text-white">
             ⏸️ 일시중지
           </button>
         )}
 
         {recordingState === "paused" && (
-          <button
-            onClick={resumeRecording}
-            className="px-4 py-2 rounded bg-green-600 text-white"
-          >
+          <button onClick={resumeRecording} className="px-4 py-2 rounded bg-green-600 text-white">
             ▶️ 재개
           </button>
         )}
@@ -289,6 +303,7 @@ export default function MeetingPage() {
         <button
           onClick={runDiarization}
           className="px-4 py-2 rounded bg-blue-600 text-white"
+          title="녹음 종료 직후에도 실행 가능합니다"
         >
           🗣️ 화자 분리 실행
         </button>
@@ -298,7 +313,7 @@ export default function MeetingPage() {
       <div className="p-4 border bg-white rounded shadow min-h-[72px]">
         <h2 className="font-semibold mb-2">🎤 실시간</h2>
         <p className="whitespace-pre-wrap text-gray-900">
-          {recordingState === "paused" ? "⏸️ 일시중지 중…" : (liveText || "...")}
+          {recordingState === "paused" ? "⏸️ 일시중지 중…" : liveText || "..."}
         </p>
       </div>
 
@@ -308,7 +323,9 @@ export default function MeetingPage() {
         {history.length ? (
           <ul className="list-disc pl-5 space-y-1">
             {history.map((line, idx) => (
-              <li key={idx} className="text-gray-800">{line}</li>
+              <li key={idx} className="text-gray-800">
+                {line}
+              </li>
             ))}
             <div ref={historyEndRef} />
           </ul>
@@ -344,7 +361,10 @@ export default function MeetingPage() {
               <p key={i} className="text-gray-800">
                 <b>{s.speaker}</b>: {s.text || ""}
                 {typeof s.start === "number" && typeof s.end === "number" ? (
-                  <span className="text-xs text-gray-500">  [{s.start.toFixed(2)}–{s.end.toFixed(2)}s]</span>
+                  <span className="text-xs text-gray-500">
+                    {" "}
+                    [{s.start.toFixed(2)}–{s.end.toFixed(2)}s]
+                  </span>
                 ) : null}
               </p>
             ))}
@@ -363,7 +383,10 @@ export default function MeetingPage() {
               <p key={i} className="text-gray-800">
                 <b>{m.speaker || "UNKNOWN"}</b>: {m.text}
                 {typeof m.start === "number" && typeof m.end === "number" ? (
-                  <span className="text-xs text-gray-500">  [{m.start.toFixed(2)}–{m.end.toFixed(2)}s]</span>
+                  <span className="text-xs text-gray-500">
+                    {" "}
+                    [{m.start.toFixed(2)}–{m.end.toFixed(2)}s]
+                  </span>
                 ) : null}
               </p>
             ))}

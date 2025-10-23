@@ -18,7 +18,9 @@ def create_or_update_usage(db: Session, user_id: int, subscription: Subscription
     """
     plan = subscription.plan
     if not plan:
-        raise ValueError("Subscription has no linked plan")
+        # raise ValueError("Subscription has no linked plan")
+        raise ValueError(f"Subscription {subscription.id} has no linked plan") # 🍒 10.22 front결제오류로 수정
+
 
     prev_usage = (
         db.query(RecordingUsage)

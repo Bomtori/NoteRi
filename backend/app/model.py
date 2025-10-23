@@ -148,7 +148,7 @@ class Board(Base):
     __tablename__ = "boards"
 
     id = Column(Integer, primary_key=True)
-    folder_id = Column(Integer, ForeignKey("folders.id", ondelete="CASCADE"), nullable=True)
+    folder_id = Column(Integer, ForeignKey("folders.id"), nullable=True) # 🍒 10.23 front, ondelete="CASCADE"
     owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     title = Column(String, nullable=False)
     description = Column(Text)

@@ -18,6 +18,7 @@ from backend.ml.postprocess.silence_segmenter import SilenceSegmenter
 from backend.ml.postprocess.timestamp_deduplicator import TimestampDeduplicator
 from backend.ml.summarizer import ThreeLineSummarizer
 from backend.config import VAD_THRESHOLD, VAD_SAMPLE_RATE
+from backend.services.diarization import run_diarization_for_session
 
 # ✅ Redis 퍼블리셔 (요구사항 반영: session_id 필드 미사용, raw_text/speaker_label 사용)
 from backend.app.util.redis_publisher import (
@@ -125,6 +126,10 @@ class STTPipeline:
             )
         except Exception as e:
             logger.warning(f"init_session_meta({source}) failed: {e}")
+
+        # ✅ 프론트가 “이번 세션”을 정확히 추적할 수 있도록 SID 알림
+        await self._safe_send_json({"event": "session_started", "sid": self.sid})
+
     async def begin_session(self, websocket):
         """WS 수락 직후 호출: 타이머 즉시 시작(오디오 유무 무관)."""
         await self._start_session(websocket, source="manual")
@@ -162,6 +167,8 @@ class STTPipeline:
         self.reset_all()
 
         # ✅ 종료 후 Redis→Postgres 적재 (이벤트 루프 블로킹 방지: 스레드로 실행)
+        session_id = None  # ✅ 추가
+        
         if self.sid and self.redis_prefix:
             try:
                 session_id = await asyncio.to_thread(ingest_one_session, self.redis_prefix, self.sid)
@@ -174,10 +181,22 @@ class STTPipeline:
                 except Exception as _:
                     pass
 
+                # ✅ 세션ID를 SID 키로 1시간 보관 → 프론트가 by-sid로 정확히 찾게 함
+                try:
+                    from backend.app.util.redis_client import get_redis
+                    r = await get_redis()
+                    await r.setex(f"stt:last_session_id:{self.sid}", 3600, str(session_id))
+                except Exception:
+                    logger.warning("failed to cache last_session_id in redis")
+
                 logger.info(f"[DB] Redis→Postgres ingest done. sid={self.sid}, session_id={session_id}")
             except Exception as e:
                 logger.warning(f"[DB] ingest failed for sid={self.sid}: {e}")
-
+        try:
+            await run_diarization_for_session(session_id)
+            logger.info(f"🗣️ Diarization done for session_id={session_id}")
+        except Exception as e:
+            logger.warning(f"diarization failed: {e}")
 
     # ---------------------------------------------------------------------
     # 내부 타이머 루프 & 요약 로직
@@ -350,7 +369,7 @@ class STTPipeline:
                             sid=self.sid,
                             prefix=self.redis_prefix,
                             raw_text=finalized,
-                            speaker_label="A",
+                            speaker_label=None,
                             ts_start_ms=ts_start_ms,
                             ts_end_ms=ts_end_ms,
                         )
@@ -406,7 +425,6 @@ class STTPipeline:
             self.paragraph_buffer.append((time.time(), finalized))
             logger.info(f"Finalized: {finalized}")
 
-            # ✅ Redis로 확정 히스토리 적재 (raw_text / speaker_label='A')
             if self.sid:
                 try:
                     now_ms = int(((time.time() - (self.session_start_ts or time.time())) * 1000))
@@ -420,7 +438,7 @@ class STTPipeline:
                         sid=self.sid,
                         prefix=self.redis_prefix,
                         raw_text=finalized,
-                        speaker_label="A",
+                        speaker_label=None,
                         ts_start_ms=ts_start_ms,
                         ts_end_ms=ts_end_ms,
                     )

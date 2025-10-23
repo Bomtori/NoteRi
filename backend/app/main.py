@@ -72,7 +72,6 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("✅ connection open")
 
-    # 1) 오디오 유무와 관계없이 세션/타이머 시작
     await pipeline.begin_session(websocket)
 
     try:
@@ -81,45 +80,42 @@ async def websocket_endpoint(websocket: WebSocket):
             await pipeline.feed(data, websocket)
 
     except WebSocketDisconnect:
-        # 클라이언트가 정상적으로 끊은 경우
         print("🔌 client disconnected")
+
     except Exception as e:
-        # 기타 예외
         print(f"❌ 오류 발생: {e}")
+
     finally:
-        # --- 종료 시 순서 중요 ---
-        # A. 가능하면 최종 요약을 먼저 생성/전송(WS가 살아있을 때만)
         try:
+            # --- 종료 시 순서 ---
+            # A. 요약 전송 (WS가 아직 연결 중일 때만)
             if websocket.application_state == WebSocketState.CONNECTED:
                 await pipeline.flush_final_summary()
         except Exception as e:
             print(f"⚠️ flush_final_summary 실패: {e}")
 
-        # B. 원본 오디오 저장(버퍼가 초기화되기 전에 반드시 실행)
-        result = None
         try:
-            result = pipeline.save_raw_audio()  # 저장 후 내부적으로 부분 초기화(reset) 수행
+            # B. 원본 오디오 저장
+            result = pipeline.save_raw_audio()
+            if result:
+                filepath = result["filepath"]
+                duration = result["duration"]
+                print(f"🎵 Audio saved at: {filepath} ({duration:.2f}s)")
+            else:
+                print("⚠️ 저장할 오디오 데이터 없음")
         except Exception as e:
             print(f"⚠️ save_raw_audio 실패: {e}")
 
-        if result:
-            filepath = result["filepath"]
-            duration = result["duration"]
-            print(f"🎵 Audio saved at: {filepath} (duration={duration:.2f}s)")
-        else:
-            print("⚠️ 저장할 오디오 데이터 없음")
-
-        # C. 세션 종료(타이머/상태 정리). 이미 요약/저장 했으므로 여기서는 정리만.
         try:
-            # end_session 내부에서 WS로 보내지 않도록 방어적으로 끊어둠
+            # C. 세션 종료 → flush, diarization 자동 실행 ❌
             if websocket.application_state != WebSocketState.CONNECTED:
                 pipeline.ws = None
-            await pipeline.end_session()
+            await pipeline.end_session(run_diarization=False)
         except Exception as e:
             print(f"⚠️ end_session 실패: {e}")
 
-        # D. 서버 측에서 WS가 아직 열려있다면 안전하게 닫기
         try:
+            # D. WS 닫기
             if websocket.application_state == WebSocketState.CONNECTED:
                 await websocket.close()
         except Exception:

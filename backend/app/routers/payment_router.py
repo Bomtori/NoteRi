@@ -2,7 +2,7 @@
 import logging
 import os
 import uuid
-from typing import Optional
+from typing import Optional, List, Tuple
 
 import httpx
 import base64
@@ -54,6 +54,21 @@ class PaymentConfirmRequest(BaseModel):
     amount: int
     plan_name: str  # 동일하게 plan_name
 
+class SortBy:
+    # 필요 시 approved_at, created_at 등 확장
+    APPROVED_AT = "approved_at"
+    CREATED_AT = "created_at"
+
+def _parse_statuses(status: Optional[str]) -> Optional[List[str]]:
+    """
+    status=SUCCESS or 'SUCCESS,FAIL' 처럼 들어온 값을 ['SUCCESS','FAIL']로 변환.
+    None이면 필터 미적용.
+    """
+    if not status:
+        return None
+    # 공백 제거 + 빈 문자열 필터링
+    arr = [s.strip() for s in status.split(",") if s.strip()]
+    return arr or None
 
 # ✅ 1️⃣ 결제 요청 API (프론트 → 토스 결제창으로 이동하기 전에 호출)
 @router.post("/request")
@@ -102,56 +117,88 @@ async def confirm_payment(
 
     payment_result = response.json()
 
+    # ----- (옵션) 멱등성: 같은 orderId로 이미 성공 기록이 있다면 바로 응답 -----
+    already = (
+        db.query(Payment)
+        .filter(Payment.order_id == req.orderId, Payment.status.in_(["SUCCESS", "DONE"]))
+        .first()
+    )
+    if already:
+        sub = (
+            db.query(Subscription)
+            .filter(Subscription.user_id == current_user.id)
+            .first()
+        )
+        plan = db.query(Plan).filter(Plan.id == sub.plan_id).first() if sub else None
+        return {
+            "message": "Payment already processed",
+            "subscription": {
+                "subscription_id": sub.id if sub else None,
+                "plan_name": plan.name if plan else None,
+                "start_date": str(sub.start_date) if sub else None,
+                "end_date": str(sub.end_date) if sub else None,
+                "is_active": sub.is_active if sub else None,
+            },
+            "payment": {
+                "payment_id": already.id,
+                "order_id": already.order_id,
+                "amount": float(already.amount),
+                "status": already.status,
+            },
+        }
+
     # ----- ② 플랜 조회 -----
     plan = db.query(Plan).filter(Plan.name == req.plan_name).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Invalid plan")
 
-    # ----- ③ 구독 생성 -----
-    new_sub = Subscription(
-        user_id=current_user.id,
-        plan_id=plan.id,
-        start_date=date.today(),
-        end_date=date.today() + timedelta(days=plan.duration_days),
-        is_active=True
+    # ----- ③ 구독 '수정' (없으면 생성) -----
+    sub = (
+        db.query(Subscription)
+        .filter(Subscription.user_id == current_user.id)
+        .first()
     )
-    db.add(new_sub)
-    db.commit()
-    db.refresh(new_sub)
-
-    # 기존 활성 구독 비활성화 처리 🍒 10.22 기존플랜 비활성화 추가 -> free에서 pro결제시 free만보이는 오류
-    db.query(Subscription).filter(
-        Subscription.user_id == current_user.id,
-        Subscription.is_active == True
-    ).update({"is_active": False})
-    db.commit()
-
-    # 새 구독 생성 🍒 10.22 새 플랜 구독생성 추가
-    new_sub = Subscription(
-        user_id=current_user.id,
-        plan_id=plan.id,
-        start_date=date.today(),
-        end_date=date.today() + timedelta(days=plan.duration_days),
-        is_active=True
-    )
-    db.add(new_sub)
-    db.commit()
-    db.refresh(new_sub)
 
 
-    # ----- ✅ ④ 녹음 사용량 자동 생성 -----
-    recording_usage_crud.create_or_update_usage(db, current_user.id, new_sub)
+    today = date.today()
+    new_end = today + timedelta(days=plan.duration_days)
+
+    if sub:
+        # ✅ 기존 구독 업데이트
+        sub.plan_id = plan.id
+        sub.start_date = today
+        sub.end_date = new_end
+        sub.is_active = True  # 결제 성공 시 자동갱신/활성화 정책에 맞게 조정
+        # (auto_renew / next_renew_on 같은 컬럼을 쓰신다면 여기서 함께 갱신)
+        db.commit()
+        db.refresh(sub)
+    else:
+        # ✅ 첫 결제인 경우만 새로 생성 (안전 upsert)
+        sub = Subscription(
+            user_id=current_user.id,
+            plan_id=plan.id,
+            start_date=today,
+            end_date=new_end,
+            is_active=True,
+        )
+        db.add(sub)
+        db.commit()
+        db.refresh(sub)
+
+    # ----- ④ 녹음 사용량 초기화/갱신 -----
+    recording_usage_crud.create_or_update_usage(db, current_user.id, sub)
 
     # ----- ⑤ 결제 내역 기록 -----
     new_payment = Payment(
         user_id=current_user.id,
-        subscription_id=new_sub.id,
+        subscription_id=sub.id,
         order_id=req.orderId,
         amount=req.amount,
         method=payment_result.get("method", ""),
-        status=payment_result.get("status", ""),
-        # transaction_key=payment_result.get("transactionKey", ""),
-        transaction_key=payment_result.get("transactionKey") or None, # 10.22 front400에러 추가수정
+
+        status=payment_result.get("status", "") or "SUCCESS",
+        transaction_key=payment_result.get("transactionKey") or None
+
         approved_at=payment_result.get("approvedAt"),
         fail_reason=payment_result.get("failReason"),
         raw_response=payment_result,
@@ -164,15 +211,15 @@ async def confirm_payment(
     return {
         "message": "Payment successful",
         "subscription": {
-            "subscription_id": new_sub.id,
+            "subscription_id": sub.id,
             "plan_name": plan.name,
-            "start_date": str(new_sub.start_date),
-            "end_date": str(new_sub.end_date),
-            "is_active": new_sub.is_active,
+            "start_date": str(sub.start_date),
+            "end_date": str(sub.end_date),
+            "is_active": sub.is_active,
         },
         "usage": {
-            "allocated_minutes": new_sub.plan.allocated_minutes,
-            "duration_days": new_sub.plan.duration_days,
+            "allocated_minutes": sub.plan.allocated_minutes,
+            "duration_days": sub.plan.duration_days,
         },
         "payment": {
             "payment_id": new_payment.id,
@@ -242,93 +289,68 @@ def last_5_years(db: Session = Depends(get_db)):
         logger.exception("GET /payments/last-5-years failed")
         raise HTTPException(status_code=500, detail="PAYMENTS_LAST_5_YEARS_FAILED")
 
-@router.get("/me/payments", response_model=PaymentListResponse)
+@router.get("/me", response_model=PaymentListResponse)
 def list_my_payments(
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-    date_from: Optional[date] = Query(None),
-    date_to: Optional[date] = Query(None),
-    status: Optional[str] = Query("SUCCESS", description="SUCCESS|PENDING|FAIL|CANCELED 등"),
+    current_user: User = Depends(get_current_user),
+    # 필터
+    date_from: Optional[date] = Query(None, description="포함(inclusive) 시작일"),
+    date_to: Optional[date] = Query(None, description="포함(inclusive) 종료일"),
+    status: Optional[str] = Query("SUCCESS", description="예: SUCCESS | SUCCESS,FAIL"),
+    # 정렬/페이지네이션
+    sort_by: str = Query(SortBy.APPROVED_AT, regex="^(approved_at|created_at)$"),
+    sort_dir: str = Query("desc", regex="^(asc|desc)$"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
+    """
+    - 날짜 필터는 [date_from, date_to] 둘 다 '포함'으로 처리.
+      구현 편의상 CRUD에서 date_to+1을 '미만'(<)으로 넘겨 주면 안전함.
+    - status는 콤마로 여러 개 허용.
+    - sort_by: approved_at|created_at / sort_dir: asc|desc
+    """
+    statuses = _parse_statuses(status)
+
+    # inclusive end → half-open [from, to+1)
+    date_to_exclusive = (date_to + timedelta(days=1)) if date_to else None
+
     total, items = get_my_payments(
         db,
         user_id=current_user.id,
         date_from=date_from,
-        date_to=date_to,
-        status=status,
+        date_to=date_to_exclusive,   # CRUD에서는 < date_to_exclusive 로 처리
+        statuses=statuses,           # 기존 단일 status -> 복수 허용으로 확장
+        sort_by=sort_by,
+        sort_dir=sort_dir,
         limit=limit,
         offset=offset,
     )
-    # Pydantic 변환: PaymentItem(orm_mode=True) 사용 🍒 10.22 front코드수정 아래 원본코드 주석
-    # payload_items = [
-    #     PaymentItem(
-    #         id=p.id,
-    #         order_id=p.order_id,
-    #         amount=p.amount,
-    #         method=p.method,
-    #         status=p.status,
-    #         transaction_key=p.transaction_key,
-    #         approved_at=p.approved_at,
-    #         canceled_at=p.canceled_at,
-    #         subscription_id=p.subscription_id,
-    #         plan_name=getattr(p, "plan_name", None),
-    #     )
-    #     for p in items
-    # ]
-    # return {"total": total, "items": payload_items}
-    # 🍒10.22 front 조인 추가, 현재 결제내역 못불러옴 오류
-    enriched_items = []
-    for p in items:
-        sub = (
-            db.query(Subscription)
-            .options(joinedload(Subscription.plan))
-            .filter(Subscription.id == p.subscription_id)
-            .first()
-        )
 
-        plan_name = sub.plan.name.value if sub and sub.plan else None
+    # Pydantic 매핑 (from_attributes=True 전제)
+    items_payload = [PaymentItem.model_validate(p) for p in items]
 
-        enriched_items.append(
-            PaymentItem(
-                id=p.id,
-                order_id=p.order_id,
-                amount=p.amount,
-                method=p.method,
-                status=p.status,
-                transaction_key=p.transaction_key,
-                approved_at=p.approved_at,
-                canceled_at=p.canceled_at,
-                subscription_id=p.subscription_id,
-                plan_name=plan_name,  # 실제 plan.name 값으로 교체됨
-            )
-        )    
-    return {"total": total, "items": enriched_items}
-    # 🍒10.22 front 조인 추가, 현재 결제내역 못불러옴 오류
+    # 다음 페이지 계산
+    next_offset = offset + len(items_payload)
+    has_more = next_offset < total
+
+    return PaymentListResponse(
+        total=total,
+        items=items_payload,
+        has_more=has_more,
+        next_offset=next_offset if has_more else None,
+    )
 
 
-@router.get("/{payment_id}", response_model=PaymentItem)
+@router.get("/me/{payment_id}", response_model=PaymentItem)
 def get_my_payment(
     payment_id: int,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     p = get_my_payment_detail(db, current_user.id, payment_id)
     if not p:
         raise HTTPException(status_code=404, detail="Payment not found")
-    return PaymentItem(
-        id=p.id,
-        order_id=p.order_id,
-        amount=p.amount,
-        method=p.method,
-        status=p.status,
-        transaction_key=p.transaction_key,
-        approved_at=p.approved_at,
-        canceled_at=p.canceled_at,
-        subscription_id=p.subscription_id,
-        plan_name=getattr(p, "plan_name", None),
-    )
+    return PaymentItem.model_validate(p)
 
 # 플랜 별 총 매출
 @router.get("/revenue/plan")

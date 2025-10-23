@@ -1,52 +1,86 @@
 import { useSelector, useDispatch } from "react-redux";
 import {
-    addFolder,
-    renameFolder,
-    deleteFolder,
+    fetchFolders,
+    addFolderAsync,
+    renameFolderAsync,
+    deleteFolderAsync,
 } from "../../features/folder/folderSlice";
-import { Link,useNavigate } from "react-router-dom";
-import { useState } from "react";
-import Toast from "../common/Toast";
+import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { useToast } from "../../hooks/useToast";
+import Toast from "../common/Toast";
+import apiClient from "../../api/apiClient";
+import { API_BASE_URL } from "../../config";
+import { Folder, FileText, Mic, Star } from "lucide-react"; // 추가
+
+// color값에 따라 아이콘 매핑
+const colorToIcon = {
+    "#7E36F9": <Mic className="w-4 h-4 text-[#7E36F9]" />, // 보라 → 마이크
+    "#FFD700": <Star className="w-4 h-4 text-yellow-400" />, // 금색 → 즐겨찾기
+    "#3B82F6": <FileText className="w-4 h-4 text-blue-500" />, // 파랑 → 문서
+    "#4ADE80": <Folder className="w-4 h-4 text-green-500" />, // 초록 → 폴더
+};
 
 export default function SideNav() {
-    const { folders } = useSelector((state) => state.folder);
     const dispatch = useDispatch();
-    const navigate = useNavigate();
-
-    const [newFolder, setNewFolder] = useState("");
-    const [isAdding, setIsAdding] = useState(false);
-    const [editingId, setEditingId] = useState(null);
-    const [tempName, setTempName] = useState("");
-
-    // 실패 메시지 상태
+    const { folders, status } = useSelector((state) => state.folder);
     const { message, showToast, clearToast } = useToast();
 
+    const [isAdding, setIsAdding] = useState(false);
+    const [newFolder, setNewFolder] = useState("");
+    const [editingId, setEditingId] = useState(null);
+    const [tempName, setTempName] = useState("");
+    const [user, setUser] = useState(null);
 
-    const handleAddFolder = () => {
+    // ✅ 폴더 목록 불러오기
+    useEffect(() => {
+        dispatch(fetchFolders());
+    }, [dispatch]);
+
+    // ✅ 로그인된 유저 정보
+    useEffect(() => {
+        async function fetchUser() {
+            try {
+                const res = await apiClient.get(`${API_BASE_URL}/users/me`, {
+                    withCredentials: true,
+                });
+                setUser(res.data);
+            } catch (err) {
+                console.error("유저 정보 로드 실패:", err);
+                setUser(null);
+            }
+        }
+        fetchUser();
+    }, []);
+
+    // ✅ 새 폴더 추가
+    const handleAddFolder = async () => {
         const trimmed = newFolder.trim();
-
-        if (trimmed === "") {
+        if (!trimmed) {
             showToast("폴더 이름을 입력해주세요.");
             return;
         }
-
-        // ✅ 중복 체크 변수 정의
         const isDuplicate = folders.some((f) => f.name === trimmed);
         if (isDuplicate) {
             showToast("이미 존재하는 폴더입니다.");
             return;
         }
 
-        // ✅ 성공 시에는 알림 없이 추가
-        dispatch(addFolder(trimmed));
-        setNewFolder("");
-        setIsAdding(false);
+        try {
+            await dispatch(addFolderAsync(trimmed)).unwrap();
+            showToast("폴더가 추가되었습니다.");
+        } catch {
+            showToast("서버 오류로 폴더를 추가할 수 없습니다.");
+        } finally {
+            setNewFolder("");
+            setIsAdding(false);
+        }
     };
 
-    const handleRename = (id) => {
+    // ✅ 폴더 이름 변경
+    const handleRename = async (id) => {
         const trimmed = tempName.trim();
-        if (trimmed === "") {
+        if (!trimmed) {
             showToast("폴더 이름을 입력해주세요.");
             return;
         }
@@ -59,161 +93,186 @@ export default function SideNav() {
             return;
         }
 
-        dispatch(renameFolder({ id, name: trimmed }));
-        setEditingId(null);
-    };
-
-    const handleDelete = (id) => {
-        const folder = folders.find((f) => f.id === id);
-        if (!folder) return;
-        if (window.confirm(`"${folder.name}" 폴더를 삭제하시겠습니까?`)) {
-            dispatch(deleteFolder(id)); // recordSlice에서도 감지됨!
-            showToast(`"${folder.name}" 폴더와 그 안의 회의록이 삭제되었습니다.`);
+        try {
+            await dispatch(renameFolderAsync({ id, name: trimmed })).unwrap();
+            showToast("폴더 이름이 변경되었습니다.");
+        } catch {
+            showToast("서버 오류로 이름을 변경할 수 없습니다.");
+        } finally {
+            setEditingId(null);
         }
     };
 
+    // ✅ 폴더 삭제
+    const handleDelete = async (id) => {
+        const folder = folders.find((f) => f.id === id);
+        if (!folder) return;
+
+        if (window.confirm(`"${folder.name}" 폴더를 삭제하시겠습니까?`)) {
+            try {
+                await dispatch(deleteFolderAsync(id)).unwrap();
+                showToast(`"${folder.name}" 폴더가 삭제되었습니다.`);
+            } catch {
+                showToast("폴더 삭제에 실패했습니다.");
+            }
+        }
+    };
 
     return (
-        <aside className="w-64 bg-white border-r h-screen flex flex-col justify-between p-6 relative">
+        <aside className="w-64 bg-white border-r border-gray-200 flex flex-col justify-between">
             <div>
-                <h1
-                    className="text-lg font-semibold mb-8 cursor-pointer"
-                    onClick={() => navigate("/")}
-                >
-                    로그 NOTERI
-                </h1>
+                {/* ✅ 로고 */}
+                <div className="p-5 border-b border-gray-200 flex items-center justify-start">
+                    <Link to="/" className="flex items-center gap-2 group">
+                        <img
+                            src="/assets/NoteRi-Logo.svg"
+                            alt="NoteRi Logo"
+                            className="w-7 h-7 object-contain group-hover:scale-110 transition-transform duration-300"
+                        />
+                        <span className="text-lg font-bold text-[#7E37F9] group-hover:text-[#682be0] transition-colors">
+              NoteR<span className="text-black">i</span>
+            </span>
+                    </Link>
+                </div>
 
-                {/* 기본 메뉴 */}
-                <nav className="flex flex-col gap-3">
-                    <button
-                        onClick={() => navigate("/")}
-                        className="px-4 py-2 rounded-md bg-[#7e37f9] text-white text-sm font-medium"
+                {/* ✅ 녹음 관련 버튼 */}
+                <div className="px-5 py-4 border-b border-gray-200 flex flex-col gap-2">
+                    <Link
+                        to="/record"
+                        className="text-sm font-medium text-gray-700 hover:text-[#7E37F9] flex items-center gap-2"
                     >
-                        모든 녹음
-                    </button>
-
-                    <button
-                        onClick={() => navigate("/new")}
-                        className="px-4 py-2 rounded-md hover:bg-gray-100 text-sm"
+                        🎧 모든 녹음 보기
+                    </Link>
+                    <Link
+                        to="/new"
+                        className="text-sm font-medium text-gray-700 hover:text-[#7E37F9] flex items-center gap-2"
                     >
-                        새 녹음
-                    </button>
-                </nav>
+                        ➕ 새 녹음 시작
+                    </Link>
+                </div>
 
-                {/* 폴더 섹션 */}
-                <div className="mt-8">
-                    <p className="text-xs text-gray-500 mb-2">폴더</p>
-                    <ul className="flex flex-col gap-1">
-                        {folders.map((f) => (
-                            <li
-                                key={f.id}
-                                className="flex items-center justify-between px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-md"
-                            >
-                                {editingId === f.id ? (
-                                    <div className="flex items-center gap-1 flex-1">
-                                        <input
-                                            type="text"
-                                            value={tempName}
-                                            onChange={(e) => setTempName(e.target.value)}
-                                            className="border rounded-md px-2 py-1 text-xs flex-1"
-                                            autoFocus
-                                        />
-                                        <button
-                                            onClick={() => handleRename(f.id)}
-                                            className="text-[#7E37F9] text-xs font-semibold"
-                                        >
-                                            저장
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <>
-                    <span
-                        className="flex-1 cursor-pointer"
-                        onClick={() => navigate(`/folder/${f.id}`)}
-                    >
-                      {f.name}
-                    </span>
-                                        <div className="relative group">
-                                            <button className="text-gray-400 hover:text-gray-600">
-                                                ⋮
-                                            </button>
-
-                                            {/* 드롭다운 메뉴 */}
-                                            <div className="absolute right-0 mt-1 hidden group-hover:block bg-white border border-gray-200 rounded-lg shadow-lg z-50 w-28">
-                                                <button
-                                                    onClick={() => {
-                                                        setEditingId(f.id);
-                                                        setTempName(f.name);
-                                                    }}
-                                                    className="block w-full text-left px-4 py-2 text-xs hover:bg-gray-100"
-                                                >
-                                                    이름 수정
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(f.id)}
-                                                    className="block w-full text-left px-4 py-2 text-xs text-red-500 hover:bg-gray-100"
-                                                >
-                                                    폴더 삭제
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </>
-                                )}
-                            </li>
-                        ))}
-                    </ul>
-
-                    {isAdding ? (
-                        <div className="mt-3 flex items-center gap-1">
+                {/* ✅ 폴더 목록 */}
+                <div className="p-5 border-b border-gray-200 flex justify-between items-center">
+                    <h2 className="text-lg font-semibold text-gray-800">폴더</h2>
+                    {!isAdding ? (
+                        <button
+                            onClick={() => setIsAdding(true)}
+                            className="text-[#7E37F9] text-sm font-medium hover:text-[#682be0]"
+                        >
+                            + 새 폴더
+                        </button>
+                    ) : (
+                        <div className="flex gap-2 items-center">
                             <input
                                 type="text"
                                 value={newFolder}
                                 onChange={(e) => setNewFolder(e.target.value)}
-                                placeholder="새 폴더 이름"
-                                className="border rounded-md px-2 py-1 text-xs flex-1"
+                                className="border rounded px-2 py-1 text-sm w-28 focus:outline-none focus:border-[#7E37F9]"
+                                placeholder="폴더 이름"
                             />
                             <button
                                 onClick={handleAddFolder}
-                                className="text-[#7e37f9] text-xs font-semibold"
+                                className="text-[#7E37F9] text-sm font-semibold"
                             >
-                                추가
+                                저장
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setIsAdding(false);
+                                    setNewFolder("");
+                                }}
+                                className="text-gray-400 text-sm"
+                            >
+                                취소
                             </button>
                         </div>
-                    ) : (
-                        <button
-                            onClick={() => setIsAdding(true)}
-                            className="mt-3 text-xs text-[#7e37f9] hover:underline"
-                        >
-                            + 새 폴더 추가
-                        </button>
                     )}
                 </div>
+
+                <div className="flex-1 overflow-y-auto p-3">
+                    {status === "loading" ? (
+                        <p className="text-sm text-gray-400 mt-4 text-center">불러오는 중...</p>
+                    ) : folders.length === 0 ? (
+                        <p className="text-sm text-gray-400 mt-4 text-center">폴더가 없습니다.</p>
+                    ) : (
+                        folders.map((folder) => (
+                            <div
+                                key={folder.id}
+                                className="group flex items-center justify-between py-2 px-3 rounded-md hover:bg-gray-100"
+                            >
+                                {editingId === folder.id ? (
+                                    <input
+                                        type="text"
+                                        value={tempName}
+                                        onChange={(e) => setTempName(e.target.value)}
+                                        onBlur={() => handleRename(folder.id)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") handleRename(folder.id);
+                                            if (e.key === "Escape") setEditingId(null);
+                                        }}
+                                        className="border-b border-[#7E37F9] bg-transparent w-full text-sm text-gray-800 focus:outline-none"
+                                        autoFocus
+                                    />
+                                ) : (
+                                    <Link
+                                        to={`/folder/${folder.id}`}
+                                        className="flex items-center gap-2 text-sm text-gray-800 truncate hover:text-[#7E37F9]"
+                                    >
+                                        {/* ✅ color 기반 아이콘 */}
+                                        {colorToIcon[folder.color] || (
+                                            <Folder className="w-4 h-4 text-gray-400" />
+                                        )}
+                                        <span>{folder.name}</span>
+                                    </Link>
+                                )}
+
+                                <div className="opacity-0 group-hover:opacity-100 transition flex gap-1">
+                                    <button
+                                        onClick={() => {
+                                            setEditingId(folder.id);
+                                            setTempName(folder.name);
+                                        }}
+                                        className="text-gray-400 hover:text-[#7E37F9] text-xs"
+                                    >
+                                        수정
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete(folder.id)}
+                                        className="text-gray-400 hover:text-red-500 text-xs"
+                                    >
+                                        삭제
+                                    </button>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+
             </div>
 
-            {/* 유저 정보 */}
-            <Link
-                to="/user"
-                className="flex items-center gap-3 border-t pt-3 mt-4 group transition-colors hover:text-[#7E37F9]"
-            >
-                {/* 프로필 이미지 (임시 기본 이미지 or 사용자 이미지로 대체 가능) */}
-                <img
-                    src="https://via.placeholder.com/32"
-                    alt="user profile"
-                    className="w-8 h-8 rounded-full object-cover border border-gray-200 group-hover:border-[#7E37F9] transition"
-                />
+            {/* ✅ 하단 유저 정보 */}
+            <div className="p-4 border-t border-gray-200">
+                <Link
+                    to={user ? "/user" : "/login"}
+                    className="flex items-center gap-3 group transition-colors hover:text-[#7E37F9]"
+                >
+                    <img
+                        src={user?.picture || "https://via.placeholder.com/32"}
+                        alt="user profile"
+                        className="w-8 h-8 rounded-full object-cover border border-gray-200 group-hover:border-[#7E37F9] transition"
+                    />
+                    <div className="flex flex-col text-xs leading-tight">
+            <span className="font-medium text-gray-700 group-hover:text-[#7E37F9]">
+              {user?.nickname || user?.name || "로그인 필요"}
+            </span>
+                        <span className="text-gray-400">
+              {user ? "마이페이지" : "로그인 페이지"}
+            </span>
+                    </div>
+                </Link>
+            </div>
 
-                <div className="flex flex-col text-xs leading-tight">
-    <span className="font-medium text-gray-700 group-hover:text-[#7E37F9]">
-      유저 이름
-    </span>
-                    <span className="text-gray-400">마이페이지</span>
-                </div>
-            </Link>
-
-
-
-            {/* 실패 알림 */}
-            <Toast message={message} onClose={clearToast} />
+            <Toast message={message} clearToast={clearToast} />
         </aside>
     );
 }

@@ -1,6 +1,6 @@
 from sqlalchemy import (
     Column, Integer, String, Date, Text, Boolean,
-    ForeignKey, Enum, Float, JSON, TIMESTAMP, Numeric
+    ForeignKey, Enum, Float, JSON, TIMESTAMP, Numeric, UniqueConstraint
 )
 from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy.sql import func
@@ -22,9 +22,11 @@ class RecordingType(enum.Enum):
     stopped = "stopped"
     saved = "saved"
 
-
-
-
+updated_at = Column(
+    TIMESTAMP(timezone=True),
+    server_default=func.now(),  # 생성 시
+    onupdate=func.now(),   # ORM 업데이트 시 자동
+)
 
 # Users
 class User(Base):
@@ -50,6 +52,8 @@ class User(Base):
     notifications = relationship("Notification", back_populates="user")
     recording_usage = relationship("RecordingUsage", back_populates="user")
     ai_gemini = relationship("AIGemini", back_populates="user")
+    shared_boards = relationship("BoardShare", back_populates="user", cascade="all, delete-orphan")
+
 
 class Subscription(Base):
     __tablename__ = "subscriptions"
@@ -61,6 +65,7 @@ class Subscription(Base):
     end_date = Column(Date, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP, server_default=func.now())
 
     user = relationship("User", back_populates="subscriptions")
     plan = relationship("Plan", back_populates="subscriptions")
@@ -76,7 +81,7 @@ class Plan(Base):
     name = Column(Enum(PlanType), unique=True, nullable=False)  # free, pro, enterprise
     price = Column(Numeric(10, 2), nullable=False, default=0.00)  # ex) 0, 10000, 30000
     duration_days = Column(Integer, nullable=False, default=30)   # 구독 기간 (ex. 30일)
-    allocated_minutes = Column(Integer, nullable=False, default=300)  # 녹음 시간
+    allocated_seconds = Column(Integer, nullable=False, default=18000)  # 녹음 시간
     description = Column(Text)
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, onupdate=func.now())
@@ -112,8 +117,8 @@ class RecordingUsage(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     subscription_id = Column(Integer, ForeignKey("subscriptions.id", ondelete="CASCADE"), nullable=False)
-    allocated_minutes = Column(Integer)
-    used_minutes = Column(Integer, default=0)
+    allocated_seconds = Column(Integer, nullable=True)
+    used_seconds = Column(Integer, nullable=False, default=0)
     period_start = Column(Date, nullable=False)
     period_end = Column(Date, nullable=True)
     created_at = Column(TIMESTAMP)
@@ -150,6 +155,7 @@ class Board(Base):
     invite_token = Column(String, nullable=True)
     invite_role = Column(String, default="editor")
     invite_expires_at = Column(TIMESTAMP, nullable=True)
+    password_hash = Column(String(255), nullable=True)  # ✅ 비밀번호 해시 저장
     created_at = Column(TIMESTAMP)
     updated_at = Column(TIMESTAMP)
 
@@ -160,6 +166,7 @@ class Board(Base):
     audios = relationship("AudioData", back_populates="board", cascade="all, delete-orphan")
     memos = relationship("Memo", back_populates="board", cascade="all, delete-orphan")
     transcripts = relationship("Transcript", back_populates="board", cascade="all, delete-orphan")
+    shared_users = relationship("BoardShare", back_populates="board", cascade="all, delete-orphan")
 
     # 기존 recording_sessions 유지
     recording_sessions = relationship("RecordingSession", back_populates="board")
@@ -319,3 +326,18 @@ class AIGemini(Base):
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), index=True)
 
     user = relationship("User", lazy="joined")
+
+class BoardShare(Base):
+    __tablename__ = "board_shares"
+
+    id = Column(Integer, primary_key=True)
+    board_id = Column(Integer, ForeignKey("boards.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    role = Column(String, default="viewer")  # viewer | editor
+    created_at = Column(TIMESTAMP, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("board_id", "user_id", name="uq_board_shares_board_user"),
+    )
+    board = relationship("Board", back_populates="shared_users")
+    user = relationship("User", back_populates="shared_boards")

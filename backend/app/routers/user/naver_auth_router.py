@@ -151,3 +151,4 @@ def naver_rejoin(
             "picture": current_user.picture,
         }
     })
+

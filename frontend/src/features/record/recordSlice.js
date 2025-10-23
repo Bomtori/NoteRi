@@ -1,6 +1,5 @@
 // src/features/record/recordSlice.js
 import { createSlice, nanoid } from "@reduxjs/toolkit";
-import { deleteFolder } from "../folder/folderSlice";
 import { mockRecords } from "../../mock/records"; // ✅ 실제 목데이터 import
 
 const initialState = {
@@ -58,14 +57,6 @@ const recordSlice = createSlice({
             state.records = action.payload;
         },
 
-    },
-    extraReducers: (builder) => {
-        builder.addCase(deleteFolder, (state, action) => {
-            const deletedFolderId = action.payload; // 삭제된 폴더 ID 기준
-            state.records = state.records.filter(
-                (r) => r.folder_id !== deletedFolderId
-            );
-        });
     },
 
 });

@@ -7,7 +7,7 @@ from jose import JWTError, jwt
 ACCESS_SECRET_KEY = os.getenv("ACCESS_SECRET_KEY")
 REFRESH_SECRET_KEY = os.getenv("REFRESH_SECRET_KEY")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 120   # 2시간
+ACCESS_TOKEN_EXPIRE_MINUTES = 60   # 1시간
 REFRESH_TOKEN_EXPIRE_DAYS = 14      # 2주
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None):

@@ -67,8 +67,14 @@ async def run_diarization_for_session(session_id: int):
 
 
 def _normalize_speaker_label(label: str) -> str:
-    """pyannote 'SPEAKER_00' → 'speaker00' 형식 변환"""
-    return label.replace("SPEAKER_", "speaker").zfill(2)
+    """pyannote 'SPEAKER_00' → 'speaker00' 형식 변환(숫자 2자리 패딩)"""
+    if not label:
+        return "speaker99"
+    # 일반 케이스: "SPEAKER_00", "SPEAKER_0", "SPEAKER_12"
+    m = re.search(r'(\d+)$', label)
+    if m:
+        return f"speaker{int(m.group(1)):02d}"
+    return "speaker99"
 
 def _update_results_with_labels(db: Session, session_id:int, diar_turns):
     rows = (

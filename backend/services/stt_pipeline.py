@@ -135,23 +135,22 @@ class STTPipeline:
         await self._start_session(websocket, source="manual")
         logger.info(f"🟢 Session begun: sid={self.sid}, summary loop started. (manual)")
 
-    async def end_session(self):
+    async def end_session(self, run_diarization: bool = True):
         """WS 종료 직전 호출: 마지막 구간 요약 flush & 타이머 종료."""
         try:
-            # ★ 종료 전에 최종 요약을 반드시 생성/전송
-            await self.flush_final_summary()
-            # 전송이 이벤트 루프에 스케줄될 수 있도록 아주 짧게 양보
-            await asyncio.sleep(0.05)
-        except Exception as e:
-            logger.warning(f"flush on end_session failed: {e}")
+            # flush_final_summary는 websocket 쪽에서 이미 실행함 → 제거
+            pass
+        except Exception:
+            pass
 
-        # ✅ 녹음 종료 시각 기록 (메타 HASH: ended_at_ms)
+        # ✅ Redis 메타 종료
         if self.sid:
             try:
                 await end_session_meta(self.sid, prefix=self.redis_prefix)
             except Exception as e:
                 logger.warning(f"end_session_meta failed: {e}")
 
+        # ✅ 요약 task 중단
         if self.summary_task and not self.summary_task.done():
             self.summary_task.cancel()
             try:
@@ -163,40 +162,33 @@ class STTPipeline:
         self.session_active = False
         self.ws = None
         logger.info("🔴 Session ended: summary loop stopped.")
-
         self.reset_all()
 
-        # ✅ 종료 후 Redis→Postgres 적재 (이벤트 루프 블로킹 방지: 스레드로 실행)
-        session_id = None  # ✅ 추가
-        
+        # ✅ Redis → Postgres 적재 (to_thread로 블로킹 방지)
+        session_id = None
         if self.sid and self.redis_prefix:
             try:
-                session_id = await asyncio.to_thread(ingest_one_session, self.redis_prefix, self.sid)
-                self.last_session_id = session_id          # 👈 프론트에서 참조할 수 있게 보관(선택)
-                # 필요하면 Redis에도 써두기(세션 id 조회용)
-                try:
-                    from backend.app.util.redis_client import get_redis
-                    r = await get_redis()
-                    await r.setex(f"stt:last_session_id:{self.sid}", 3600, str(session_id))
-                except Exception as _:
-                    pass
+                session_id = await asyncio.to_thread(
+                    ingest_one_session, self.redis_prefix, self.sid
+                )
+                self.last_session_id = session_id
 
-                # ✅ 세션ID를 SID 키로 1시간 보관 → 프론트가 by-sid로 정확히 찾게 함
-                try:
-                    from backend.app.util.redis_client import get_redis
-                    r = await get_redis()
-                    await r.setex(f"stt:last_session_id:{self.sid}", 3600, str(session_id))
-                except Exception:
-                    logger.warning("failed to cache last_session_id in redis")
+                # Redis 캐시 (한 번만!)
+                from backend.app.util.redis_client import get_redis
+                r = await get_redis()
+                await r.setex(f"stt:last_session_id:{self.sid}", 3600, str(session_id))
 
-                logger.info(f"[DB] Redis→Postgres ingest done. sid={self.sid}, session_id={session_id}")
+                logger.info(f"[DB] Ingest done. sid={self.sid}, session_id={session_id}")
             except Exception as e:
                 logger.warning(f"[DB] ingest failed for sid={self.sid}: {e}")
-        try:
-            await run_diarization_for_session(session_id)
-            logger.info(f"🗣️ Diarization done for session_id={session_id}")
-        except Exception as e:
-            logger.warning(f"diarization failed: {e}")
+
+        # ✅ 화자분리는 run_diarization=False일 때는 건너뜀
+        if run_diarization and session_id:
+            try:
+                asyncio.create_task(run_diarization_for_session(session_id))
+                logger.info(f"🗣️ Diarization started for session_id={session_id}")
+            except Exception as e:
+                logger.warning(f"diarization failed: {e}")
 
     # ---------------------------------------------------------------------
     # 내부 타이머 루프 & 요약 로직
@@ -354,16 +346,17 @@ class STTPipeline:
                 self.paragraph_buffer.append((time.time(), finalized))
                 logger.info(f"Finalized (silence): {finalized}")
 
-                # ✅ Redis로 확정 히스토리 적재
+                # ✅ Redis로 확정 히스토리 적재 (이 블록은 finalized가 있을 때만 실행돼야 함)
                 if self.sid:
                     try:
-                        # 절대 타임라인: 세션 시작부터의 월클락을 end로, STT 구간 길이로 start를 역산
-                        now_ms = int(((time.time() - (self.session_start_ts or time.time())) * 1000))
-                        dur_ms = 0
+                        # whisper segment의 절대시간(초)을 ms 단위로 변환
                         if (self._utt_min_start is not None) and (self._utt_max_end is not None):
-                            dur_ms = max(0, int((self._utt_max_end - self._utt_min_start) * 1000))
-                        ts_end_ms = now_ms
-                        ts_start_ms = max(0, ts_end_ms - dur_ms)                       
+                            ts_start_ms = int(self._utt_min_start * 1000)
+                            ts_end_ms   = int(self._utt_max_end * 1000)
+                        else:
+                            # fallback (무음 등 segment 정보 없음)
+                            now_ms = int(((time.time() - (self.session_start_ts or time.time())) * 1000))
+                            ts_start_ms, ts_end_ms = now_ms, now_ms
 
                         await publish_segment(
                             sid=self.sid,
@@ -373,13 +366,16 @@ class STTPipeline:
                             ts_start_ms=ts_start_ms,
                             ts_end_ms=ts_end_ms,
                         )
-                        # 문장 하나 확정했으니 누적 범위 리셋  
+
+                        # 문장 하나 확정했으니 누적 범위 리셋
                         self._utt_min_start = None
                         self._utt_max_end = None
+
                     except Exception as e:
                         logger.warning(f"publish_segment failed(silence): {e}")
 
-            return  # ✅ 중요: 무음 분기에서는 여기서 종료
+            # ✅ 중요: 무음 분기에서는 여기서 종료
+            return
 
         # === 2. STT 실행 (segments 반환) ===
         segments = await asyncio.to_thread(self.stt.feed, data, True)
@@ -427,12 +423,14 @@ class STTPipeline:
 
             if self.sid:
                 try:
-                    now_ms = int(((time.time() - (self.session_start_ts or time.time())) * 1000))
-                    dur_ms = 0
+                    # whisper segment의 절대시간(초)을 ms 단위로 변환
                     if (self._utt_min_start is not None) and (self._utt_max_end is not None):
-                        dur_ms = max(0, int((self._utt_max_end - self._utt_min_start) * 1000))
-                    ts_end_ms = now_ms
-                    ts_start_ms = max(0, ts_end_ms - dur_ms)
+                        ts_start_ms = int(self._utt_min_start * 1000)
+                        ts_end_ms   = int(self._utt_max_end * 1000)
+                    else:
+                        # fallback (무음 등 segment 정보 없음)
+                        now_ms = int(((time.time() - (self.session_start_ts or time.time())) * 1000))
+                        ts_start_ms, ts_end_ms = now_ms, now_ms
 
                     await publish_segment(
                         sid=self.sid,
@@ -442,13 +440,12 @@ class STTPipeline:
                         ts_start_ms=ts_start_ms,
                         ts_end_ms=ts_end_ms,
                     )
+
                     # 확정 후 누적 범위 리셋
                     self._utt_min_start = None
                     self._utt_max_end = None
                 except Exception as e:
                     logger.warning(f"publish_segment failed: {e}")
-
-        logger.debug(f"Deduped Text: {raw_text}")
 
     # ---------------------------------------------------------------------
     # 상태 초기화/저장
@@ -546,3 +543,5 @@ class STTPipeline:
             logger.info(f"🔖 Saved audio metadata to Redis for sid={self.sid}")
         except Exception as e:
             logger.warning(f"⚠️ Failed to write audio metadata to Redis: {e}")
+        
+        return {"filepath": filepath, "duration": duration}

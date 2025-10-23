@@ -8,9 +8,9 @@ from backend.app.model import User
 from backend.app.schemas.recording_usage_schema import RecordingUseRequest, RecordingUseResponse
 from backend.app.crud import recording_usage_crud
 
-router = APIRouter(prefix="/recordings", tags=["recordings"])
+router = APIRouter(prefix="/recordings/usage", tags=["recordings"])
 
-@router.post("/use", response_model=RecordingUseResponse)
+@router.post("/use/{audio_id}", response_model=RecordingUseResponse)
 def use_by_audio_owner(
     audio_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),

@@ -79,51 +79,22 @@ def get_payment_last_5_years_by_plan(db: Session):
         joins=JOINS, where=WHERE
     )
 
-def get_my_payments(
-    db: Session,
-    *,
-    user_id: int,
-    date_from=None,
-    date_to=None,            # 반열림: approved_at < date_to
-    statuses: list[str] | None = None,
-    sort_by: str = "approved_at",
-    sort_dir: str = "desc",
-    limit: int = 20,
-    offset: int = 0,
-):
+def get_my_payments(db: Session, *, user_id: int):
     q = (
-        db.query(
-            Payment,
-            Plan.name.label("plan_name"),
-        )
+        db.query(Payment)
         .join(Subscription, Subscription.id == Payment.subscription_id, isouter=True)
         .join(Plan, Plan.id == Subscription.plan_id, isouter=True)
         .filter(Payment.user_id == user_id)
+        .order_by(Payment.approved_at.desc())
     )
 
-    if statuses:
-        q = q.filter(Payment.status.in_(statuses))
-    if date_from:
-        q = q.filter(Payment.approved_at >= date_from)
-    if date_to:
-        q = q.filter(Payment.approved_at < date_to)  # 반열림
+    payments = q.all()
 
-    # total
-    total = q.with_entities(func.count()).scalar() or 0
+    # plan_name 관계 접근으로 주입
+    for p in payments:
+        p.plan_name = p.subscription.plan.name if p.subscription and p.subscription.plan else None
 
-    # sort
-    sort_col = Payment.approved_at if sort_by == "approved_at" else Payment.created_at
-    q = q.order_by(asc(sort_col) if sort_dir == "asc" else desc(sort_col))
-
-    rows = q.limit(limit).offset(offset).all()
-
-    # rows는 (Payment, plan_name) 튜플 → Payment 객체에 동적으로 attr 부여
-    items = []
-    for payment, plan_name in rows:
-        setattr(payment, "plan_name", plan_name)
-        items.append(payment)
-
-    return total, items
+    return payments
 
 
 def get_my_payment_detail(db: Session, user_id: int, payment_id: int):

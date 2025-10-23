@@ -64,14 +64,20 @@ class Subscription(Base):
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=True)
     is_active = Column(Boolean, default=True)
-    created_at = Column(TIMESTAMP, server_default=func.now())
-    updated_at = Column(TIMESTAMP, server_default=func.now())
+
+    # ✅ 자동결제 관련 필드
+    auto_renew = Column(Boolean, nullable=False, server_default="true")          # 자동갱신 여부
+    billing_key = Column(String(200), nullable=True)                             # 토스 billingKey
+    customer_key = Column(String(100), nullable=True)                            # 토스 customerKey
+    next_renew_on = Column(Date, nullable=True)                                  # 다음 결제일 (보통 end_date)
+
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 
     user = relationship("User", back_populates="subscriptions")
     plan = relationship("Plan", back_populates="subscriptions")
     recording_usage = relationship("RecordingUsage", back_populates="subscription")
     payments = relationship("Payment", back_populates="subscription", cascade="all, delete")
-
 
 # ✅ 플랜 정보 (가격, 시간 등)
 class Plan(Base):
@@ -263,7 +269,6 @@ class Summary(Base):
     recording_session_id = Column(Integer, ForeignKey("recording_sessions.id", ondelete="CASCADE"), nullable=False)
     summary_type = Column(String)                      # 'interval' | 'final' 등
     content = Column(Text, nullable=False)
-    rating = Column(Boolean)                           # 선택: 사용자 평점/북마크 등
     # 선택: 구간 요약 및 로깅 메타
     interval_start_at = Column(TIMESTAMP, nullable=True)
     interval_end_at   = Column(TIMESTAMP, nullable=True)

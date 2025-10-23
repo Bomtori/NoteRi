@@ -7,7 +7,7 @@ from typing import Optional, List, Tuple
 import httpx
 import base64
 from pydantic import BaseModel
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from sqlalchemy.orm import Session
 
 from backend.app.deps.auth import get_current_user
@@ -15,7 +15,7 @@ from backend.app.model import User
 from backend.app.db import get_db
 from backend.app.model import Subscription, PlanType, Plan, Payment
 from backend.app.schemas.payment_schema import PaymentListResponse, PaymentItem
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, UTC
 from backend.app.crud import recording_usage_crud
 from backend.app.crud.payment_crud import (
     get_payment_today_by_plan,
@@ -100,36 +100,31 @@ def request_payment(
 async def confirm_payment(
     req: PaymentConfirmRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    # ----- ① 토스 결제 승인 -----
+    # ① 토스 결제 승인
     url = "https://api.tosspayments.com/v1/payments/confirm"
-
-    encoded_secret = base64.b64encode(f"{TOSS_SECRET_KEY}:".encode()).decode()
-    headers = {"Authorization": f"Basic {encoded_secret}", "Content-Type": "application/json"}
+    encoded = base64.b64encode(f"{TOSS_SECRET_KEY}:".encode()).decode()
+    headers = {"Authorization": f"Basic {encoded}", "Content-Type": "application/json"}
     data = {"paymentKey": req.paymentKey, "orderId": req.orderId, "amount": req.amount}
 
     async with httpx.AsyncClient() as client:
-        response = await client.post(url, json=data, headers=headers)
+        resp = await client.post(url, json=data, headers=headers)
 
-    if response.status_code != 200:
-        raise HTTPException(status_code=response.status_code, detail=response.json())
+    if resp.status_code != 200:
+        raise HTTPException(status_code=resp.status_code, detail=resp.json())
 
-    payment_result = response.json()
+    payment_result = resp.json()
 
-    # ----- (옵션) 멱등성: 같은 orderId로 이미 성공 기록이 있다면 바로 응답 -----
+    # ② 멱등성
     already = (
         db.query(Payment)
         .filter(Payment.order_id == req.orderId, Payment.status.in_(["SUCCESS", "DONE"]))
         .first()
     )
     if already:
-        sub = (
-            db.query(Subscription)
-            .filter(Subscription.user_id == current_user.id)
-            .first()
-        )
-        plan = db.query(Plan).filter(Plan.id == sub.plan_id).first() if sub else None
+        sub = db.query(Subscription).filter(Subscription.user_id == current_user.id).first()
+        plan = db.query(Plan).get(sub.plan_id) if sub else None
         return {
             "message": "Payment already processed",
             "subscription": {
@@ -147,58 +142,59 @@ async def confirm_payment(
             },
         }
 
-    # ----- ② 플랜 조회 -----
+    # ③ 플랜 조회
     plan = db.query(Plan).filter(Plan.name == req.plan_name).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Invalid plan")
 
-    # ----- ③ 구독 '수정' (없으면 생성) -----
-    sub = (
-        db.query(Subscription)
-        .filter(Subscription.user_id == current_user.id)
-        .first()
-    )
+    # ④ 구독 upsert
+    billing_key = payment_result.get("billingKey")
+    customer_key = payment_result.get("customerKey")
 
-
+    sub = db.query(Subscription).filter(Subscription.user_id == current_user.id).first()
     today = date.today()
     new_end = today + timedelta(days=plan.duration_days)
 
     if sub:
-        # ✅ 기존 구독 업데이트
         sub.plan_id = plan.id
         sub.start_date = today
         sub.end_date = new_end
-        sub.is_active = True  # 결제 성공 시 자동갱신/활성화 정책에 맞게 조정
-        # (auto_renew / next_renew_on 같은 컬럼을 쓰신다면 여기서 함께 갱신)
-        db.commit()
-        db.refresh(sub)
+        sub.is_active = True
+        sub.auto_renew = True
+        if billing_key:
+            sub.billing_key = billing_key
+        if customer_key:
+            sub.customer_key = customer_key
+        sub.next_renew_on = new_end
     else:
-        # ✅ 첫 결제인 경우만 새로 생성 (안전 upsert)
         sub = Subscription(
             user_id=current_user.id,
             plan_id=plan.id,
             start_date=today,
             end_date=new_end,
             is_active=True,
+            auto_renew=True,
+            billing_key=billing_key,
+            customer_key=customer_key,
+            next_renew_on=new_end,
         )
         db.add(sub)
-        db.commit()
-        db.refresh(sub)
 
-    # ----- ④ 녹음 사용량 초기화/갱신 -----
+    db.commit()
+    db.refresh(sub)
+
+    # ⑤ 사용량 갱신
     recording_usage_crud.create_or_update_usage(db, current_user.id, sub)
 
-    # ----- ⑤ 결제 내역 기록 -----
+    # ⑥ 결제 레코드
     new_payment = Payment(
         user_id=current_user.id,
         subscription_id=sub.id,
         order_id=req.orderId,
         amount=req.amount,
-        method=payment_result.get("method", ""),
-
+        method=payment_result.get("method", "") or "",
         status=payment_result.get("status", "") or "SUCCESS",
         transaction_key=payment_result.get("transactionKey") or None,
-
         approved_at=payment_result.get("approvedAt"),
         fail_reason=payment_result.get("failReason"),
         raw_response=payment_result,
@@ -207,7 +203,7 @@ async def confirm_payment(
     db.commit()
     db.refresh(new_payment)
 
-    # ----- ⑥ 응답 -----
+    # ⑦ 응답
     return {
         "message": "Payment successful",
         "subscription": {
@@ -218,7 +214,8 @@ async def confirm_payment(
             "is_active": sub.is_active,
         },
         "usage": {
-            "allocated_minutes": sub.plan.allocated_minutes,
+            # 프로젝트 모델에 맞춰 seconds/minutes 중 선택
+            "allocated_seconds": sub.plan.allocated_seconds,
             "duration_days": sub.plan.duration_days,
         },
         "payment": {

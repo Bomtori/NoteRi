@@ -47,6 +47,7 @@ async def get_user_me(
         "picture": current_user.picture,
         "oauth_provider": current_user.oauth_provider,
         "is_active": current_user.is_active,
+        "role" : current_user.role,
         "created_at": current_user.created_at,
         "updated_at": current_user.updated_at,
         "plan_name": plan_name,

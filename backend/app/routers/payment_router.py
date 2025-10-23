@@ -286,57 +286,29 @@ def last_5_years(db: Session = Depends(get_db)):
         logger.exception("GET /payments/last-5-years failed")
         raise HTTPException(status_code=500, detail="PAYMENTS_LAST_5_YEARS_FAILED")
 
-@router.get("/me", response_model=PaymentListResponse)
-def list_my_payments(
+@router.get("/me", response_model=list[PaymentItem])
+def list_my_payments_simple(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    # 필터
-    date_from: Optional[date] = Query(None, description="포함(inclusive) 시작일"),
-    date_to: Optional[date] = Query(None, description="포함(inclusive) 종료일"),
-    status: Optional[str] = Query("SUCCESS", description="예: SUCCESS | SUCCESS,FAIL"),
-    # 정렬/페이지네이션
-    sort_by: str = Query(SortBy.APPROVED_AT, regex="^(approved_at|created_at)$"),
-    sort_dir: str = Query("desc", regex="^(asc|desc)$"),
-    limit: int = Query(20, ge=1, le=100),
-    offset: int = Query(0, ge=0),
 ):
     """
-    - 날짜 필터는 [date_from, date_to] 둘 다 '포함'으로 처리.
-      구현 편의상 CRUD에서 date_to+1을 '미만'(<)으로 넘겨 주면 안전함.
-    - status는 콤마로 여러 개 허용.
-    - sort_by: approved_at|created_at / sort_dir: asc|desc
+    로그인한 사용자의 모든 결제 내역을 단순 리스트로 반환.
+    (정렬: 최신 결제 순)
     """
-    statuses = _parse_statuses(status)
-
-    # inclusive end → half-open [from, to+1)
-    date_to_exclusive = (date_to + timedelta(days=1)) if date_to else None
-
-    total, items = get_my_payments(
-        db,
-        user_id=current_user.id,
-        date_from=date_from,
-        date_to=date_to_exclusive,   # CRUD에서는 < date_to_exclusive 로 처리
-        statuses=statuses,           # 기존 단일 status -> 복수 허용으로 확장
-        sort_by=sort_by,
-        sort_dir=sort_dir,
-        limit=limit,
-        offset=offset,
+    payments = (
+        db.query(Payment)
+        .join(Subscription, Subscription.id == Payment.subscription_id, isouter=True)
+        .join(Plan, Plan.id == Subscription.plan_id, isouter=True)
+        .filter(Payment.user_id == current_user.id)
+        .order_by(Payment.approved_at.desc())
+        .all()
     )
 
-    # Pydantic 매핑 (from_attributes=True 전제)
-    items_payload = [PaymentItem.model_validate(p) for p in items]
+    # plan_name을 Payment 객체에 주입 (조인 라벨 대신)
+    for p in payments:
+        p.plan_name = p.subscription.plan.name if p.subscription and p.subscription.plan else None
 
-    # 다음 페이지 계산
-    next_offset = offset + len(items_payload)
-    has_more = next_offset < total
-
-    return PaymentListResponse(
-        total=total,
-        items=items_payload,
-        has_more=has_more,
-        next_offset=next_offset if has_more else None,
-    )
-
+    return [PaymentItem.model_validate(p) for p in payments]
 
 @router.get("/me/{payment_id}", response_model=PaymentItem)
 def get_my_payment(

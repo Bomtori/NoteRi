@@ -1,3 +1,4 @@
+# backend/app/schemas/recording_session.py
 from __future__ import annotations
 from typing import Optional, List
 from datetime import datetime

@@ -75,3 +75,7 @@ def mom(db: Session = Depends(get_db)):
 @router.get("/yoy")
 def yoy(db: Session = Depends(get_db)):
     return user_crud.get_yoy_signup_growth(db)
+
+@router.get("/away/count")
+def get_inactive_stats(db: Session = Depends(get_db)):
+    return user_crud.inactive_stats_last_6_months(db)

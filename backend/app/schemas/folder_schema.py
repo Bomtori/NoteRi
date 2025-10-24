@@ -1,22 +1,42 @@
-from pydantic import BaseModel
+from __future__ import annotations
+
+from pydantic import BaseModel, Field, constr, validator
 from typing import Optional, List
 from datetime import datetime
 
+# ---------- Create / Update ----------
+
 class FolderCreate(BaseModel):
-    name: str
-    parent_id: Optional[int] = None
+    name: constr(strip_whitespace=True, min_length=1)
+    parent_id: Optional[int] = Field(default=None, ge=1)
+    color: Optional[constr(pattern=r"^#[0-9A-Fa-f]{6}$")] = None
+
+    @validator("name")
+    def name_not_empty(cls, v):
+        if not v.strip():
+            raise ValueError("이름은 비어 있을 수 없습니다.")
+        return v
 
 class FolderUpdate(BaseModel):
-    name: Optional[str] = None
-    parent_id: Optional[int] = None
-    color : Optional[str] = None
+    name: Optional[constr(strip_whitespace=True, min_length=1)] = None
+    parent_id: Optional[int] = Field(default=None, ge=1)
+    color: Optional[constr(pattern=r"^#[0-9A-Fa-f]{6}$")] = None
+
+    @validator("name")
+    def name_not_empty_if_given(cls, v):
+        if v is not None and not v.strip():
+            raise ValueError("이름은 비어 있을 수 없습니다.")
+        return v
+
+# ---------- Responses ----------
 
 class FolderResponse(BaseModel):
     id: int
     name: str
-    parent_id: Optional[int]
-    created_at: Optional[datetime]
-    updated_at: Optional[datetime]
+    parent_id: Optional[int] = None
+    color: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         orm_mode = True
@@ -33,4 +53,4 @@ class FolderBase(BaseModel):
         orm_mode = True
 
 class FolderTree(FolderBase):
-    children: list["FolderTree"] = []  # 재귀 구조
+    children: List["FolderTree"] = Field(default_factory=list)

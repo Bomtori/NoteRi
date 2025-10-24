@@ -8,7 +8,6 @@ from backend.app.deps.auth import get_current_user
 from backend.app.model import User, Folder  # 타입 힌트용
 from typing import Optional
 
-
 router = APIRouter(prefix="/folders", tags=["folders"])
 
 
@@ -22,14 +21,15 @@ def create_folder(
     return crud.create_folder(db, folder, current_user)
 
 # Read all
+
 @router.get("/", response_model=schemas.FolderListResponse)
 def read_folders(
     skip: int = 0,
-    limit: Optional[int] = None, # 🍒 10.24 front /DB에 20개 폴더가 있어도 10개만 반환됨 수정
+    limit: Optional[int] = None,  # ✅ 올바른 문법
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    folders = crud.get_folders(db, user_id=current_user.id, skip=skip, limit=limit)
+    folders = crud.get_folders(db, current_user, skip=skip, limit=limit)
     return {"folders": folders}
 
 # Read one
@@ -60,19 +60,6 @@ def update_folder(folder_id: int, folder_update: schemas.FolderUpdate, db: Sessi
     folder = db.query(Folder).filter(Folder.id == folder_id, Folder.user_id == current_user.id).first()
     if not folder:
         raise HTTPException(status_code=404, detail="Folder not found")
-
-    # if folder_update.name:
-    #     folder.name = folder_update.name
-    # if folder_update.color:
-    #     folder.color = folder_update.color
-    # 🍒 10.24 front/ 컬럼누락, 관계직렬화 에러 수정 | 필요한 필드만 업데이트
-    if folder_update.name is not None:
-        folder.name = folder_update.name
-    if folder_update.color is not None:
-        folder.color = folder_update.color
-
-    db.commit()
-    db.refresh(folder)
     return folder
 
 # Delete

@@ -2,12 +2,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
-
+from backend.app.deps.guest import get_principal
+from backend.app.util.access import can_read_board
 from backend.app.schemas import board_schema as schemas
 from backend.app.db import get_db
 from backend.app.crud import board_crud as crud
 from backend.app.deps.auth import get_current_user
-from backend.app.model import User
+from backend.app.model import User, Board
 from pydantic import BaseModel, StringConstraints
 from typing import Annotated
 
@@ -37,10 +38,20 @@ def read_board_recent(limit: int = 3, db: Session = Depends(get_db), current_use
 
 # Read one
 @router.get("/{board_id}", response_model=schemas.BoardResponse)
-def read_board(board_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    board = crud.get_board(db, current_user.id, board_id)
-    if not board:
+def read_board(
+    board_id: int,
+    db: Session = Depends(get_db),
+    principal = Depends(get_principal),  # ✅ 게스트/유저 공통 허용
+):
+    # 권한 체크
+    if not can_read_board(db, board_id, principal):
+        # 권한/존재 모호화 위해 404
         raise HTTPException(status_code=404, detail="Board not found or no permission")
+
+    # 게스트도 통과했으므로 직접 보드 로드 후 반환
+    board = db.query(Board).filter(Board.id == board_id).first()
+    if not board:
+        raise HTTPException(status_code=404, detail="Board not found")
     return board
 
 # Update

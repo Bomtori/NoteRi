@@ -1,0 +1,26 @@
+# backend/app/access.py
+from sqlalchemy.orm import Session
+import backend.app.model as model
+
+def can_read_board(db: Session, board_id: int, principal) -> bool:
+    if not principal:
+        return False
+
+    board = db.query(model.Board).filter(model.Board.id == board_id).first()
+    if not board:
+        return False
+
+    if principal["type"] == "guest":
+        return int(principal.get("board_id") or 0) == int(board_id)
+
+    # user
+    uid = principal["id"]
+    if board.owner_id == uid:
+        return True
+    share = (
+        db.query(model.BoardShare)
+          .filter(model.BoardShare.board_id == board_id,
+                  model.BoardShare.user_id == uid)
+          .first()
+    )
+    return bool(share)

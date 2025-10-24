@@ -19,6 +19,9 @@ from backend.ml.postprocess.timestamp_deduplicator import TimestampDeduplicator
 from backend.ml.summarizer import ThreeLineSummarizer
 from backend.config import VAD_THRESHOLD, VAD_SAMPLE_RATE
 from backend.services.diarization import run_diarization_for_session
+from backend.app.tasks.final_summary import build_final_summary, persist_final_summary
+from backend.ml.postprocess.text_cleaner import normalize_transcript_lines, TextCleaner
+
 
 # ✅ Redis 퍼블리셔 (요구사항 반영: session_id 필드 미사용, raw_text/speaker_label 사용)
 from backend.app.util.redis_publisher import (
@@ -189,6 +192,34 @@ class STTPipeline:
                 logger.info(f"🗣️ Diarization started for session_id={session_id}")
             except Exception as e:
                 logger.warning(f"diarization failed: {e}")
+
+        """
+        세션 종료 시: 메모리 버퍼 -> Qwen 전체 요약 -> PostgreSQL 저장
+        """
+            # ① 전체 문장 취합 (확정 + 남은 버퍼)
+        all_lines: list[str] = []
+        all_lines.extend(getattr(self, "paragraph_buffer", []))
+        # segmenter에 남은 미확정 조각이 있으면 포함
+        seg = getattr(self, "segmenter", None)
+        if seg and getattr(seg, "buffer", ""):
+            all_lines.append(seg.buffer)
+
+        if not all_lines:
+            # 더 이상 처리할 내용이 없으면 조용히 종료
+            return
+
+        # ② 요약 생성 (Qwen, Redis 비경유)
+        final_summary = await build_final_summary(all_lines)
+
+        # ③ DB 저장 (세션 시작 시 만들어 둔 recording_session_id 사용)
+        session_id = getattr(self, "session_db_id", None)
+        if session_id is not None:
+            cleaned_text = "\n".join(normalize_transcript_lines(all_lines, cleaner=TextCleaner()))
+            persist_final_summary(
+                recording_session_id=session_id,
+                summary_json=final_summary,
+                raw_text=cleaned_text
+        )
 
     # ---------------------------------------------------------------------
     # 내부 타이머 루프 & 요약 로직

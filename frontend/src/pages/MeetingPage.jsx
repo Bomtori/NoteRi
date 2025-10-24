@@ -20,6 +20,7 @@ export default function MeetingPage() {
   const [speakers, setSpeakers] = useState([]);
   const [merged, setMerged] = useState([]);
   const [sessionId, setSessionId] = useState(null);
+  const [finalSummary, setFinalSummary] = useState(null);
 
   // idle | recording | paused
   const [recordingState, setRecordingState] = useState("idle");
@@ -195,6 +196,19 @@ export default function MeetingPage() {
             console.log("✅ 세션 매핑 완료:", data.id);
             setSessionId(data.id);
             setPendingMapping(false);
+            // ✅ 전체 요약 자동 불러오기 시도
+            try {
+              const summaryRes = await fetch(`${API_BASE}/summaries/by-session/${data.id}`);
+              if (summaryRes.ok) {
+                const summaryData = await summaryRes.json();
+                setFinalSummary(summaryData);
+                console.log("🧾 Final summary loaded:", summaryData);
+              } else {
+                console.warn("⚠️ no final summary yet", summaryRes.status);
+              }
+            } catch (err) {
+              console.warn("⚠️ final summary fetch failed:", err);
+            }
             break;
           } else {
             console.warn("by-sid unexpected status:", res.status);
@@ -393,6 +407,36 @@ export default function MeetingPage() {
           </div>
         ) : (
           <p className="text-gray-500">병합 결과 없음</p>
+        )}
+      </div>
+      {/* 전체 요약 */}
+      <div className="p-4 border bg-white rounded shadow max-h-60 overflow-y-auto">
+        <h2 className="font-semibold mb-2">🧾 전체 요약</h2>
+        {finalSummary ? (
+          <div className="space-y-2">
+            {finalSummary.title && <p className="font-bold text-lg">{finalSummary.title}</p>}
+            {finalSummary.bullets?.length ? (
+              <ul className="list-disc pl-5 space-y-1 text-gray-800">
+                {finalSummary.bullets.map((b, i) => (
+                  <li key={i}>{b}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-gray-500">내용이 없습니다.</p>
+            )}
+            {finalSummary.actions?.length ? (
+              <div className="mt-3">
+                <p className="font-semibold">📌 후속 조치</p>
+                <ul className="list-disc pl-5 space-y-1 text-gray-700">
+                  {finalSummary.actions.map((a, i) => (
+                    <li key={i}>{a}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <p className="text-gray-500">아직 전체 요약이 없습니다.</p>
         )}
       </div>
     </div>

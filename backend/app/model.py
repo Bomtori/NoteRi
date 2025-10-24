@@ -140,14 +140,15 @@ class Folder(Base):
     parent_id = Column(Integer, ForeignKey("folders.id"))
     name = Column(String, nullable=False)
     color = Column(String(7), nullable=True, default="#7E36F9")
-    created_at = Column(TIMESTAMP)
-    updated_at = Column(TIMESTAMP)
+    # created_at = Column(TIMESTAMP)
+    # updated_at = Column(TIMESTAMP)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())# 🍒 10.24 front/ 폴더정렬에러로 수정 수정 시 자동 업데이트
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
 
     owner = relationship("User", back_populates="folders")
     boards = relationship("Board", back_populates="folder")
     children = relationship("Folder", backref="parent", remote_side="Folder.id")
-
 
 # Boards
 class Board(Base):
@@ -360,3 +361,22 @@ class RecordingUsageLog(Base):
     after_used = Column(Integer, nullable=False)
     reason = Column(String(50), nullable=True)  # "audio_duration"
     created_at = Column(TIMESTAMP, server_default=func.now())
+
+# Final Summaries
+class FinalSummary(Base):
+    __tablename__ = "final_summaries"
+
+    id = Column(Integer, primary_key=True)
+    recording_session_id = Column(
+        Integer,
+        ForeignKey("recording_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    title = Column(String(255))
+    bullets = Column(JSON)  # 핵심 요약 리스트
+    actions = Column(JSON)  # 후속 조치 리스트
+    content = Column(Text)  # 전체 원문 텍스트
+    created_at = Column(TIMESTAMP, server_default=func.now())
+
+    # 관계 (RecordingSession ↔ FinalSummary: 1:N 가능)
+    session = relationship("RecordingSession", backref="final_summaries")

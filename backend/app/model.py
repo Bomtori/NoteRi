@@ -64,14 +64,20 @@ class Subscription(Base):
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=True)
     is_active = Column(Boolean, default=True)
-    created_at = Column(TIMESTAMP, server_default=func.now())
-    updated_at = Column(TIMESTAMP, server_default=func.now())
+
+    # ✅ 자동결제 관련 필드
+    auto_renew = Column(Boolean, nullable=False, server_default="true")          # 자동갱신 여부
+    billing_key = Column(String(200), nullable=True)                             # 토스 billingKey
+    customer_key = Column(String(100), nullable=True)                            # 토스 customerKey
+    next_renew_on = Column(Date, nullable=True)                                  # 다음 결제일 (보통 end_date)
+
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 
     user = relationship("User", back_populates="subscriptions")
     plan = relationship("Plan", back_populates="subscriptions")
     recording_usage = relationship("RecordingUsage", back_populates="subscription")
     payments = relationship("Payment", back_populates="subscription", cascade="all, delete")
-
 
 # ✅ 플랜 정보 (가격, 시간 등)
 class Plan(Base):
@@ -134,14 +140,15 @@ class Folder(Base):
     parent_id = Column(Integer, ForeignKey("folders.id"))
     name = Column(String, nullable=False)
     color = Column(String(7), nullable=True, default="#7E36F9")
-    created_at = Column(TIMESTAMP)
-    updated_at = Column(TIMESTAMP)
+    # created_at = Column(TIMESTAMP)
+    # updated_at = Column(TIMESTAMP)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())# 🍒 10.24 front/ 폴더정렬에러로 수정 수정 시 자동 업데이트
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
 
     owner = relationship("User", back_populates="folders")
     boards = relationship("Board", back_populates="folder")
     children = relationship("Folder", backref="parent", remote_side="Folder.id")
-
 
 # Boards
 class Board(Base):
@@ -263,7 +270,6 @@ class Summary(Base):
     recording_session_id = Column(Integer, ForeignKey("recording_sessions.id", ondelete="CASCADE"), nullable=False)
     summary_type = Column(String)                      # 'interval' | 'final' 등
     content = Column(Text, nullable=False)
-    rating = Column(Boolean)                           # 선택: 사용자 평점/북마크 등
     # 선택: 구간 요약 및 로깅 메타
     interval_start_at = Column(TIMESTAMP, nullable=True)
     interval_end_at   = Column(TIMESTAMP, nullable=True)
@@ -355,3 +361,22 @@ class RecordingUsageLog(Base):
     after_used = Column(Integer, nullable=False)
     reason = Column(String(50), nullable=True)  # "audio_duration"
     created_at = Column(TIMESTAMP, server_default=func.now())
+
+# Final Summaries
+class FinalSummary(Base):
+    __tablename__ = "final_summaries"
+
+    id = Column(Integer, primary_key=True)
+    recording_session_id = Column(
+        Integer,
+        ForeignKey("recording_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    title = Column(String(255))
+    bullets = Column(JSON)  # 핵심 요약 리스트
+    actions = Column(JSON)  # 후속 조치 리스트
+    content = Column(Text)  # 전체 원문 텍스트
+    created_at = Column(TIMESTAMP, server_default=func.now())
+
+    # 관계 (RecordingSession ↔ FinalSummary: 1:N 가능)
+    session = relationship("RecordingSession", backref="final_summaries")

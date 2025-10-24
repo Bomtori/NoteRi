@@ -62,13 +62,10 @@ def refresh_access_token(
 @router.get("/logout")
 def logout(provider: str | None = Query(default=None)):
     # 1) provider별 리다이렉트 목적지 결정
-    if provider == "kakao":
-        # logout_redirect_uri는 반드시 URL-인코딩
-        encoded = quote(KAKAO_LOGOUT_REDIRECT, safe="")
-        target = f"https://kauth.kakao.com/oauth/logout?client_id={KAKAO_CLIENT_ID}&logout_redirect_uri={encoded}"
-    elif provider == "google":
+
+    if provider == "google":
         target = "https://accounts.google.com/Logout"
-    elif provider == "naver":
+    elif (provider == "naver" or "kakao"):
         # 네이버는 별도 로그아웃 URL 실효성이 없어 보통 프론트 로그아웃 페이지로 이동
         target = FRONTEND_LOGOUT_REDIRECT
     else:

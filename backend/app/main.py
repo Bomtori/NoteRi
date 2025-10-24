@@ -25,6 +25,7 @@ from backend.app.routers.sessions_router import router as sessions_router
 # 🗓 Scheduler & DB 초기화
 # ============================================
 from backend.app.tasks.scheduler import start_scheduler
+from backend.app.tasks.scheduler import run_renew_once
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.db import get_db, SessionLocal
 from backend.app.seed.plan_seed import seed_plans
@@ -140,19 +141,14 @@ def diarize_latest(num_speakers: int | None = Query(default=None, ge=1, le=10)):
     diarization_result = diarizer.diarize(filepath, num_speakers=num_speakers)
     return {"file": filepath, "diarization": diarization_result}
 
-
-
 @app.get("/")
 async def root():
     return {"message": "Hello, FastAPI is running"}
 
 @app.on_event("startup")
 async def startup_event():
-    # ✅ Redis 연결
+    # ✅ Redis 연결 (비동기)
     await get_redis()
-
-    # ✅ 스케줄러 시작
-    start_scheduler()
 
     # ✅ 초기 데이터 시드
     db = SessionLocal()
@@ -160,6 +156,12 @@ async def startup_event():
         seed_plans(db)
     finally:
         db.close()
+
+    # ✅ 스케줄러 시작
+    start_scheduler()
+
+    # (선택) 서버 기동 직후 1회 갱신 실행
+    await run_renew_once()
 
 @app.on_event("shutdown")
 async def shutdown_event():

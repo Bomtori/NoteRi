@@ -5,7 +5,8 @@ from backend.app.crud import folder_crud as crud
 from backend.app.db import get_db
 from backend.app.schemas.board_schema import BoardResponse
 from backend.app.deps.auth import get_current_user
-from backend.app.model import User  # 타입 힌트용
+from backend.app.model import User, Folder  # 타입 힌트용
+from typing import Optional
 
 router = APIRouter(prefix="/folders", tags=["folders"])
 
@@ -20,14 +21,15 @@ def create_folder(
     return crud.create_folder(db, folder, current_user)
 
 # Read all
+
 @router.get("/", response_model=schemas.FolderListResponse)
 def read_folders(
     skip: int = 0,
-    limit: int = 10,
+    limit: Optional[int] = None,  # ✅ 올바른 문법
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    folders = crud.get_folders(db, user_id=current_user.id, skip=skip, limit=limit)
+    folders = crud.get_folders(db, current_user, skip=skip, limit=limit)
     return {"folders": folders}
 
 # Read one
@@ -62,7 +64,7 @@ def update_folder(
 ):
     folder = crud.update_folder(db, folder_id, folder_update, current_user)
     if not folder:
-        raise HTTPException(status_code=404, detail="Folder not found or no permission")
+        raise HTTPException(status_code=404, detail="Folder not found")
     return folder
 
 # Delete

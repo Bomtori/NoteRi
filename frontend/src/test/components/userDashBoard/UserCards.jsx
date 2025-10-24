@@ -5,6 +5,7 @@ import CardWithActions from "@/test/components/userDashBoard/CardWithActions.jsx
 import CardWithDonutGraph from "@/test/components/CardWithDonutGraph.tsx";
 import MetricStatCard from "@/test/components/userDashBoard/MetricsStatCard.tsx";
 import UserSignupTrend from "@/test/components/userDashBoard/UserSignupTrend.jsx";
+import UserAway from "@/test/components/userDashBoard/UserAway.tsx";
 
 const API_BASE_URL = import.meta.env.API_BASE_URL ?? "http://localhost:8000";
 
@@ -173,16 +174,16 @@ export default function UserCards() {
   }, [range]);
 
   return (
-    <div className="bg-background text-foreground p-6">
-      <div className="mx-auto w-full max-w-7xl grid grid-cols-[repeat(3,minmax(0,1fr))] items-start gap-4">
-        <MetricStatCard className="min-h-[190px] sm:col-span-2 xl:col-span-2"
+    <div >
+      <div >
+        <MetricStatCard
           title="전체 사용자"
           value={totalUsers ?? 0}
           caption={`비활성 유저 : ${(noActiveUsers ?? 0).toLocaleString()} 명`}
           loading={loading}
           error={error}
         />
-        <StatCard className="min-h-[190px]"
+        <StatCard
           title="MAU"
           value="1,532"
           delta="+7.4%"
@@ -190,7 +191,7 @@ export default function UserCards() {
           highlight="전일 대비 7.4% 상승"
         />
         {/* 가입자 카드: 뱃지(헤더) + 버튼(본문 우측) */}
-        <CardWithActions className="min-h-[190px] "
+        <CardWithActions
           range={range}
           setRange={setRange}
           todaySignupUsers={todaySignupUsers}
@@ -201,10 +202,11 @@ export default function UserCards() {
           loading={loading}
           error={error}
         />
-        <CardWithDonutGraph className="sm:col-span-2 xl:col-span-2 h-[340px]"
+        <CardWithDonutGraph
           providerUsers={provider}
         />
-        <div className="col-span-1 sm:col-span-2 xl:grid-cols-4 xl:col-span-4">
+        <UserAway range={range}/>
+        <div>
           <UserSignupTrend />
         </div>
       </div>

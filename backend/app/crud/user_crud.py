@@ -1,9 +1,10 @@
 from zoneinfo import ZoneInfo
 
+from dateutil.relativedelta import relativedelta
 from sqlalchemy.orm import Session
-from sqlalchemy import func, extract, text, case
+from sqlalchemy import func, extract, text, case, select
 from backend.app.model import User, Plan, Subscription
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from typing import Dict, Any, List, Tuple, Optional
 from backend.app.util.trend import trend_series
 from backend.app.util.day_calculation import (
@@ -226,3 +227,21 @@ def get_yoy_signup_growth(db: Session) -> dict:
 
     growth_rate = None if previous == 0 else (current - previous) / previous
     return {"current": current, "previous": previous, "growth_rate": growth_rate}
+
+# 이탈 유저 숫자
+def inactive_stats_last_6_months(db):
+    cutoff = datetime.now(timezone.utc) - relativedelta(months=6)
+
+    total_active_q = select(func.count()).select_from(User).where(User.is_active == True)
+    inactive_q = (
+        select(func.count())
+        .select_from(User)
+        .where(User.is_active == True)
+        .where(User.updated_at < cutoff)
+    )
+
+    total_active = db.scalar(total_active_q) or 0
+    inactive = db.scalar(inactive_q) or 0
+    ratio = (inactive / total_active) if total_active else 0.0
+
+    return {"total_active_users": total_active, "inactive_users": inactive, "inactive_ratio": ratio}

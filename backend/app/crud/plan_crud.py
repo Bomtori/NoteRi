@@ -22,7 +22,7 @@ def create_plan(db: Session, payload: PlanCreate) -> Plan:
         name=payload.name,
         price=payload.price,
         duration_days=payload.duration_days,
-        allocated_minutes=payload.allocated_minutes,
+        allocated_seconds=payload.allocated_seconds,
         description=payload.description,
     )
     db.add(plan)
@@ -57,8 +57,8 @@ def update_plan(db: Session, plan_id: int, payload: PlanUpdate) -> Plan:
         plan.price = payload.price
     if payload.duration_days is not None:
         plan.duration_days = payload.duration_days
-    if payload.allocated_minutes is not None:
-        plan.allocated_minutes = payload.allocated_minutes
+    if payload.allocated_seconds is not None:
+        plan.allocated_seconds = payload.allocated_seconds
     if payload.description is not None:
         plan.description = payload.description
 

@@ -15,7 +15,7 @@ class UsageExceededError(ValueError):
 def create_or_update_usage(db: Session, user_id: int, subscription: Subscription):
     """
     새 구독 발생 시 녹음 사용량(초 단위) 생성 또는 갱신.
-    이전 구독의 '남은 초'를 이월하고, Plan의 allocated_minutes를 초 단위로 환산.
+    이전 구독의 '남은 초'를 이월하고, Plan의 allocated_seconds 초 단위로 환산.
     """
     plan = subscription.plan
     if not plan:
@@ -35,10 +35,10 @@ def create_or_update_usage(db: Session, user_id: int, subscription: Subscription
         prev_remaining = max(int(prev_usage.allocated_seconds) - int(prev_usage.used_seconds or 0), 0)
 
     # 분→초 환산 (None=무제한)
-    if plan.allocated_minutes is None or plan.allocated_minutes < 0:
+    if plan.allocated_seconds is None or plan.allocated_seconds < 0:
         alloc_seconds = None
     else:
-        alloc_seconds = int(plan.allocated_minutes) * 60
+        alloc_seconds = int(plan.allocated_seconds) * 60
 
     # free는 기간 무제한
     if plan.name == "free":

@@ -1,10 +1,23 @@
 from sqlalchemy.orm import Session
 from backend.app import model
+from fastapi import Depends, HTTPException
 from backend.app.schemas import folder_schema as schemas
-
+from backend.app.deps.auth import get_current_user
 
 # Create
 def create_folder(db: Session, folder: schemas.FolderCreate, current_user: model.User):
+    # ✅ 이름 중복 체크 (같은 유저 내에서 동일 이름 금지)
+    exists = (
+        db.query(model.Folder)
+        .filter(
+            model.Folder.user_id == current_user.id,
+            model.Folder.name == folder.name
+        )
+        .first()
+    )
+    if exists:
+        raise HTTPException(status_code=400, detail="이미 동일한 이름의 폴더가 존재합니다.")
+
     new_folder = model.Folder(
         name=folder.name,
         parent_id=folder.parent_id,
@@ -15,6 +28,7 @@ def create_folder(db: Session, folder: schemas.FolderCreate, current_user: model
     db.refresh(new_folder)
     return new_folder
 
+
 # Read one
 def get_folder(db: Session, folder_id: int, current_user: model.User):
     return (
@@ -24,14 +38,22 @@ def get_folder(db: Session, folder_id: int, current_user: model.User):
     )
 
 # Read all
-def get_folders(db: Session, user_id: int, skip: int = 0, limit: int = 10):
-    return (
+def get_folders(
+    db: Session,
+    skip: int = 0,
+    limit: int | None = None,
+    current_user: model.User = Depends(get_current_user)
+):
+    query = (
         db.query(model.Folder)
-        .filter(model.Folder.user_id == user_id)
+        .filter(model.Folder.user_id == current_user.id)
+        .order_by(model.Folder.created_at.desc())  # ✅ 최신순 정렬
         .offset(skip)
-        .limit(limit)
-        .all()
     )
+    if limit:
+        query = query.limit(limit)
+    return query.all()
+
 
 # ✅ 폴더별 보드 목록
 def get_boards_by_folder(db: Session, folder_id: int):
@@ -52,12 +74,28 @@ def update_folder(db: Session, folder_id: int, folder_update: schemas.FolderUpda
         .first()
     )
     if not folder:
-        return None
+        raise HTTPException(status_code=404, detail="Folder not found")
+
+    # ✅ 이름 중복 체크
+    if folder_update.name and folder_update.name != folder.name:
+        exists = (
+            db.query(model.Folder)
+            .filter(
+                model.Folder.user_id == current_user.id,
+                model.Folder.name == folder_update.name,
+                model.Folder.id != folder.id,
+            )
+            .first()
+        )
+        if exists:
+            raise HTTPException(status_code=400, detail="이미 동일한 이름의 폴더가 존재합니다.")
 
     if folder_update.name is not None:
         folder.name = folder_update.name
     if folder_update.parent_id is not None:
         folder.parent_id = folder_update.parent_id
+    if folder_update.color is not None:
+        folder.color = folder_update.color
 
     db.commit()
     db.refresh(folder)

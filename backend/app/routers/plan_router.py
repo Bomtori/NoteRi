@@ -70,7 +70,7 @@ def update_plan(
 ):
     """
     플랜 일부/전체 업데이트(관리자)
-    - price/duration_days/allocated_minutes/description 중 일부만 보내도 됨
+    - price/duration_days/allocated_seconds/description 중 일부만 보내도 됨
     """
     return plan_crud.update_plan(db, plan_id, payload)
 

@@ -53,12 +53,12 @@ const UserAway: React.FC<Props> = ({ range }) => {
 
   const caption = error
     ? undefined
-    : `이탈률: ${(awayRatio * 100).toFixed(1)}%`;
+    : `이탈률: ${(awayRatio * 100).toFixed(2)}%`;
 
   return (
     <div>
       <UserAwayCard
-        title="이탈 유저"
+        title="이탈 유저 (최근 6개월 미접속자)"
         value={awayUserCount}
         caption={caption}
         loading={loading}

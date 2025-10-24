@@ -26,7 +26,7 @@ def create_board(
         raise HTTPException(status_code=400, detail=str(e))
 
 # Read all
-@router.get("/", response_model=list[schemas.BoardResponse])
+@router.get("/", response_model=list[schemas.BoardResponse],  response_model_exclude_unset=True)
 def read_boards(skip: int = 0, limit: int = 10, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return crud.get_boards(db, current_user.id, skip=skip, limit=limit)
 

@@ -9,6 +9,10 @@ from backend.app.model import RecordingSession, RecordingResult, AudioData
 from backend.app.util.crypto_path import decrypt_path
 from backend.ml.diarization.diarization_model import DiarizationModel
 import re
+import logging, pprint
+from collections import Counter
+
+logger = logging.getLogger(__name__)
 
 def _to_mono_16k(waveform, sample_rate):
     # 채널 평균으로 mono
@@ -46,19 +50,23 @@ async def run_diarization_for_session(session_id: int):
         if not audio or not audio.file_path:
             return
 
-        real_path = decrypt_path(audio.file_path)  # 암호화 경로 복호화 → 실제 파일경로
-        # 파일이 이미 WAV/16k/mono면 infer_file로 바로:
+        real_path = decrypt_path(audio.file_path)
         model = DiarizationModel.get()
+
+        # 🔍 추론 실행
         turns = model.infer_file(real_path)  # [(start_ms, end_ms, "SPEAKER_00"), ...]
-
-        # 필요 시 메모리 로딩(코덱 이슈 회피) 버전:
-        # waveform, sr = torchaudio.load(real_path)
-        # waveform, sr = _to_mono_16k(waveform, sr)
-        # turns = model.infer_mem(waveform, sr)  # infer_mem 구현 시
-
         if not turns:
+            logger.info("🎧 Diarization returns no turns.")
             return
-        # 모델 키를 그대로 사용
+
+        # ✅ 콘솔 로그: 개수/미리보기/스피커 분포/총 커버리지
+        total_ms = sum(max(0, e - s) for s, e, _ in turns)
+        dist = Counter(lbl for *_ , lbl in turns)
+        logger.info(f"🎧 Diarization turns: {len(turns)} items, coverage={total_ms/1000:.2f}s")
+        logger.info("🎧 Speaker distribution: " + ", ".join(f"{k}={v}" for k, v in dist.items()))
+        logger.info("🎧 Preview (first 10):\n" + pprint.pformat(turns[:10]))
+
+        # 이후 DB 업데이트
         diar_turns = sorted(turns, key=lambda x: x[0])
         _update_results_with_labels(db, session_id, diar_turns)
 
@@ -87,8 +95,9 @@ def _update_results_with_labels(db: Session, session_id:int, diar_turns):
     for r in rows:
         if not r.started_at or not r.ended_at:
             continue
-        s = int(r.started_at.timestamp()*1000)
-        e = int(r.ended_at.timestamp()*1000)
+        base = int(sess.started_at.timestamp()*1000) if sess.started_at else 0
+        s = int(r.started_at.timestamp()*1000) - base
+        e = int(r.ended_at.timestamp()*1000)   - base
         label = _normalize_speaker_label(_best_label_for_segment(s, e, diar_turns))
         r.speaker_label = label
         summary[label] = summary.get(label, 0) + 1

@@ -252,7 +252,7 @@ export default function MeetingPage() {
       if (!res.ok) throw new Error(`results fetch failed: ${res.status}`);
       const rows = await res.json();
       const formatted = rows.map((r) => ({
-        speaker: r.speaker_label || "U",
+        speaker: r.speaker_label || "speaker99",
         text: r.raw_text || "",
         start: typeof r.offset_start_sec === "number" ? r.offset_start_sec : undefined,
         end: typeof r.offset_end_sec === "number" ? r.offset_end_sec : undefined,

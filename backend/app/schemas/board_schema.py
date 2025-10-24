@@ -86,11 +86,11 @@ class BoardResponse(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
-    # ✅ 1:1 관계 → 단일 객체 or None
-    audios: Optional[AudioResponse] = None
-    memos: Optional[MemoResponse] = None
+    # ✅ 1:N 관계 → 리스트로 변경해야 함
+    audios: List[AudioResponse] = Field(default_factory=list)
+    memos: List[MemoResponse] = Field(default_factory=list)
     transcripts: List[TranscriptResponse] = Field(default_factory=list)
-    summaries: List[SummaryResponse] = Field(default_factory=list)    # ✅ Relationships
+    summaries: List[SummaryResponse] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 

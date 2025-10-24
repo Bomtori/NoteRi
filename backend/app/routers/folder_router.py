@@ -5,7 +5,9 @@ from backend.app.crud import folder_crud as crud
 from backend.app.db import get_db
 from backend.app.schemas.board_schema import BoardResponse
 from backend.app.deps.auth import get_current_user
-from backend.app.model import User  # 타입 힌트용
+from backend.app.model import User, Folder  # 타입 힌트용
+from typing import Optional
+
 
 router = APIRouter(prefix="/folders", tags=["folders"])
 
@@ -23,7 +25,7 @@ def create_folder(
 @router.get("/", response_model=schemas.FolderListResponse)
 def read_folders(
     skip: int = 0,
-    limit: int = 10,
+    limit: Optional[int] = None, # 🍒 10.24 front /DB에 20개 폴더가 있어도 10개만 반환됨 수정
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -53,16 +55,24 @@ def read_boards_by_folder(
     return boards
 
 # Update
-@router.patch("/{folder_id}", response_model=schemas.FolderResponse)
-def update_folder(
-    folder_id: int,
-    folder_update: schemas.FolderUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    folder = crud.update_folder(db, folder_id, folder_update, current_user)
+@router.patch("/{folder_id}")
+def update_folder(folder_id: int, folder_update: schemas.FolderUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    folder = db.query(Folder).filter(Folder.id == folder_id, Folder.user_id == current_user.id).first()
     if not folder:
-        raise HTTPException(status_code=404, detail="Folder not found or no permission")
+        raise HTTPException(status_code=404, detail="Folder not found")
+
+    # if folder_update.name:
+    #     folder.name = folder_update.name
+    # if folder_update.color:
+    #     folder.color = folder_update.color
+    # 🍒 10.24 front/ 컬럼누락, 관계직렬화 에러 수정 | 필요한 필드만 업데이트
+    if folder_update.name is not None:
+        folder.name = folder_update.name
+    if folder_update.color is not None:
+        folder.color = folder_update.color
+
+    db.commit()
+    db.refresh(folder)
     return folder
 
 # Delete

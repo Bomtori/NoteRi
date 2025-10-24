@@ -1,11 +1,16 @@
 # backend/app/routers/sessions_router.py
+from __future__ import annotations
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status, BackgroundTasks
+from sqlalchemy.orm import Session
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from backend.app.db import get_db
 from backend.app.util.redis_client import get_redis
 from sqlalchemy import desc
 from backend.app.db import SessionLocal
 from backend.app.model import RecordingSession, RecordingResult
 from backend.services.diarization import run_diarization_for_session
+from backend.app.schemas.sessions_schema import (RecordingSessionListResponse, RecordingSessionResponse)
+from backend.app.crud.session_crud import get_sessions_by_board
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -86,3 +91,19 @@ async def get_session_id_by_sid(sid: str):
         # ⏳ 아직 매핑 전: 202(Processing)로 상태를 돌려주면 프론트가 부드럽게 계속 기다릴 수 있음
         return {"status": "pending"}, 202
     return {"id": int(val), "status": "ready"}
+
+@router.get("/{board_id}/list", response_model=RecordingSessionListResponse, summary="보드에 속한 RecordingSession 목록 조회",
+)
+def list_recording_sessions_by_board(
+    board_id: int = Path(..., ge=1),
+    limit: int | None = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    # current_user: User = Depends(get_current_user),  # 권한 체크가 필요하면 활성화
+):
+    """
+    주어진 board_id에 속한 모든 RecordingSession을 반환합니다.
+    시작시간 최신순으로 정렬되며, 각 세션에는 audio(1:1), results_count, summaries_count가 포함됩니다.
+    """
+    total, items = get_sessions_by_board(db, board_id, limit=limit, offset=offset)
+    return {"total": total, "items": items}

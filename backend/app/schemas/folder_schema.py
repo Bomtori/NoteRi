@@ -9,6 +9,7 @@ class FolderCreate(BaseModel):
 class FolderUpdate(BaseModel):
     name: Optional[str] = None
     parent_id: Optional[int] = None
+    color : Optional[str] = None
 
 class FolderResponse(BaseModel):
     id: int

@@ -134,8 +134,10 @@ class Folder(Base):
     parent_id = Column(Integer, ForeignKey("folders.id"))
     name = Column(String, nullable=False)
     color = Column(String(7), nullable=True, default="#7E36F9")
-    created_at = Column(TIMESTAMP)
-    updated_at = Column(TIMESTAMP)
+    # created_at = Column(TIMESTAMP)
+    # updated_at = Column(TIMESTAMP)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())# 🍒 10.24 front/ 폴더정렬에러로 수정 수정 시 자동 업데이트
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())       
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
 
     owner = relationship("User", back_populates="folders")

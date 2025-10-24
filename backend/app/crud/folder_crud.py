@@ -24,14 +24,25 @@ def get_folder(db: Session, folder_id: int, current_user: model.User):
     )
 
 # Read all
-def get_folders(db: Session, user_id: int, skip: int = 0, limit: int = 10):
-    return (
+# def get_folders(db: Session, user_id: int, skip: int = 0, limit: int = 10):
+#     return (
+#         db.query(model.Folder)
+#         .filter(model.Folder.user_id == user_id)
+#         .offset(skip)
+#         .limit(limit)
+#         .all()
+#     )
+def get_folders(db: Session, user_id: int, skip: int = 0, limit: int | None = None): # 🍒 10.24 front/ 폴더불러오기제한 없이, 프론트로조절, 색상변경시 정렬되도록 추가
+    query = (
         db.query(model.Folder)
         .filter(model.Folder.user_id == user_id)
+        .order_by(model.Folder.created_at.asc())
         .offset(skip)
-        .limit(limit)
-        .all()
     )
+    if limit:
+        query = query.limit(limit)
+    return query.all()
+
 
 # ✅ 폴더별 보드 목록
 def get_boards_by_folder(db: Session, folder_id: int):

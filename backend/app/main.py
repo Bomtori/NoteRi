@@ -1,4 +1,3 @@
-from fastapi import FastAPI, WebSocket, Query
 # ============================================
 # 🌐 기본 라이브러리 & 환경 설정
 # ============================================
@@ -24,9 +23,7 @@ from backend.app.routers.sessions_router import router as sessions_router
 # ============================================
 # 🗓 Scheduler & DB 초기화
 # ============================================
-from backend.app.tasks.scheduler import start_scheduler, unban_expired_users
-from backend.app.tasks.scheduler import run_renew_once
-from fastapi.middleware.cors import CORSMiddleware
+from backend.app.tasks.scheduler import start_scheduler, unban_expired_users, run_renew_once, send_morning_calendar_notifications
 from backend.app.db import get_db, SessionLocal
 from backend.app.seed.plan_seed import seed_plans
 from backend.app.routers import register_routers

@@ -16,6 +16,7 @@ import RecordDetailPage from "./pages/RecordDetailPage.jsx";
 import UserPage from "./pages/UserPage.tsx";
 import MeetingPage from "./pages/MeetingPage.jsx";
 import PaymentSuccessPage from "./pages/PaymentSuccessPage.tsx";
+import Calendar from "@/components/calendar/Calendar.js";
 
 function App() {
   return (
@@ -42,6 +43,7 @@ function App() {
                         <Route path="/user" element={<UserPage />} />
                         <Route path="/meeting" element={<MeetingPage />} />
                         <Route path="/payments/success" element={<PaymentSuccessPage />} />
+          <Route path="/calendar" element={<Calendar/>}/>
       </Routes>
     </BrowserRouter>
   );

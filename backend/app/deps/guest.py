@@ -20,7 +20,7 @@ def get_principal(
     guest_token_cookie: Optional[str] = Cookie(default=None, alias="guest_token"),
 ):
     """
-    반환:
+    반환:A
       - 로그인 사용자면 {"type":"user","id":<int>}
       - 게스트면 {"type":"guest","board_id":<int>}
       - 아니면 None

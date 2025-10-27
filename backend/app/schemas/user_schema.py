@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 
@@ -26,3 +26,36 @@ class UserResponse(BaseModel):
 class PlanUserCount(BaseModel):
     plan: str  # "free" | "pro" | "enterprise"
     user_count: int
+
+class BanUpdateRequest(BaseModel):
+    is_banned: bool
+    reason: Optional[str] = None
+    until: Optional[datetime] = None
+
+class BanStatusResponse(BaseModel):
+    user_id: int
+    is_banned: bool
+    banned_reason: Optional[str] = None
+    banned_until: Optional[datetime] = None
+
+class UserMeResponse(BaseModel):
+    id: int
+    email: str
+    name: Optional[str]
+    role: str
+    is_banned: bool
+    banned_reason: Optional[str] = None
+    banned_until: Optional[datetime] = None
+
+    class Config:
+        orm_mode = True
+
+class BanInfoResponse(BaseModel):
+    user_id: int
+    is_banned: bool
+    banned_reason: Optional[str] = None
+    banned_until: Optional[datetime] = None
+    remaining_seconds: Optional[int] = None  # None=영구밴, 0=만료됨/해제 가능
+
+    class Config:
+        orm_mode = True

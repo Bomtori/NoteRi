@@ -24,7 +24,7 @@ from backend.app.routers.sessions_router import router as sessions_router
 # ============================================
 # 🗓 Scheduler & DB 초기화
 # ============================================
-from backend.app.tasks.scheduler import start_scheduler
+from backend.app.tasks.scheduler import start_scheduler, unban_expired_users
 from backend.app.tasks.scheduler import run_renew_once
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.db import get_db, SessionLocal
@@ -162,6 +162,8 @@ async def startup_event():
 
     # (선택) 서버 기동 직후 1회 갱신 실행
     await run_renew_once()
+
+    unban_expired_users()
 
 @app.on_event("shutdown")
 async def shutdown_event():

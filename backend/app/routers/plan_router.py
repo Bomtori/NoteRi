@@ -10,23 +10,8 @@ from backend.app.schemas.plan_schema import (
     PlanRead, PlanCreate, PlanUpdate, PlanPriceUpdate
 )
 from backend.app.crud import plan_crud
-
+from backend.app.util.authz import require_admin
 router = APIRouter(prefix="/plans", tags=["Plans"])
-
-def require_admin(user: User = Depends(get_current_user)) -> User:
-    """
-    - user.is_admin 이 True 이거나
-    - user.role == 'admin' 이면 관리자라고 간주
-    """
-    if hasattr(user, "role") and getattr(user, "role", None) == "admin":
-        is_admin = True
-
-    if not is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="관리자만 접근할 수 있습니다."
-        )
-    return user
 
 # ───────────────────────────────
 # 공개/일반 조회

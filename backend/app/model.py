@@ -102,7 +102,7 @@ class Plan(Base):
     __tablename__ = "plans"
 
     id = Column(Integer, primary_key=True)
-    name = Column(Enum(PlanType), unique=True, nullable=False)  # free, pro, enterprise
+    name = Column(String(32), unique=True, nullable=False, index=True)  # 문자열로 전환
     price = Column(Numeric(10, 2), nullable=False, default=0.00)  # ex) 0, 10000, 30000
     duration_days = Column(Integer, nullable=False, default=30)   # 구독 기간 (ex. 30일)
     allocated_seconds = Column(Integer, nullable=False, default=18000)  # 녹음 시간

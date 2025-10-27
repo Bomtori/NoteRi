@@ -1,13 +1,14 @@
-# backend/app/schemas/plan_schema.py
-from decimal import Decimal
+# plan_schema.py
+from pydantic import BaseModel, condecimal, constr
 from typing import Optional
-from pydantic import BaseModel, condecimal
 from datetime import datetime
-from backend.app.model import PlanType  # 이미 Enum 이 있다고 가정
+
+# name은 문자열로 받되, 소문자/숫자/하이픈만 허용 (필요 규칙에 맞게 조정)
+PlanCode = constr(strip_whitespace=True, to_lower=True, pattern=r"^[a-z0-9-]{3,32}$")
 
 class PlanBase(BaseModel):
-    name: PlanType
-    price: condecimal(max_digits=10, decimal_places=2)  # Decimal 안전
+    name: PlanCode
+    price: condecimal(max_digits=10, decimal_places=2)
     duration_days: int
     allocated_seconds: int
     description: Optional[str] = None
@@ -16,7 +17,6 @@ class PlanCreate(PlanBase):
     pass
 
 class PlanUpdate(BaseModel):
-    # 일반 업데이트용(필요시)
     price: Optional[condecimal(max_digits=10, decimal_places=2)] = None
     duration_days: Optional[int] = None
     allocated_seconds: Optional[int] = None
@@ -27,8 +27,8 @@ class PlanPriceUpdate(BaseModel):
 
 class PlanRead(BaseModel):
     id: int
-    name: PlanType
-    price: Decimal
+    name: str
+    price: condecimal(max_digits=10, decimal_places=2)
     duration_days: int
     allocated_seconds: int
     description: Optional[str] = None
@@ -36,4 +36,4 @@ class PlanRead(BaseModel):
     updated_at: Optional[datetime] = None
 
     class Config:
-        from_attributes = True  # SQLAlchemy 객체 -> Pydantic 변환
+        from_attributes = True

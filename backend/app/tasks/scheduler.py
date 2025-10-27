@@ -7,7 +7,7 @@ from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy.orm import Session
 
 from backend.app.db import SessionLocal
-from backend.app.model import Subscription, Plan, PlanType, Payment
+from backend.app.model import Subscription, Plan, PlanType, Payment, User
 from backend.app.crud import recording_usage_crud
 
 _scheduler: Optional[AsyncIOScheduler] = None
@@ -152,3 +152,47 @@ async def run_renew_once():
     """서버 기동 직후 1회 실행하고 싶을 때 호출 (선택)."""
     # 스케줄러 잡과 동일하게 세션 열고 닫음
     renew_due_subscriptions()
+
+try:
+    from backend.app.model import UserBanLog  # 로그 테이블 쓰는 경우
+except Exception:
+    UserBanLog = None
+
+@_with_session
+def unban_expired_users(db: Session):
+    """
+    banned_until <= now 인 유저의 밴을 자동 해제.
+    - is_banned=False, banned_reason=None, banned_until=None 로 리셋
+    - (선택) UserBanLog 에도 해제 이력 기록
+    """
+    now = datetime.now(UTC)
+
+    targets = (
+        db.query(User)
+        .filter(
+            User.is_banned == True,
+            User.banned_until.isnot(None),
+            User.banned_until <= now,
+        )
+        .all()
+    )
+    if not targets:
+        return
+
+    for u in targets:
+        u.is_banned = False
+        u.banned_reason = None
+        u.banned_until = None
+        db.add(u)
+
+        # 선택: 해제 로그 남기기
+        if UserBanLog is not None:
+            db.add(UserBanLog(
+                user_id=u.id,
+                actor_id=None,          # 시스템 자동 해제
+                is_banned=False,
+                reason=None,
+                until=None,
+            ))
+
+    db.commit()

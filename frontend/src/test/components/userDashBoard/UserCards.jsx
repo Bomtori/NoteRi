@@ -6,6 +6,7 @@ import CardWithDonutGraph from "@/test/components/CardWithDonutGraph.tsx";
 import MetricStatCard from "@/test/components/userDashBoard/MetricsStatCard.tsx";
 import UserSignupTrend from "@/test/components/userDashBoard/UserSignupTrend.jsx";
 import UserAway from "@/test/components/userDashBoard/UserAway.tsx";
+import UserByAge from "@/test/components/userDashBoard/UserByAge.tsx";
 
 const API_BASE_URL = import.meta.env.API_BASE_URL ?? "http://localhost:8000";
 
@@ -144,8 +145,10 @@ export default function UserCards() {
         const data = await res.json();
         setTotalUsers(data.total_users ?? 0);
       } catch (e) {
-        setError("전체 사용자 수를 불러오지 못했습니다.");
-        setTotalUsers(null);
+        if (e.name !== "AbortError") {
+          setError("사용자 수를 불러오지 못했습니다.");
+          setProviderCounts({});
+        }
       } finally {
         setLoading(false);
       }
@@ -164,8 +167,10 @@ export default function UserCards() {
         const data = await res.json();
         setNoActiveUsers(data.no_active_users ?? 0);
       } catch (e) {
-        setError("비활성 사용자 수를 불러오지 못했습니다.");
-        setNoActiveUsers(0);
+        if (e.name !== "AbortError") {
+          setError("사용자 수를 불러오지 못했습니다.");
+          setProviderCounts({});
+        }
       } finally {
         setLoading(false);
       }
@@ -206,6 +211,9 @@ export default function UserCards() {
           providerUsers={provider}
         />
         <UserAway range={range}/>
+        <div>
+          <UserByAge/>
+        </div>
         <div>
           <UserSignupTrend />
         </div>

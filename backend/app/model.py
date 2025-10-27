@@ -1,6 +1,6 @@
 from sqlalchemy import (
     Column, Integer, String, Date, Text, Boolean,
-    ForeignKey, Enum, Float, JSON, TIMESTAMP, Numeric, UniqueConstraint
+    ForeignKey, Enum, Float, JSON, TIMESTAMP, Numeric, UniqueConstraint, DateTime
 )
 from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy.sql import func
@@ -39,8 +39,11 @@ class User(Base):
     picture = Column(String(500), nullable=True)
     oauth_provider = Column(String)
     oauth_sub = Column(String)
-    role = Column(String)
+    role = Column(String, default="user")
     is_active = Column(Boolean, default=True)
+    is_banned = Column(Boolean, default=False)
+    banned_reason = Column(Text, nullable=True)
+    banned_until = Column(DateTime, nullable=True)
     created_at = Column(TIMESTAMP)
     updated_at = Column(TIMESTAMP)
 
@@ -54,6 +57,21 @@ class User(Base):
     ai_gemini = relationship("AIGemini", back_populates="user")
     shared_boards = relationship("BoardShare", back_populates="user", cascade="all, delete-orphan")
 
+class UserBanLog(Base):
+    __tablename__ = "user_ban_logs"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    actor_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    is_banned = Column(Boolean, nullable=False)  # True: 밴 / False: 해제
+    reason = Column(Text, nullable=True)
+    until = Column(DateTime, nullable=True)
+
+    created_at = Column(DateTime, server_default=func.now())
+
+    user = relationship("User", foreign_keys=[user_id], backref="ban_logs")
+    actor = relationship("User", foreign_keys=[actor_id])
 
 class Subscription(Base):
     __tablename__ = "subscriptions"
@@ -376,7 +394,9 @@ class FinalSummary(Base):
     bullets = Column(JSON)  # 핵심 요약 리스트
     actions = Column(JSON)  # 후속 조치 리스트
     content = Column(Text)  # 전체 원문 텍스트
+    rating = Column(Integer)
     created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), onupdate=func.now())
 
     # 관계 (RecordingSession ↔ FinalSummary: 1:N 가능)
     session = relationship("RecordingSession", backref="final_summaries")

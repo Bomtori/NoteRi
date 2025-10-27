@@ -6,7 +6,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 router = APIRouter()
-BASE_URL = os.getenv("APP_BASE_URL", "http://127.0.0.1:8001")
+BASE_URL = os.getenv("APP_BASE_URL", "http://127.0.0.1:8000")
 
 @router.post("/upload") # 사진 업로드
 async def upload_picture(file: UploadFile = File(...)):

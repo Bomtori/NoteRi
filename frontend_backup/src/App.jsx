@@ -6,7 +6,7 @@ import PaymentFail from "./PaymentFail";
 import ChatBox from "./test/ChatBox";
 import LoginPage from "./pages/LoginPage.jsx";
 import AuthCallback from "./test/AuthCallback.jsx";
-import DashBoard from "./pages/DashBoard.tsx"
+import DashBoard from "../../frontend/src/pages/AdminDashboardPage.tsx"
 import LandingPage from "./pages/LandingPage";
 import RecordListPage from "./pages/RecordListPage";
 import FolderListPage from "./pages/FolderListPage";

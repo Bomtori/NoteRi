@@ -12,7 +12,7 @@ import {
   MenubarSubContent,
   MenubarSubTrigger,
   MenubarTrigger,
-} from "@/components/ui/menubar"
+} from "../../../../frontend/src/components/ui/menubar"
 
 export function MenubarDemo() {
   return (

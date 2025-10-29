@@ -10,7 +10,7 @@ import NewRecordPage from "./pages/NewRecordPage";
 import LoginPage from "./pages/LoginPage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
 import AdminSettingsPage from "./pages/AdminSettingsPage";
-import DashBoard from "./components/admin/dashBoard/DashBoard.jsx";
+import AdminDashBoardPage from "./pages/AdminDashBoardPage";
 import RecordDetailPage from "./pages/RecordDetailPage.jsx";
 import UserPage from "./pages/UserPage.tsx";
 import PaymentSuccessPage from "./pages/PaymentSuccessPage.tsx";
@@ -67,7 +67,7 @@ export default function App() {
                         </ProtectedRoute>
                     }
                 >
-                    <Route index element={<DashBoard />} />
+                    <Route index element={<AdminDashBoardPage />} />
                     <Route path="users" element={<AdminUserPage />} />
                     <Route path="settings" element={<AdminSettingsPage />} />
                 </Route>

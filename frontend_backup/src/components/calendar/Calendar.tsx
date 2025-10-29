@@ -3,9 +3,9 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import type { EventClickArg, EventInput } from "@fullcalendar/core";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
+import { Label } from "../../../../frontend/src/components/ui/label";
+import { Textarea } from "../../../../frontend/src/components/ui/textarea";
+import { Switch } from "../../../../frontend/src/components/ui/switch";
 
 /**
  * Mini month calendar widget (compact corner widget)

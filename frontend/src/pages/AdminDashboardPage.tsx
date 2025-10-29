@@ -1,23 +1,44 @@
+/* filename: src/test/components/DashBoard.tsx */
 import React from "react";
+import Buttons from "../components/dashboard/cards/Buttons";
+import UserCards from "./UserCards";
+import PaymentCards from "./PaymentCards";
+import UsageCards from "./UsageCards";
 
-export default function AdminDashboardPage(): JSX.Element {
-    return (
-        <div className="space-y-6">
-            <h2 className="text-2xl font-semibold mb-2">대시보드</h2>
-            <div className="grid grid-cols-3 gap-4">
-                <div className="bg-white shadow rounded-xl p-4">
-                    <p className="text-sm text-gray-500">총 사용자</p>
-                    <h3 className="text-xl font-bold mt-1">123명</h3>
-                </div>
-                <div className="bg-white shadow rounded-xl p-4">
-                    <p className="text-sm text-gray-500">이번 달 매출</p>
-                    <h3 className="text-xl font-bold mt-1">₩1,200,000</h3>
-                </div>
-                <div className="bg-white shadow rounded-xl p-4">
-                    <p className="text-sm text-gray-500">활성 세션</p>
-                    <h3 className="text-xl font-bold mt-1">8개</h3>
-                </div>
-            </div>
+type Tab = "users" | "payments" | "usage";
+
+const AdminDashBoardPage: React.FC = () => {
+  const [tab, setTab] = React.useState<Tab>("users");
+
+  return (
+    <div className="bg-background text-foreground min-w-0">
+      <div className="p-4 border-b min-w-0">
+        <Buttons active={tab} onChange={(next) => setTab(next)} />
+      </div>
+
+      <div className="p-6 min-w-0">
+        <div className="max-w-6xl mx-auto grid gap-6 min-w-0">
+          {tab === "users" && (
+            <section className="min-w-0">
+              <UserCards />
+            </section>
+          )}
+
+          {tab === "payments" && (
+            <section className="min-w-0">
+              <PaymentCards />
+            </section>
+          )}
+
+          {tab === "usage" && (
+            <section className="min-w-0">
+              <UsageCards />
+            </section>
+          )}
         </div>
-    );
-}
+      </div>
+    </div>
+  );
+};
+
+export default AdminDashBoardPage;

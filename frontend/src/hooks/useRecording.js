@@ -34,7 +34,7 @@ export default function useRecording({ WS_URL, boardId, onData, onStartError }) 
         wsUrl = `${WS_URL}${separator}board_id=${boardId}`;
       }
       console.log("🔌 WebSocket connecting to:", wsUrl);
-      
+
       wsRef.current = new WebSocket(wsUrl);
       wsRef.current.binaryType = "arraybuffer";
 

@@ -1,6 +1,8 @@
 from sqlalchemy.orm import Session
 from backend.app import model
 from fastapi import Depends, HTTPException
+
+from backend.app.model import Folder, User
 from backend.app.schemas import folder_schema as schemas
 from backend.app.deps.auth import get_current_user
 

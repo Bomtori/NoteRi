@@ -1,12 +1,12 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AuthLayout from "./layouts/AuthLayout";
-// import PaymentButton from "./PaymentButton";              // ← 당장 안 쓰면 주석
-// import PaymentSuccess from "./PaymentSuccess";            // ← 중복 방지 위해 주석
+import PaymentButton from "./PaymentButton";              // ← 당장 안 쓰면 주석
+import PaymentSuccess from "./PaymentSuccess";            // ← 중복 방지 위해 주석
 import PaymentFail from "./PaymentFail";
 import ChatBox from "./test/ChatBox";
 import LoginPage from "./pages/LoginPage.jsx";
 import AuthCallback from "./test/AuthCallback.jsx";
-// import DashBoard from "./test/components/DashBoard.jsx";  // ← 임시 주석
+import DashBoard from "./test/components/DashBoard.jsx"
 import LandingPage from "./pages/LandingPage";
 import RecordListPage from "./pages/RecordListPage";
 import FolderListPage from "./pages/FolderListPage";
@@ -16,11 +16,6 @@ import RecordDetailPage from "./pages/RecordDetailPage.jsx";
 import UserPage from "./pages/UserPage.tsx";
 import MeetingPage from "./pages/MeetingPage.jsx";
 import PaymentSuccessPage from "./pages/PaymentSuccessPage.tsx";
-
-// 임시 대시보드 플레이스홀더 (라우트 유지하고 싶으면 사용)
-const DashboardPlaceholder = () => (
-  <div style={{ padding: 16 }}>Dashboard 준비 중…</div>
-);
 
 function App() {
   return (
@@ -55,11 +50,12 @@ function App() {
 
         {/* 기록/폴더/사용자/미팅 */}
         <Route path="/record" element={<RecordListPage />} />
-        <Route path="/folder/:id" element={<FolderListPage />} />
-        <Route path="/record/:id" element={<RecordDetailPage />} />
-        <Route path="/new" element={<NewRecordPage />} />
-        <Route path="/user" element={<UserPage />} />
-        <Route path="/meeting" element={<MeetingPage />} />
+                        <Route path="/folder/:id" element={<FolderListPage />} />
+                        <Route path="/record/:id" element={<RecordDetailPage />} />
+                        <Route path="/new" element={<NewRecordPage />} />
+                        <Route path="/user" element={<UserPage />} />
+                        <Route path="/meeting" element={<MeetingPage />} />
+                        <Route path="/payments/success" element={<PaymentSuccessPage />} />
       </Routes>
     </BrowserRouter>
   );

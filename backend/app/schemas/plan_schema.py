@@ -1,5 +1,6 @@
 from pydantic import BaseModel, condecimal, constr, ConfigDict
 from typing import Optional
+from pydantic import BaseModel, condecimal
 from datetime import datetime
 
 # 이름 규칙 (소문자/숫자/하이픈만)

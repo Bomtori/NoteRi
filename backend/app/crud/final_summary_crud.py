@@ -3,8 +3,33 @@ from __future__ import annotations
 from typing import List, Tuple, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import select, desc, func
-
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from backend.app.db import get_db
 from backend.app.model import RecordingSession, FinalSummary
+
+
+def list_final_summaries_by_board(
+    board_id: int = Path(..., ge=1),
+    session_id: Optional[int] = Query(
+        None, description="명시하면 해당 세션의 FinalSummary들, 없으면 보드의 최신 세션 FinalSummary들"
+    ),
+    db: Session = Depends(get_db),
+):
+    total, resolved_session_id, items = get_final_summaries_by_board(
+        db, board_id, session_id=session_id
+    )
+    if resolved_session_id == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No recording session found for this board (or session_id doesn't belong to this board).",
+        )
+    return {
+        "board_id": board_id,
+        "session_id": resolved_session_id,
+        "total": total,
+        "items": items,
+    }
+
 
 
 def _resolve_session_id_for_board(
@@ -84,3 +109,13 @@ def get_latest_final_summary_by_board(
     )
     latest = db.execute(stmt).scalars().first()
     return (1 if latest else 0, resolved_session_id if latest else 0, latest)
+
+def set_final_summary_rating(db: Session, final_summary_id: int, rating: int) -> FinalSummary | None:
+    fs = db.get(FinalSummary, final_summary_id)
+    if not fs:
+        return None
+    fs.rating = int(rating)
+    db.add(fs)
+    db.commit()
+    db.refresh(fs)
+    return fs

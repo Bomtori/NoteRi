@@ -34,7 +34,7 @@ async def get_user_me(
 
     # Plan.name 이 Enum(PlanType)이면 .value 로 문자열 뽑기
     plan_name = (
-        active_sub.plan.name.value
+        active_sub.plan.name
         if active_sub and active_sub.plan
         else "free" # 🍒 10.22 front None -> "free" 로변경 [만약 플랜이없으면 free로가라]
     )

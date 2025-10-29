@@ -2,7 +2,7 @@ from sqlalchemy import (
     Column, Integer, String, Date, Text, Boolean,
     ForeignKey, Enum, Float, JSON, TIMESTAMP, Numeric, UniqueConstraint, DateTime
 )
-from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy.orm import relationship, declarative_base, backref
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import JSONB
 import enum
@@ -27,6 +27,9 @@ updated_at = Column(
     server_default=func.now(),  # 생성 시
     onupdate=func.now(),   # ORM 업데이트 시 자동
 )
+
+EventStatusEnum = Enum("confirmed", "tentative", "cancelled",
+                       name="event_status")
 
 # Users
 class User(Base):
@@ -102,7 +105,7 @@ class Plan(Base):
     __tablename__ = "plans"
 
     id = Column(Integer, primary_key=True)
-    name = Column(Enum(PlanType), unique=True, nullable=False)  # free, pro, enterprise
+    name = Column(String(32), unique=True, nullable=False, index=True)  # 문자열로 전환
     price = Column(Numeric(10, 2), nullable=False, default=0.00)  # ex) 0, 10000, 30000
     duration_days = Column(Integer, nullable=False, default=30)   # 구독 기간 (ex. 30일)
     allocated_seconds = Column(Integer, nullable=False, default=18000)  # 녹음 시간
@@ -400,3 +403,60 @@ class FinalSummary(Base):
 
     # 관계 (RecordingSession ↔ FinalSummary: 1:N 가능)
     session = relationship("RecordingSession", backref="final_summaries")
+
+class Calendar(Base):
+    __tablename__ = "calendars"
+
+    id = Column(Integer, primary_key=True)
+    owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    name = Column(String(100), nullable=False, default="My Calendar")
+    timezone = Column(String(64), nullable=False, default="Asia/Seoul")
+
+    default_bg_color = Column(String(20))
+    default_text_color = Column(String(20))
+    default_border_color = Column(String(20))
+
+    # is_primary, visibility 등 다캘린더용 필드가 필요 없으면 제거 권장
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP(timezone=True), onupdate=func.now())
+
+    owner = relationship("User", backref=backref("calendar", uselist=False, cascade="all, delete-orphan"))
+
+class CalendarEvent(Base):
+    __tablename__ = "calendar_events"
+
+    id = Column(Integer, primary_key=True)
+    # ★ 핵심: 캘린더 대신 사용자 기준
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    # (선택) 특정 보드/프로젝트에 묶고 싶다면
+    board_id = Column(Integer, ForeignKey("boards.id", ondelete="SET NULL"), nullable=True)
+
+    title = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    location = Column(String(200), nullable=True)
+    url = Column(String(300), nullable=True)
+
+    start_time = Column(TIMESTAMP(timezone=True), nullable=False)
+    end_time = Column(TIMESTAMP(timezone=True), nullable=True)
+    all_day = Column(Boolean, nullable=False, default=False)
+
+    # FullCalendar 색상 커스텀
+    background_color = Column(String(20), nullable=True)
+    text_color = Column(String(20), nullable=True)
+    border_color = Column(String(20), nullable=True)
+
+    status = Column(EventStatusEnum, nullable=False, default="confirmed")
+
+    # 반복/예외/확장
+    rrule = Column(Text, nullable=True)  # "FREQ=WEEKLY;BYDAY=MO,WE" 등
+    exdates = Column(JSONB, nullable=True)  # ["2025-11-03T00:00:00+09:00", ...]
+    extended_props = Column(JSONB, nullable=True)  # 임의 확장 필드
+
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP(timezone=True), onupdate=func.now())
+
+    remind_morning = Column(Boolean, nullable=False, server_default="true")
+
+    user = relationship("User", foreign_keys=[user_id])

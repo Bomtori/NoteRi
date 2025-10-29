@@ -186,7 +186,7 @@ export default function MeetingPage() {
       setPendingMapping(true);
       const sid = sidRef.current;
       let tries = 0;
-      while (tries++ < 40) { // 최대 20초
+      while (tries++ < 60) { // 최대 30초 (요약 생성 대기 포함)
         try {
           const res = await fetch(`${API_BASE}/sessions/by-sid/${sid}`);
           if (res.status === 202) {
@@ -196,9 +196,34 @@ export default function MeetingPage() {
             console.log("✅ 세션 매핑 완료:", data.id);
             setSessionId(data.id);
             setPendingMapping(false);
-            // ✅ 전체 요약 자동 불러오기 시도
+
+            // ✅ [1단계] 프론트 보유 확정 문장(history)으로 전체 요약 생성 & 저장
             try {
-              const summaryRes = await fetch(`${API_BASE}/summaries/by-session/${data.id}`);
+              if (history.length > 0) {
+                console.log("🧾 Generating final summary from frontend history…");
+                const finRes = await fetch(`${API_BASE}/sessions/${data.id}/finalize-summary`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ lines: history }),
+                });
+
+                if (finRes.ok) {
+                  const fin = await finRes.json();
+                  setFinalSummary(fin); // 바로 UI 반영
+                  console.log("🧾 Final summary created via frontend:", fin);
+                } else {
+                  console.warn("⚠️ finalize-summary failed:", finRes.status);
+                }
+              } else {
+                console.warn("⚠️ No history lines to summarize.");
+              }
+            } catch (err) {
+              console.warn("⚠️ finalize-summary error:", err);
+            }
+
+            // ✅ [2단계] 백엔드 저장된 전체 요약 다시 확인 (보정용)
+            try {
+              const summaryRes = await fetch(`${API_BASE}/sessions/final-summaries/by-session/${data.id}`);
               if (summaryRes.ok) {
                 const summaryData = await summaryRes.json();
                 setFinalSummary(summaryData);
@@ -209,6 +234,7 @@ export default function MeetingPage() {
             } catch (err) {
               console.warn("⚠️ final summary fetch failed:", err);
             }
+
             break;
           } else {
             console.warn("by-sid unexpected status:", res.status);
@@ -221,7 +247,8 @@ export default function MeetingPage() {
       // 그래도 못 받았으면 안내만
       if (!sessionId) setPendingMapping(false);
     }
-  };
+  }
+
 
   // 필요 시: diarization 버튼 누를 때도 마지막 보정 폴링 한번 더
   const ensureSessionId = async () => {

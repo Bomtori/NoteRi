@@ -6,7 +6,7 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b-instruct-q4_K_M")
 PROMPT = """다음은 회의 전체 기록입니다.
 구어체를 문서체로 정리하고, 아래 JSON 형식으로만 응답하세요.
 
-{"title": "...", "bullets": ["...", "..."], "actions": ["...", "..."]}
+{{"title": "...", "bullets": ["...", "..."], "actions": ["...", "..."]}}
 
 요구:
 - title: 한 줄 요약 제목

@@ -10,7 +10,7 @@ from backend.app.crud import board_crud as crud
 from backend.app.deps.auth import get_current_user
 from backend.app.model import User, Board
 from pydantic import BaseModel, StringConstraints
-from typing import Annotated
+from typing import Annotated, Optional
 
 router = APIRouter(prefix="/boards", tags=["boards"])
 
@@ -28,7 +28,7 @@ def create_board(
 
 # Read all
 @router.get("/", response_model=list[schemas.BoardResponse],  response_model_exclude_unset=True)
-def read_boards(skip: int = 0, limit: int = 10, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def read_boards(skip: int = 0, limit: Optional[int] = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return crud.get_boards(db, current_user.id, skip=skip, limit=limit)
 
 # Recent

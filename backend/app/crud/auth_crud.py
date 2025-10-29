@@ -121,8 +121,8 @@ def get_or_create_user(
 
 
 def generate_login_response(db_user: User):
-    access_token = create_access_token({"sub": str(db_user.id), "email": db_user.email})
-    refresh_token = create_refresh_token({"sub": str(db_user.id), "email": db_user.email})
+    access_token = create_access_token({"sub": str(db_user.id), "email": db_user.email, "role": db_user.role,})  # 🍒 10.28 frontend 토큰 권한추가
+    refresh_token = create_refresh_token({"sub": str(db_user.id), "email": db_user.email, "role": db_user.role,})  # 🍒 10.28 frontend 토큰 권한추가
 
     response = JSONResponse({
         "access_token": access_token,
@@ -134,6 +134,7 @@ def generate_login_response(db_user: User):
             "name": db_user.name,
             "nickname": db_user.nickname,
             "picture": db_user.picture,
+            "role": db_user.role, # 🍒 10.28 frontend 토큰 권한추가
         },
     })
 

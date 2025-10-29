@@ -1,17 +1,18 @@
 # backend/app/scheduler.py
-from datetime import date, timedelta, UTC, datetime
+from datetime import date, timedelta, UTC, datetime, time
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy.orm import Session
 
 from backend.app.db import SessionLocal
-from backend.app.model import Subscription, Plan, PlanType, Payment, User
+from backend.app.model import Subscription, Plan, PlanType, Payment, User, Notification, CalendarEvent
 from backend.app.crud import recording_usage_crud
 
 _scheduler: Optional[AsyncIOScheduler] = None
-
+KST = ZoneInfo("Asia/Seoul")
 def _with_session(fn):
     """DB 세션을 열고 닫는 데코레이터(스케줄러 잡용)."""
     def wrapper(*args, **kwargs):
@@ -144,6 +145,12 @@ def start_scheduler():
     _scheduler = AsyncIOScheduler(timezone="Asia/Seoul")
     _scheduler.add_job(expire_subscriptions, CronTrigger(hour=1, minute=0))
     _scheduler.add_job(renew_due_subscriptions, CronTrigger(hour=3, minute=0))
+    _scheduler.add_job(
+        send_morning_calendar_notifications,
+        CronTrigger(hour=8, minute=0, timezone=KST),
+        id="calendar_morning_notifications",
+        replace_existing=True,
+    )
     _scheduler.start()
     print("[Scheduler] Started: expire@01:00, renew@03:00")
     return _scheduler
@@ -194,5 +201,77 @@ def unban_expired_users(db: Session):
                 reason=None,
                 until=None,
             ))
+
+    db.commit()
+
+def _today_range_kst():
+    now = datetime.now(KST)
+    start = datetime.combine(now.date(), time(0, 0, 0), tzinfo=KST)
+    end   = start + timedelta(days=1)
+    return start, end
+
+@_with_session
+def send_morning_calendar_notifications(db: Session):
+    """당일(로컬 KST) 일정들을 유저별로 모아 아침 알림 생성"""
+    day_start, day_end = _today_range_kst()
+
+    # remind_morning 컬럼이 있다면 조건 포함
+    q = (
+        db.query(CalendarEvent)
+        .filter(
+            CalendarEvent.start_time >= day_start,
+            CalendarEvent.start_time < day_end,
+            # CalendarEvent.remind_morning == True,   # ← 컬럼 쓴다면 주석 해제
+        )
+    )
+
+    events = q.all()
+    if not events:
+        return
+
+    # 유저별 그룹핑
+    by_user = {}
+    for ev in events:
+        by_user.setdefault(ev.user_id, []).append(ev)
+
+    for user_id, user_events in by_user.items():
+        # 중복 방지: 오늘 이미 보낸 적 있으면 skip
+        already = (
+            db.query(Notification)
+            .filter(
+                Notification.user_id == user_id,
+                Notification.type == "calendar_morning",
+                Notification.created_at >= day_start,
+                Notification.created_at < day_end,
+            )
+            .first()
+        )
+        if already:
+            continue
+
+        # 내용 만들기 (최대 5개만 상세, 나머지는 +N)
+        def fmt(dt: datetime):
+            # 사용자별 타임존이 있다면 그걸로 변환 (User.calendar.timezone 사용 가능)
+            local = dt.astimezone(KST)
+            return local.strftime("%H:%M")
+
+        items = [
+            f"• {ev.title}" + ("" if ev.all_day else f" ({fmt(ev.start_time)})")
+            for ev in sorted(user_events, key=lambda e: e.start_time)
+        ]
+        preview = "\n".join(items[:5])
+        if len(items) > 5:
+            preview += f"\n…외 {len(items)-5}건"
+
+        content = f"오늘 일정 {len(user_events)}건\n{preview}"
+
+        noti = Notification(
+            user_id=user_id,
+            type="calendar_morning",
+            content=content,
+            is_read=False,
+            created_at=datetime.now(KST),
+        )
+        db.add(noti)
 
     db.commit()

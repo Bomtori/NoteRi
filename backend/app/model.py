@@ -32,6 +32,9 @@ updated_at = Column(
     onupdate=func.now(),   # ORM 업데이트 시 자동
 )
 
+EventStatusEnum = Enum("confirmed", "tentative", "cancelled",
+                       name="event_status")
+
 # Users
 class User(Base):
     __tablename__ = "users"

@@ -9,10 +9,21 @@ from sqlalchemy import desc
 from backend.app.db import SessionLocal
 from backend.app.model import RecordingSession, RecordingResult
 from backend.services.diarization import run_diarization_for_session
+from backend.app import model as models
+from backend.app import model as models  # ✅ FinalSummary ORM 접근용
+from pydantic import BaseModel
+from typing import List
+from backend.app.tasks.final_summary import (
+    build_final_summary_from_lines,
+    persist_final_summary,
+)
 from backend.app.schemas.sessions_schema import (RecordingSessionListResponse, RecordingSessionResponse)
 from backend.app.crud.session_crud import get_sessions_by_board
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
+
+class FinalizePayload(BaseModel):
+    lines: List[str]
 
 @router.get("/latest")
 def get_latest_session():
@@ -107,3 +118,59 @@ def list_recording_sessions_by_board(
     """
     total, items = get_sessions_by_board(db, board_id, limit=limit, offset=offset)
     return {"total": total, "items": items}
+
+@router.post("/{session_id}/finalize-summary")
+async def finalize_summary(session_id: int, payload: FinalizePayload):
+    """
+    프론트에서 확정 문장 배열(lines)을 보내면
+    → Qwen으로 최종 요약 생성 → final_summaries에 저장 → 결과 반환
+    (Redis/메모리/레코드 의존 없이 안정적으로 동작)
+    """
+    # 1) 최소 검증
+    lines = [ln.strip() for ln in payload.lines if ln and ln.strip()]
+    if not lines:
+        raise HTTPException(status_code=400, detail="No lines to summarize")
+
+    # 2) 실제 세션 존재 확인(안전)
+    with SessionLocal() as db:
+        exists = db.query(models.RecordingSession.id).filter(models.RecordingSession.id == session_id).first()
+        if not exists:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+    # 3) 요약 생성
+    final_json = await build_final_summary_from_lines(lines)
+    raw_text = "\n".join(lines)
+
+    # 4) DB 저장
+    persist_final_summary(
+        recording_session_id=session_id,
+        summary_json=final_json,
+        raw_text=raw_text,
+    )
+
+    # 5) 응답(프론트 즉시 표시용)
+    return final_json
+
+
+@router.get("/final-summaries/by-session/{session_id}")
+def get_final_summary_by_session(session_id: int):
+    """
+    프론트에서 세션 전체 요약을 읽을 때 사용하는 엔드포인트.
+    final_summaries 테이블의 최신 1건을 반환한다.
+    """
+    with SessionLocal() as db:
+        row = (
+            db.query(models.FinalSummary)
+            .filter(models.FinalSummary.recording_session_id == session_id)
+            .order_by(models.FinalSummary.created_at.desc())
+            .first()
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Final summary not found")
+        return {
+            "title": row.title,
+            "bullets": row.bullets or [],
+            "actions": row.actions or [],
+            "content": row.content,
+            "created_at": row.created_at,
+        }

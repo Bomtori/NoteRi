@@ -45,6 +45,10 @@ def notion_login(current_user: User = Depends(get_current_user)):
         "state": state,
     }
     url = "https://api.notion.com/v1/oauth/authorize?" + urllib.parse.urlencode(params)
+     # ✅ 로그로 전체 URL 찍기
+    logger.info(f"✅ Notion 로그인 시도 by user {current_user.id}")
+    logger.info(f"➡️ 리다이렉트 URL: {url}")
+    logger.info(f"CLIENT_ID={CLIENT_ID}, REDIRECT_URI={REDIRECT_URI}")
     return RedirectResponse(url)
 
 

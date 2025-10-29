@@ -1,6 +1,7 @@
 from pydantic import BaseModel, StringConstraints, ConfigDict, Field
 from typing import Optional, List, Annotated
 from datetime import datetime
+from backend.app.schemas.folder_schema import FolderResponse
 
 # -----------------------------
 # AudioData
@@ -85,6 +86,7 @@ class BoardResponse(BaseModel):
     description: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    folder: Optional["FolderResponse"] = None # 🍒 수정 10.27 frontend folderResponse
 
     # ✅ 1:N 관계 → 리스트로 변경해야 함
     audios: List[AudioResponse] = Field(default_factory=list)

@@ -9,7 +9,9 @@ from sqlalchemy import or_
 from passlib.hash import argon2
 import re
 import backend.app.model as model
+from backend.app.model import Board
 from backend.app.schemas import board_schema as schemas
+from sqlalchemy.orm import joinedload
 
 
 # -----------------------------
@@ -80,23 +82,55 @@ def create_board(db: Session, current_user_id: int, data: schemas.BoardCreate):
 # -----------------------------
 # Read (소유 + 공유 받은 보드)
 # -----------------------------
-def get_boards(db: Session, current_user_id: int, skip: int = 0, limit: int = 10):
-    return (
-        db.query(model.Board)
-        .outerjoin(model.BoardShare, model.BoardShare.board_id == model.Board.id)
-        .filter(
-            or_(
-                model.Board.owner_id == current_user_id,
-                model.BoardShare.user_id == current_user_id,
-            )
-        )
-        .order_by(model.Board.updated_at.desc().nullslast())
+def get_boards(db: Session, user_id: int, skip=0, limit: int | None = None):
+    query = (
+        db.query(Board)
+        .filter(Board.owner_id == user_id)
+        .options(joinedload(model.Board.folder))
         .offset(skip)
-        .limit(limit)
-        .distinct()
-        .all()
     )
 
+    if limit is not None:  # ✅ limit 있을 때만 적용
+        query = query.limit(limit)
+
+    boards = query.all()
+
+    result = []
+    for b in boards:
+        result.append({
+            "id": b.id,
+            "owner_id": b.owner_id,
+            "title": b.title,
+            "folder_id": b.folder_id,
+            "description": b.description,
+            "created_at": b.created_at,
+            "updated_at": b.updated_at,
+            "folder": (
+                {
+                    "id": b.folder.id,
+                    "name": b.folder.name,
+                    "color": b.folder.color,
+                } if b.folder else None
+            ),
+            "audios": [
+                {
+                    "id": a.id,
+                    "file_path": a.file_path,
+                    "duration": a.duration,
+                    "language": a.language,
+                    "created_at": a.created_at,
+                } for a in b.audios or []
+            ],
+            "memos": [
+                {
+                    "id": m.id,
+                    "content": m.content,
+                    "created_at": m.created_at,
+                    "user_id": m.user_id,
+                } for m in b.memos or []
+            ]
+        })
+    return result
 
 def get_board(db: Session, current_user_id: int, board_id: int):
     board = db.query(model.Board).filter(model.Board.id == board_id).first()

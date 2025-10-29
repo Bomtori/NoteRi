@@ -9,7 +9,7 @@ from datetime import datetime
 import time
 from uuid import uuid4
 from datetime import datetime
-
+import traceback
 from starlette.websockets import WebSocketState
 
 from backend.ml.stt_model import STTModel
@@ -19,6 +19,12 @@ from backend.ml.postprocess.timestamp_deduplicator import TimestampDeduplicator
 from backend.ml.summarizer import ThreeLineSummarizer
 from backend.config import VAD_THRESHOLD, VAD_SAMPLE_RATE
 from backend.services.diarization import run_diarization_for_session
+from backend.ml.postprocess.text_cleaner import normalize_transcript_lines, TextCleaner
+from backend.app.tasks.final_summary import (
+    build_final_summary_from_lines,
+    persist_final_summary,
+    fetch_lines_from_db,
+)
 
 # ✅ Redis 퍼블리셔 (요구사항 반영: session_id 필드 미사용, raw_text/speaker_label 사용)
 from backend.app.util.redis_publisher import (
@@ -159,6 +165,21 @@ class STTPipeline:
                 pass
         self.summary_task = None
 
+        # ✅ (1) 최종 요약에 쓸 라인들 **먼저 복사**해둠 (reset_all 전에!)
+        all_lines_for_final: list[str] = []
+
+        # 🔥 FIX: 튜플 (timestamp, text)에서 text만 추출
+        for ts, text in getattr(self, "paragraph_buffer", []):
+            if text and text.strip():
+                all_lines_for_final.append(text.strip())
+
+        # segmenter 버퍼도 추가
+        seg = getattr(self, "segmenter", None)
+        if seg and getattr(seg, "buffer", ""):
+            buffer_text = seg.buffer.strip()
+            if buffer_text:
+                all_lines_for_final.append(buffer_text)
+
         self.session_active = False
         self.ws = None
         logger.info("🔴 Session ended: summary loop stopped.")
@@ -190,6 +211,37 @@ class STTPipeline:
             except Exception as e:
                 logger.warning(f"diarization failed: {e}")
 
+        # ✅ (2) ingest로 session_id가 확보되면 → 복사해둔 라인으로 최종 요약 생성/저장
+        try:
+            if not session_id:
+                logger.info("🧾 Final summary skipped (no session_id).")
+                return
+
+            # 2-1) 메모리 라인이 없으면 DB에서 대체 소스 확보
+            lines = all_lines_for_final
+            if not lines:
+                lines = await asyncio.to_thread(fetch_lines_from_db, session_id)
+
+            if not lines:
+                logger.info("🧾 Final summary skipped (no lines from memory/DB).")
+                return
+
+            # 2-2) 요약 생성 + 저장
+            final_json = await build_final_summary_from_lines(lines)
+            raw_text = "\n".join([ln for ln in lines if ln and ln.strip()])
+            
+            # 🔥 FIX: persist_final_summary는 동기 함수이므로 to_thread 사용
+            await asyncio.to_thread(
+                persist_final_summary,
+                recording_session_id=session_id,
+                summary_json=final_json,
+                raw_text=raw_text
+            )
+            logger.info("🧾 Final summary created and saved.")
+        except Exception as e:
+            logger.error(f"Final summary failed: {e}")
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
+            logger.error(f"lines type: {type(lines)}, lines sample: {lines[:2] if lines else 'empty'}")
     # ---------------------------------------------------------------------
     # 내부 타이머 루프 & 요약 로직
     # ---------------------------------------------------------------------

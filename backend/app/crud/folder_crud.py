@@ -40,23 +40,16 @@ def get_folder(db: Session, folder_id: int, current_user: model.User):
     )
 
 # Read all
-def get_folders(
-    db: Session,
-    user: User,
-    *,
-    skip: int = 0,
-    limit: int = 100,
-):
-    q = (
-        db.query(Folder)           # 실제 모델명으로 수정
-        .filter(Folder.user_id == user.id)
-        .order_by(Folder.created_at.desc())
+def get_folders(db: Session, user_id: int, skip: int = 0, limit: int = 10):
+    return (
+        db.query(model.Folder)
+        .filter(model.Folder.user_id == user_id)
+        .offset(skip)
     )
-    if skip:
-        q = q.offset(skip)
     if limit:
-        q = q.limit(limit)
-    return q.all()
+        query = query.limit(limit)
+    return query.all()
+
 
 # ✅ 폴더별 보드 목록
 def get_boards_by_folder(db: Session, folder_id: int):

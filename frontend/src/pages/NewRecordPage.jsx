@@ -99,7 +99,6 @@ export default function NewRecordPage() {
             }
             await startRecording();
             setIsRecording(true);
-            showToast("녹음을 시작했습니다 🎧");
         } catch (err) {
             console.error("녹음 시작 실패:", err);
             showToast("녹음을 시작할 수 없습니다.");

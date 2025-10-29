@@ -38,7 +38,7 @@ function SummaryCard({ summaryText }) {
                     </p>
                 </div>
             ) : (
-                // ✅ 요약 완료 시 문장 순차 등장
+                // 요약 완료 시 문장 순차 등장
                 <motion.div
                     variants={{
                         visible: {
@@ -66,7 +66,7 @@ function SummaryCard({ summaryText }) {
         </motion.div>
     );
 }
-
+export default SummaryCard;
 
 
 

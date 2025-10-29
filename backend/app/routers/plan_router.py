@@ -1,16 +1,15 @@
 # backend/app/routers/plan_router.py
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
+from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy.orm import Session
 from typing import List
 
 from backend.app.db import get_db
-from backend.app.deps.auth import get_current_user
-from backend.app.model import User
 from backend.app.schemas.plan_schema import (
     PlanRead, PlanCreate, PlanUpdate, PlanPriceUpdate
 )
 from backend.app.crud import plan_crud
 from backend.app.util.authz import require_admin
+
 router = APIRouter(prefix="/plans", tags=["Plans"])
 
 # ───────────────────────────────
@@ -42,9 +41,7 @@ def change_plan_price(
     payload: PlanPriceUpdate,
     db: Session = Depends(get_db),
 ):
-    """
-    플랜 가격만 변경(관리자)
-    """
+    """플랜 가격만 변경(관리자)"""
     return plan_crud.update_plan_price(db, plan_id, payload.price)
 
 @router.patch("/{plan_id}", response_model=PlanRead, dependencies=[Depends(require_admin)])

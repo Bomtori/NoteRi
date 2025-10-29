@@ -7,7 +7,7 @@ from sqlalchemy import func, or_, and_
 from backend.app.model import User, Subscription, Plan, Payment
 from backend.app.schemas.admin_user_overview_schema import (
     AdminUserOverview,
-    AdminUserOverviewListResponse,
+    AdminUserOverviewListResponse, AdminUserPayment,
 )
 
 def _collect_payment_maps(
@@ -167,29 +167,80 @@ def list_overviews(
     return AdminUserOverviewListResponse(total=total, items=items)
 
 
-def get_overview(db: Session, user_id: int) -> Optional[AdminUserOverview]:
-    """특정 사용자 개요(상세 패널용)."""
+def _fetch_user_payments(
+    db: Session,
+    user_id: int,
+    limit: int = 50,
+) -> List[AdminUserPayment]:
+    """
+    해당 유저의 결제 내역을 최신순으로 가져온다.
+    Payment → (LEFT JOIN) Subscription → (LEFT JOIN) Plan 으로 플랜명까지 포함.
+    """
+    rows = (
+        db.query(
+            Payment.id,
+            Payment.amount,
+            Payment.status,
+            Payment.method,
+            Payment.order_id,
+            Payment.approved_at,
+            Plan.name.label("plan_name"),  # ✅ Plan 이름
+        )
+        .join(Subscription, Subscription.id == Payment.subscription_id, isouter=True)
+        .join(Plan, Plan.id == Subscription.plan_id, isouter=True)
+        .filter(Payment.user_id == user_id)
+        .order_by(Payment.approved_at.desc().nullslast(), Payment.id.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return [
+        AdminUserPayment(
+            id=r.id,
+            amount=float(r.amount or 0),
+            status=r.status,
+            method=r.method,
+            order_id=r.order_id,
+            approved_at=r.approved_at,
+            plan_name=r.plan_name,  # ✅ 구독을 통해 얻은 플랜명 (없으면 None)
+        )
+        for r in rows
+    ]
+
+def get_overview(
+    db: Session,
+    user_id: int,
+    *,
+    include_payments: bool = True,
+    payments_limit: int = 50,
+) -> Optional[AdminUserOverview]:
+    """특정 사용자 개요(상세 패널용) + (옵션) 결제 내역."""
     u: Optional[User] = db.query(User).filter(User.id == user_id).one_or_none()
     if not u:
         return None
 
+    # 집계
     total_paid_map, latest_status_map = _collect_payment_maps(db, [u.id])
     latest_sub_map = _collect_latest_subscription_map(db, [u.id])
     plan_name, end_date, sub_is_active = latest_sub_map.get(u.id, (None, None, None))
 
-    payload = {
-        "user_id": u.id,
-        "name": getattr(u, "name", None),
-        "email": getattr(u, "email", None),
-        "is_banned": bool(getattr(u, "is_banned", False)),
-        "banned_reason": getattr(u, "banned_reason", None),
-        "banned_until": getattr(u, "banned_until", None),
-        "is_active": bool(getattr(u, "is_active", True)),  # users.is_active
-        "plan_name": plan_name,
-        "subscription_is_active": sub_is_active,  # ✅ status 대신 is_active 노출
-        "latest_payment_status": latest_status_map.get(u.id),
-        "total_paid_amount": float(total_paid_map.get(u.id, 0.0)),
-        "next_billing_date": end_date if sub_is_active else None,
-        "joined_at": u.created_at,
-    }
-    return AdminUserOverview(**payload)
+    payments_list: List[AdminUserPayment] = []
+    if include_payments:
+        payments_list = _fetch_user_payments(db, u.id, limit=payments_limit)
+
+    return AdminUserOverview(
+        user_id=u.id,
+        name=getattr(u, "name", None),
+        email=getattr(u, "email", None),
+        is_banned=bool(getattr(u, "is_banned", False)),
+        banned_reason=getattr(u, "banned_reason", None),
+        banned_until=getattr(u, "banned_until", None),
+        is_active=bool(getattr(u, "is_active", True)),
+        plan_name=plan_name,
+        subscription_is_active=sub_is_active,
+        latest_payment_status=latest_status_map.get(u.id),
+        total_paid_amount=float(total_paid_map.get(u.id, 0.0)),
+        next_billing_date=end_date if sub_is_active else None,
+        joined_at=u.created_at,
+        payments=payments_list,  # ✅ 포함
+    )

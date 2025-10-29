@@ -1,6 +1,8 @@
 from sqlalchemy.orm import Session
 from backend.app import model
 from fastapi import Depends, HTTPException
+
+from backend.app.model import Folder, User
 from backend.app.schemas import folder_schema as schemas
 from backend.app.deps.auth import get_current_user
 
@@ -40,20 +42,21 @@ def get_folder(db: Session, folder_id: int, current_user: model.User):
 # Read all
 def get_folders(
     db: Session,
+    user: User,
+    *,
     skip: int = 0,
-    limit: int | None = None,
-    current_user: model.User = Depends(get_current_user)
+    limit: int = 100,
 ):
-    query = (
-        db.query(model.Folder)
-        .filter(model.Folder.user_id == current_user.id)
-        .order_by(model.Folder.created_at.desc())  # ✅ 최신순 정렬
-        .offset(skip)
+    q = (
+        db.query(Folder)           # 실제 모델명으로 수정
+        .filter(Folder.user_id == user.id)
+        .order_by(Folder.created_at.desc())
     )
+    if skip:
+        q = q.offset(skip)
     if limit:
-        query = query.limit(limit)
-    return query.all()
-
+        q = q.limit(limit)
+    return q.all()
 
 # ✅ 폴더별 보드 목록
 def get_boards_by_folder(db: Session, folder_id: int):

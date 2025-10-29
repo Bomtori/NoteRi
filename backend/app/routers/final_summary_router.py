@@ -47,10 +47,37 @@ def get_rating_summary(db: Session = Depends(get_db)):
     average = round(ssum/total, 2) if total else 0.0
     return {"total": total, "average": average, "counts": counts}
 @router.get(
-    "/{board_id}",
+    "/{board_id}/final-summaries",
     response_model=FinalSummaryListResponse,
     summary="보드의 (특정/최신) 세션의 FinalSummary 전체 조회",
 )
+def list_final_summaries_by_board(
+    board_id: int = Path(..., ge=1),
+    session_id: Optional[int] = Query(
+        None, description="명시하면 해당 세션의 FinalSummary들, 없으면 보드의 최신 세션 FinalSummary들"
+    ),
+    db: Session = Depends(get_db),
+):
+    total, resolved_session_id, items = get_final_summaries_by_board(
+        db, board_id, session_id=session_id
+    )
+
+    # ✅ 세션이 없으면 null과 빈 배열로 반환 (404 아님)
+    if resolved_session_id == 0:
+        return {
+            "board_id": board_id,
+            "session_id": None,
+            "total": 0,
+            "items": [],
+        }
+
+    return {
+        "board_id": board_id,
+        "session_id": resolved_session_id,
+        "total": total,
+        "items": items,
+    }
+
 @router.get(
     "/{board_id}/latest",
     response_model=FinalSummaryResponse,

@@ -114,6 +114,7 @@ export default function Calendar() {
 
   // Click -> open update editor
   const onEventClick = useCallback((arg: EventClickArg) => {
+     arg.jsEvent.preventDefault();
     const e = arg.event;
     setForm({
       id: String(e.id),
@@ -231,14 +232,44 @@ export default function Calendar() {
     }
   }, [form, refresh]);
 
+  const ymd = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  const LILAC = {
+  50:  "#f5f3ff",
+  100: "#ede9fe",
+  200: "#ddd6fe",
+  300: "#c4b5fd",
+  400: "#a78bfa",
+  500: "#8b5cf6",
+  600: "#7c3aed",
+  700: "#6d28d9",
+  800: "#5b21b6",
+  900: "#4c1d95",
+};
+
   return (
-    <div className="w-[300px] rounded-2xl border shadow-sm p-2 bg-background text-foreground">
+    <div className="w-[400px] rounded-2xl border shadow-sm p-2 bg-background text-foreground"
+     style={
+        {
+          // shadcn 색 변수
+          ["--primary" as any]: LILAC[600],
+          ["--primary-foreground" as any]: "white",
+          ["--muted" as any]: LILAC[50],
+          ["--muted-foreground" as any]: "#4b5563",
+          // FullCalendar 커스텀 변수(임의)
+          ["--fc-lilac" as any]: LILAC[600],
+          ["--fc-lilac-soft" as any]: LILAC[100],
+          ["--fc-lilac-ink" as any]: LILAC[900],
+        } as React.CSSProperties
+      }
+    >
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-semibold">My Calendar</h3>
         <div className="text-[11px] opacity-70">mini</div>
       </div>
 
-      <FullCalendar
+           <FullCalendar
         ref={calRef as any}
         plugins={[dayGridPlugin, interactionPlugin]}
         initialView="dayGridMonth"
@@ -260,6 +291,15 @@ export default function Calendar() {
         eventTimeFormat={{ hour: "2-digit", minute: "2-digit", meridiem: false }}
         dayHeaderFormat={{ weekday: "short" }}
         buttonText={{ today: "오늘" }}
+        dayCellClassNames={(arg) => {
+          const classes: string[] = [];
+          const dow = arg.date.getDay(); // 0: Sun, 6: Sat
+          const dateStr = ymd(arg.date);
+          if (dow === 0) classes.push("is-sun");
+          if (dow === 6) classes.push("is-sat");
+
+          return classes;
+        }}
       />
 
       {showEditor && form && (
@@ -276,28 +316,28 @@ export default function Calendar() {
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="desc">메모</Label>
+            <Label htmlFor="desc">일정</Label>
             <Textarea
               id="desc"
-              placeholder="간단한 설명"
+              placeholder="..."
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Switch
-                id="allday"
-                checked={form.allDay}
-                onCheckedChange={(v) => setForm({ ...form, allDay: !!v })}
-              />
-              <Label htmlFor="allday">하루 종일</Label>
-            </div>
-            <div className="text-xs opacity-70">
-              {new Date(form.start).toLocaleString()} {form.end ? "– " + new Date(form.end).toLocaleString() : ""}
-            </div>
-          </div>
+          {/*<div className="flex items-center justify-between">*/}
+          {/*  <div className="flex items-center gap-2">*/}
+          {/*    <Switch*/}
+          {/*      id="allday"*/}
+          {/*      checked={form.allDay}*/}
+          {/*      onCheckedChange={(v) => setForm({ ...form, allDay: !!v })}*/}
+          {/*    />*/}
+          {/*    <Label htmlFor="allday">하루 종일</Label>*/}
+          {/*  </div>*/}
+          {/*  <div className="text-xs opacity-70">*/}
+          {/*    {new Date(form.start).toLocaleString()} {form.end ? "– " + new Date(form.end).toLocaleString() : ""}*/}
+          {/*  </div>*/}
+          {/*</div>*/}
 
           <div className="flex items-center gap-2 justify-end">
             {form.id && (
@@ -328,9 +368,9 @@ export default function Calendar() {
         </div>
       )}
 
-      <p className="mt-2 text-[11px] text-muted-foreground">
-        날짜를 드래그해 일정 추가 · 이벤트 드래그/리사이즈로 시간 변경
-      </p>
+      {/*<p className="mt-2 text-[11px] text-muted-foreground">*/}
+      {/*  날짜를 드래그해 일정 추가 · 이벤트 드래그/리사이즈로 시간 변경*/}
+      {/*</p>*/}
 
       <style>{`
         .fc { font-size: 11px; }
@@ -338,6 +378,9 @@ export default function Calendar() {
         .fc .fc-daygrid-day-number { font-size: 11px; }
         .fc .fc-daygrid-dot-event .fc-event-title { white-space: nowrap; }
         .fc .fc-event { border-radius: 6px; }
+        .fc .is-sun .fc-daygrid-day-number { color: #e11d48; } /* 일요일: 붉은색(rose-600) */
+        .fc .is-sat .fc-daygrid-day-number { color: #2563eb; } /* 토요일: 파란색(blue-600) */
+        .fc .is-holiday .fc-daygrid-day-number { color: #e11d48; } /* 공휴일: 붉은색 */
       `}</style>
     </div>
   );

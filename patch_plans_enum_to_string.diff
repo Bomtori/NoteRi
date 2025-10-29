@@ -1,0 +1,86 @@
+--- a/backend/app/model.py
++++ b/backend/app/model.py
+@@ -102,7 +102,7 @@
+     __tablename__ = "plans"
+ 
+     id = Column(Integer, primary_key=True)
+-    name = Column(Enum(PlanType), unique=True, nullable=False)  # free, pro, enterprise
++    name = Column(String(32), unique=True, nullable=False, index=True)  # free, pro, enterprise
+     price = Column(Numeric(10, 2), nullable=False, default=0.00)  # ex) 0, 10000, 30000
+     duration_days = Column(Integer, nullable=False, default=30)   # 구독 기간 (ex. 30일)
+     allocated_seconds = Column(Integer, nullable=False, default=18000)  # 녹음 시간
+--- a/backend/app/schemas/plan_schema.py
++++ b/backend/app/schemas/plan_schema.py
+@@ -3,10 +3,9 @@
+ from typing import Optional
+ from pydantic import BaseModel, condecimal
+ from datetime import datetime
+-from backend.app.model import PlanType  # 이미 Enum 이 있다고 가정
+ 
+ class PlanBase(BaseModel):
+-    name: PlanType
++    name: constr(strip_whitespace=True, to_lower=True, regex=r"^[a-z0-9-]{3,32}$")
+     price: condecimal(max_digits=10, decimal_places=2)  # Decimal 안전
+     duration_days: int
+     allocated_seconds: int
+@@ -27,7 +26,7 @@
+ 
+ class PlanRead(BaseModel):
+     id: int
+-    name: PlanType
++    name: constr(strip_whitespace=True, to_lower=True, regex=r"^[a-z0-9-]{3,32}$")
+     price: Decimal
+     duration_days: int
+     allocated_seconds: int
+--- a/backend/app/crud/plan_crud.py
++++ b/backend/app/crud/plan_crud.py
+@@ -5,17 +5,17 @@
+ from sqlalchemy.exc import IntegrityError
+ from fastapi import HTTPException, status
+ 
+-from backend.app.model import Plan, PlanType
++from backend.app.model import Plan
+ from backend.app.schemas.plan_schema import PlanCreate, PlanUpdate
+ 
+ def get_plan_by_id(db: Session, plan_id: int) -> Optional[Plan]:
+-    return db.query(Plan).filter(Plan.id == plan_id).first()
++eturn db.query(Plan).filter(Plan.id == plan_id).first()
+ 
+-def get_plan_by_name(db: Session, name: PlanType) -> Optional[Plan]:
+-    return db.query(Plan).filter(Plan.name == name).first()
++def get_plan_by_name(db: Session, name: str) -> Optional[Plan]:
++eturn db.query(Plan).filter(Plan.name == name).first()
+ 
+ def list_plans(db: Session) -> List[Plan]:
+-    return db.query(Plan).order_by(Plan.id.asc()).all()
++eturn db.query(Plan).order_by(Plan.id.asc()).all()
+ 
+ def create_plan(db: Session, payload: PlanCreate) -> Plan:
+     plan = Plan(
+@@ -36,7 +36,7 @@
+             detail="이미 존재하는 Plan name 입니다."
+         )
+     db.refresh(plan)
+-    return plan
++eturn plan
+ 
+ def update_plan_price(db: Session, plan_id: int, price: Decimal) -> Plan:
+     plan = get_plan_by_id(db, plan_id)
+@@ -46,7 +46,7 @@
+     db.add(plan)
+     db.commit()
+     db.refresh(plan)
+-    return plan
++eturn plan
+ 
+ def update_plan(db: Session, plan_id: int, payload: PlanUpdate) -> Plan:
+     plan = get_plan_by_id(db, plan_id)
+@@ -65,7 +65,7 @@
+     db.add(plan)
+     db.commit()
+     db.refresh(plan)
+-    return plan
++eturn plan
+ 
+ def delete_plan(db: Session, plan_id: int) -> None:
+     plan = get_plan_by_id(db, plan_id)

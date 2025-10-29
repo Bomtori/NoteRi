@@ -9,7 +9,7 @@ from sqlalchemy import or_
 from passlib.hash import argon2
 import re
 import backend.app.model as model
-from backend.app.model import Board
+from backend.app.model import Board, BoardShare
 from backend.app.schemas import board_schema as schemas
 from sqlalchemy.orm import joinedload
 
@@ -82,55 +82,71 @@ def create_board(db: Session, current_user_id: int, data: schemas.BoardCreate):
 # -----------------------------
 # Read (소유 + 공유 받은 보드)
 # -----------------------------
-def get_boards(db: Session, user_id: int, skip=0, limit: int | None = None):
-    query = (
+def _serialize_board(b: Board) -> dict:
+    return {
+        "id": b.id,
+        "owner_id": b.owner_id,
+        "title": b.title,
+        "folder_id": b.folder_id,
+        "description": b.description,
+        "created_at": b.created_at,
+        "updated_at": b.updated_at,
+        "folder": (
+            {
+                "id": b.folder.id,
+                "name": b.folder.name,
+                "color": b.folder.color,
+            } if getattr(b, "folder", None) else None
+        ),
+        "audios": [
+            {
+                "id": a.id,
+                "file_path": a.file_path,
+                "duration": a.duration,
+                "language": a.language,
+                "created_at": a.created_at,
+            } for a in (getattr(b, "audios", None) or [])
+        ],
+        "memos": [
+            {
+                "id": m.id,
+                "content": m.content,
+                "created_at": m.created_at,
+                "user_id": m.user_id,
+            } for m in (getattr(b, "memos", None) or [])
+        ],
+        # 필요 시 transcripts/summaries도 동일 패턴으로 추가
+    }
+
+def get_boards(db: Session, user_id: int, skip: int = 0, limit: int | None = None):
+    """
+    내 보드 + 내가 공유받은 보드
+    - updated_at DESC 정렬
+    - distinct로 중복 제거
+    - folder/audios/memos eager-load
+    - skip/limit 적용
+    - 일관 직렬화(dict)
+    """
+    base = (
         db.query(Board)
-        .filter(Board.owner_id == user_id)
-        .options(joinedload(model.Board.folder))
+        .outerjoin(BoardShare, BoardShare.board_id == Board.id)
+        .filter(or_(Board.owner_id == user_id, BoardShare.user_id == user_id))
+        .options(
+            joinedload(Board.folder),
+            joinedload(Board.audios),
+            joinedload(Board.memos),
+            # 필요하면 joinedload(Board.transcripts), joinedload(Board.summaries) 추가
+        )
+        .order_by(Board.updated_at.desc().nullslast())
+        .distinct()
         .offset(skip)
     )
 
-    if limit is not None:  # ✅ limit 있을 때만 적용
-        query = query.limit(limit)
+    if limit is not None:
+        base = base.limit(limit)
 
-    boards = query.all()
-
-    result = []
-    for b in boards:
-        result.append({
-            "id": b.id,
-            "owner_id": b.owner_id,
-            "title": b.title,
-            "folder_id": b.folder_id,
-            "description": b.description,
-            "created_at": b.created_at,
-            "updated_at": b.updated_at,
-            "folder": (
-                {
-                    "id": b.folder.id,
-                    "name": b.folder.name,
-                    "color": b.folder.color,
-                } if b.folder else None
-            ),
-            "audios": [
-                {
-                    "id": a.id,
-                    "file_path": a.file_path,
-                    "duration": a.duration,
-                    "language": a.language,
-                    "created_at": a.created_at,
-                } for a in b.audios or []
-            ],
-            "memos": [
-                {
-                    "id": m.id,
-                    "content": m.content,
-                    "created_at": m.created_at,
-                    "user_id": m.user_id,
-                } for m in b.memos or []
-            ]
-        })
-    return result
+    boards = base.all()
+    return [_serialize_board(b) for b in boards]
 
 def get_board(db: Session, current_user_id: int, board_id: int):
     board = db.query(model.Board).filter(model.Board.id == board_id).first()
@@ -155,6 +171,51 @@ def get_recent_boards(db: Session, current_user_id: int, limit: int = 3):
         .all()
     )
 
+def get_owned_boards(db: Session, user_id: int, *, skip=0, limit=10):
+    return (
+        db.query(model.Board)
+        .filter(model.Board.owner_id == user_id)
+        .order_by(model.Board.updated_at.desc().nullslast())
+        .offset(skip).limit(limit)
+        .all()
+    )
+
+def get_shared_boards(db: Session, user_id: int, *, skip=0, limit=10):
+    return (
+        db.query(model.Board)
+        .join(model.BoardShare, model.BoardShare.board_id == model.Board.id)
+        .filter(model.BoardShare.user_id == user_id)
+        .order_by(model.Board.updated_at.desc().nullslast())
+        .offset(skip).limit(limit)
+        .all()
+    )
+
+def get_boards_in_folder(db: Session, user_id: int, folder_id: int, *, skip=0, limit=None):
+    folder = db.query(model.Folder).filter(model.Folder.id == folder_id, model.Folder.user_id == user_id).first()
+    if not folder:
+        return None
+
+    # ✅ "공유받은 회의" 폴더면 공유받은 보드만 표시
+    if folder.name == "공유받은 회의":
+        q = (
+            db.query(model.Board)
+            .join(model.BoardShare, model.BoardShare.board_id == model.Board.id)
+            .filter(model.BoardShare.user_id == user_id)
+            .order_by(model.Board.updated_at.desc().nullslast())
+        )
+        if limit:
+            q = q.limit(limit)
+        return q.all()
+
+    # 일반 폴더는 내가 소유한 보드
+    q = (
+        db.query(model.Board)
+        .filter(model.Board.folder_id == folder_id, model.Board.owner_id == user_id)
+        .order_by(model.Board.updated_at.desc().nullslast())
+    )
+    if limit:
+        q = q.limit(limit)
+    return q.all()
 
 # -----------------------------
 # Update (owner 또는 editor 이상만)

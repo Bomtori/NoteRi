@@ -86,9 +86,22 @@ Pin = Annotated[str, StringConstraints(pattern=r"^\d{4}$")]
 class BoardPasswordVerify(BaseModel):
     password: Pin
 
+# 비밀번호 설정
 @router.post("/{board_id}/verify-password")
 def verify_board_password(board_id: int, body: BoardPasswordVerify, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     ok = crud.verify_board_password(db, board_id, body.password)
     if not ok:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid password")
     return {"ok": True}
+
+# 공유받은 회의 폴더 보드 보기
+@router.get("/folder/{folder_id}", response_model=list[schemas.BoardResponse])
+def read_boards_in_folder(
+    folder_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    boards = crud.get_boards_in_folder(db, current_user.id, folder_id)
+    if boards is None:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    return boards

@@ -18,7 +18,7 @@ export const fetchFolders = createAsyncThunk(
     "folder/fetchFolders",
     async (_, { rejectWithValue }) => {
         try {
-            const res = await apiClient.get(`${API_BASE_URL}/folders`, {
+            const res = await apiClient.get(`${API_BASE_URL}/folders/`, {
                 withCredentials: true,
             });
             return res.data.folders; // 백엔드가 {"folders": [...]} 형태 반환 중
@@ -35,7 +35,7 @@ export const addFolderAsync = createAsyncThunk(
     async (name, { rejectWithValue }) => {
         try {
             const res = await apiClient.post(
-                `${API_BASE_URL}/folders`,
+                `${API_BASE_URL}/folders/`,
                 { name },
                 { withCredentials: true }
             );
@@ -61,6 +61,23 @@ export const renameFolderAsync = createAsyncThunk(
         } catch (err) {
             console.error("폴더 이름 수정 실패:", err);
             return rejectWithValue(err.response?.data || "폴더 수정 실패");
+        }
+    }
+);
+// 🔹 폴더 색상 변경 (PATCH /folders/{id})
+export const updateFolderColorAsync = createAsyncThunk(
+    "folder/updateFolderColorAsync",
+    async ({ id, color }, { rejectWithValue }) => {
+        try {
+            const res = await apiClient.patch(
+                `${API_BASE_URL}/folders/${id}`,
+                { color },
+                { withCredentials: true }
+            );
+            return res.data;
+        } catch (err) {
+            console.error("폴더 색상 변경 실패:", err);
+            return rejectWithValue(err.response?.data || "폴더 색상 변경 실패");
         }
     }
 );
@@ -121,8 +138,14 @@ const folderSlice = createSlice({
             .addCase(deleteFolderAsync.fulfilled, (state, action) => {
                 const deleted = action.payload;
                 state.folders = state.folders.filter((f) => f.id !== deleted.id);
-            });
-    },
-});
+            })
 
+            // 🔹 폴더 색상 변경
+            .addCase(updateFolderColorAsync.fulfilled, (state, action) => {
+                const updated = action.payload.folder || action.payload; // 둘 다 대응
+                const folder = state.folders.find((f) => f.id === updated.id);
+                if (folder) folder.color = updated.color;
+            });
+    }, // ✅ extraReducers 닫힘
+}); // ✅ createSlice 닫힘
 export default folderSlice.reducer;

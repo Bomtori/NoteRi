@@ -1,0 +1,47 @@
+/* ✨ 반짝이는 그라데이션 텍스트 */
+.text-gradient {
+    background: linear-gradient(90deg, #c19ef8, #9b6dff, #c19ef8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: shimmer 4s linear infinite;
+    background-size: 200%;
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: 0% 50%;
+    }
+    100% {
+        background-position: 200% 50%;
+    }
+}
+
+/* 💫 flicker 효과 */
+.flicker {
+    animation: flicker 0.25s ease-in-out 3;
+    text-shadow: 0 0 12px rgba(255, 255, 255, 0.8),
+    0 0 30px rgba(193, 158, 248, 0.7);
+}
+
+@keyframes flicker {
+    0%, 100% { opacity: 1; }
+    40% { opacity: 0.6; }
+    60% { opacity: 1; }
+}
+
+/* 🌠 Lens flare 효과 */
+.lens-flare {
+    background: radial-gradient(
+            circle,
+            rgba(255, 255, 255, 0.8) 0%,
+            rgba(193, 158, 248, 0.3) 40%,
+            transparent 70%
+    );
+    transform: translate(-50%, -50%) scale(0.2);
+    transition: opacity 0.4s ease, transform 0.6s ease;
+}
+
+.lens-flare.active {
+    opacity: 0.9;
+    transform: translate(-50%, -50%) scale(1.5);
+}

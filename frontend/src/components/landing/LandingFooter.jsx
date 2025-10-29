@@ -25,9 +25,9 @@ export const LandingFooter = () => {
                 <div>
                     <h3 className="font-semibold text-gray-800 mb-3">Team NoteRi</h3>
                     <ul className="space-y-2 text-sm">
-                        <li>Frontend — Ji-hye</li>
-                        <li>Backend — [팀원명]</li>
-                        <li>AI/Infra — [팀원명]</li>
+                        <li>Frontend — Park JiYe</li>
+                        <li>Backend — Kim HyeomJae</li>
+                        <li>AI/Infra — Park BeomCheol</li>
                         <li>
                             <a href="https://github.com/NoteRi-project" target="_blank" className="text-[#7E37F9] hover:underline">
                                 GitHub Repository →

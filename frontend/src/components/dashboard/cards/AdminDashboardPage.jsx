@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import Buttons from "./Buttons.jsx"
+import Buttons from "./Buttons.tsx"
 import Menubars from "@/test/components/Menubar.jsx";
 import UserCards from "@/test/components/userDashBoard/UserCards.jsx";
 import PaymentCards from "@/test/components/paymentDashBoard/PaymentCards.jsx";

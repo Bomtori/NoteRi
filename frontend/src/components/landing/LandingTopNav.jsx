@@ -1,35 +1,52 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../../api/apiClient";
-import { API_BASE_URL } from "../../config";
+import useLogout from "../../hooks/useLogout.js";
 
 export default function LandingTopNav() {
     const navigate = useNavigate();
     const [user, setUser] = useState(null);
     const [isScrolled, setIsScrolled] = useState(false);
+    const fetchedRef = useRef(false); // ✅ 중복 호출 방지
+    const handleLogout = useLogout();
 
-    // ✅ 사용자 로그인 상태 확인
     useEffect(() => {
-        async function fetchUser() {
-            try {
-                const res = await apiClient.get(`${API_BASE_URL}/users/me`, {
-                    withCredentials: true,
-                });
-                setUser(res.data);
-            } catch {
-                setUser(null);
-            }
+        // ✅ 비로그인 상태면 요청하지 않음
+        const accessToken = localStorage.getItem("access_token");
+        if (!accessToken) {
+            console.log("🔓 Public mode — skip /users/me");
+            return;
         }
+
+        // ✅ 이미 요청한 적 있으면 또 안 함
+        if (fetchedRef.current) return;
+        fetchedRef.current = true;
+
+        const fetchUser = async () => {
+            try {
+                const res = await apiClient.get("/users/me");
+                setUser(res.data);
+            } catch (err) {
+                // ✅ refresh 실패(401)는 무시하고 계속 공개 페이지 유지
+                if (err.response?.status === 401) {
+                    console.log("⚠️ Unauthorized — probably expired token, stay logged out.");
+                    localStorage.removeItem("access_token");
+                    localStorage.removeItem("refresh_token");
+                    setUser(null);
+                    return;
+                }
+                console.error("❌ Failed to load user:", err);
+            }
+        };
+
         fetchUser();
     }, []);
 
-    // ✅ HeroSection 지나가면 색 반전
+    // ✅ 스크롤 색상 반전
     useEffect(() => {
         const handleScroll = () => {
-            const scrollY = window.scrollY;
-            setIsScrolled(scrollY > window.innerHeight * 0.8);
+            setIsScrolled(window.scrollY > window.innerHeight * 0.8);
         };
-
         window.addEventListener("scroll", handleScroll);
         return () => window.removeEventListener("scroll", handleScroll);
     }, []);
@@ -39,19 +56,13 @@ export default function LandingTopNav() {
         if (section) section.scrollIntoView({ behavior: "smooth" });
     };
 
-    const handleLogout = () => {
-        window.location.href = `${API_BASE_URL}/auth/logout?provider=${user.oauth_provider}`;
-    };
-
-
     return (
         <nav
-            className={`fixed top-0 left-0 w-full z-50 
-        transition-all duration-500
-        ${isScrolled
-                ? "bg-white/70 backdrop-blur-lg border-b border-gray-200 text-gray-900"
-                : "bg-transparent text-white"}`
-            }
+            className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 ${
+                isScrolled
+                    ? "bg-white/70 backdrop-blur-lg border-b border-gray-200 text-gray-900"
+                    : "bg-transparent text-white"
+            }`}
         >
             <div className="max-w-7xl mx-auto flex items-center justify-between px-8 py-4">
                 {/* ✅ 로고 */}
@@ -86,7 +97,7 @@ export default function LandingTopNav() {
 
                     {user ? (
                         <button
-                            onClick={handleLogout}
+                            onClick={() => handleLogout(user.oauth_provider)}
                             className={`ml-6 px-5 py-2 rounded-full font-semibold transition-all duration-500 ${
                                 isScrolled
                                     ? "bg-[#7E37F9] text-white hover:bg-[#6927d8]"

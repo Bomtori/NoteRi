@@ -6,6 +6,8 @@ from sqlalchemy.orm import relationship, declarative_base, backref
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import JSONB
 import enum
+from pgvector.sqlalchemy import Vector
+from sqlalchemy.dialects.postgresql import JSON
 
 Base = declarative_base()
 
@@ -53,6 +55,7 @@ class User(Base):
     banned_until = Column(DateTime, nullable=True)
     created_at = Column(TIMESTAMP)
     updated_at = Column(TIMESTAMP)
+    embeddings = relationship("RecordingEmbedding", back_populates="user", cascade="all, delete-orphan")
 
     subscriptions = relationship("Subscription", back_populates="user")
     payments = relationship("Payment", back_populates="user")
@@ -231,6 +234,7 @@ class RecordingSession(Base):
     ended_at = Column(TIMESTAMP)
     created_at = Column(TIMESTAMP)
     is_diarized = Column(Boolean, nullable=False, default=False)
+    embeddings = relationship("RecordingEmbedding", back_populates="recording_session", cascade="all, delete-orphan")
 
     board = relationship("Board", back_populates="recording_sessions")
     results = relationship("RecordingResult", back_populates="session")
@@ -464,3 +468,27 @@ class CalendarEvent(Base):
     remind_morning = Column(Boolean, nullable=False, server_default="true")
 
     user = relationship("User", foreign_keys=[user_id])
+
+class RecordingEmbedding(Base):
+    __tablename__ = "recording_embeddings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    recording_session_id = Column(
+        Integer, 
+        ForeignKey("recording_sessions.id", ondelete="CASCADE"), 
+        nullable=False
+    )
+    user_id = Column(
+        Integer, 
+        ForeignKey("users.id", ondelete="CASCADE"), 
+        nullable=False
+    )
+    text_chunk = Column(Text, nullable=False)
+    embedding = Column(Vector(384), nullable=False)
+    chunk_index = Column(Integer, nullable=False)
+    chunk_metadata = Column(JSON, nullable=True)  # ✅ 변경!
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    
+    # 관계 설정
+    recording_session = relationship("RecordingSession", back_populates="embeddings")
+    user = relationship("User", back_populates="embeddings")

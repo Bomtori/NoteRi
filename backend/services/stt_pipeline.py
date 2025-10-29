@@ -16,7 +16,9 @@ from backend.ml.stt_model import STTModel
 from backend.ml.vad import VADFilter
 from backend.ml.postprocess.silence_segmenter import SilenceSegmenter
 from backend.ml.postprocess.timestamp_deduplicator import TimestampDeduplicator
-from backend.ml.summarizer import ThreeLineSummarizer
+from backend.ml.preprocessing.realtime_cleaner import RealtimeCleaner
+# from backend.ml.summarizer import ThreeLineSummarizer
+from backend.app.util.llm_client import ollama_summarize_interval
 from backend.config import VAD_THRESHOLD, VAD_SAMPLE_RATE
 from backend.services.diarization import run_diarization_for_session
 from backend.ml.postprocess.text_cleaner import normalize_transcript_lines, TextCleaner
@@ -69,7 +71,8 @@ class STTPipeline:
         self.vad = VADFilter(threshold=VAD_THRESHOLD, sampling_rate=VAD_SAMPLE_RATE)
         self.deduper = TimestampDeduplicator()
         self.segmenter = SilenceSegmenter(silence_limit=1.5, chunk_seconds=1.0, ngram_size=2)
-        self.summarizer = ThreeLineSummarizer(device="cuda")
+        self.realtime_cleaner = RealtimeCleaner(use_typo_correction=True)
+        # self.summarizer = ThreeLineSummarizer(device="cuda")
 
         # ===== 요약/세션 상태 =====
         self.summary_task = None           # asyncio.Task | None
@@ -287,8 +290,7 @@ class STTPipeline:
     async def _flush_interval_summary(self, force: bool):
         """
         마지막 컷(last_cut_ts)부터 지금(now)까지 요약 후 push.
-        force=False: 최소 분량 미달이면 스킵(누적)
-        force=True : 분량 무관 시도(세션 종료용)
+        ✅ 최소 길이 체크 추가
         """
         if self.ws is None:
             return
@@ -299,19 +301,29 @@ class STTPipeline:
         start_ts = self.last_cut_ts
         source_text = self._collect_text_in_interval(start_ts, now)
 
+        # ✅ 최소 길이 체크 (글자 수 기준)
         if not force and len(source_text) < self._min_chars_for_summary:
-            logger.debug("⏭️ Interval too short, carry over to next minute.")
+            logger.debug(f"⭐️ Interval too short ({len(source_text)} chars), carry over.")
             return
+        
         if not source_text:
             self.last_cut_ts = now
             return
 
-        try:
-            summary = await asyncio.to_thread(self.summarizer.summarize, source_text)
-        except Exception as e:
-            logger.warning(f"summary failed: {e}")
-            self.last_cut_ts = now
-            return
+        # ✅ 추가: 50자 미만이면 요약하지 않고 원문 그대로 전송
+        if len(source_text) < 50:
+            logger.info(f"[{self.sid}] ℹ️ Text too short, sending original without summary")
+            summary = f"• {source_text}"
+        else:
+            try:
+                # Ollama로 고품질 요약 생성
+                summary = await ollama_summarize_interval(source_text)
+                logger.info(f"[{self.sid}] 🤖 Ollama interval summary generated ({len(summary)} chars)")
+            except Exception as e:
+                logger.warning(f"Ollama summary failed: {e}, using fallback")
+                # Fallback: 원문을 불릿으로
+                lines = [ln.strip() for ln in source_text.split('.') if ln.strip()]
+                summary = "• " + "\n• ".join(lines[:3]) if lines else f"• {source_text[:100]}"
 
         await self._safe_send_json({"paragraph": source_text, "summary": summary})
 

@@ -44,23 +44,23 @@ from .util.redis_client import get_redis, close_redis
 # static 디렉토리 생성 후 mount
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-origins = [
-    "http://localhost:5173",      # 학원에서 돌리는 프론트
-    "http://127.0.0.1:5173",
-    "http://1.236.171.160:5173",
-    "http://localhost:8000"# 필요 시 추가
-]
-
-# ✅ CORS 설정
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,  # 로그인 쿠키, 토큰 등
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=[
+        "http://localhost:5173",      # 로컬 프론트엔드
+        "http://localhost:3000",      # 대체 포트
+        "http://1.236.171.160:5173",  # 외부 프론트엔드
+        "http://1.236.171.160:3000",  # 대체 포트
+        # 프로덕션 도메인 추가
+        # "https://yourdomain.com",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],  # 모든 HTTP 메서드 허용
+    allow_headers=["*"],  # 모든 헤더 허용
 )
+
 # 라우터 등록
-register_routers(app)  # 한 줄로 끝
+register_routers(app)
 
 pipeline = STTPipeline()
 

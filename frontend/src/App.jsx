@@ -16,6 +16,7 @@ import UserPage from "./pages/UserPage.tsx";
 import PaymentSuccessPage from "./pages/PaymentSuccessPage.tsx";
 import AdminLayout from "./layouts/AdminLayout";
 import AdminUserPage from "./pages/AdminUserPage";
+import MeetingPage from "./pages/MeetingPage";
 
 export default function App() {
     return (
@@ -23,6 +24,8 @@ export default function App() {
             <Routes>
                 {/* 🔹 공개 라우트 (로그인 필요 없음) */}
                 <Route path="/" element={<LandingPage />} />
+                <Route path="/meeting" element={<MeetingPage />} />
+
 
                 {/* 🔹 로그인 및 인증 관련 페이지 */}
                 <Route element={<AuthLayout />}>

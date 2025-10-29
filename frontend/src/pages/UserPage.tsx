@@ -4,7 +4,7 @@ import apiClient from "../api/apiClient";
 import { API_BASE_URL } from "../config";
 
 // =======================
-// ✅ 타입 정의
+// ✅ 타입 정의 (팀원 참고용)
 // =======================
 interface Plan {
     name: "free" | "pro" | "enterprise";

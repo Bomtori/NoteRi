@@ -15,34 +15,86 @@ from backend.app.util.day_calculation import (
 )
 from backend.app.model import Payment, Subscription, Plan, PlanType
 
-def _norm_plan(plan) -> str:
-    # Enum(PlanType.pro)면 plan.value, 그 외(str)면 그대로
-    return getattr(plan, "value", plan)
+def _plan_key(plan) -> str:
+    # Enum이면 .value, 아니면 str(plan)
+    return getattr(plan, "value", str(plan)) or ""
 
-def _sum_by_plan(
-    db: Session,
-    *,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,  # [start_date, end_date) 반열린 구간
-) -> Dict[str, float]:
+def _sum_by_plan(db, start_date=None, end_date=None) -> dict[str, float]:
+    """
+    결제 성공(SUCCESS)만 Plan.name 기준으로 합산해서 dict로 반환.
+    { "<plan_name>": <total_amount_float>, ... }
+    """
     q = (
-        db.query(Plan.name.label("plan_name"), func.coalesce(func.sum(Payment.amount), 0))
-        .join(Subscription, Payment.subscription_id == Subscription.id)
-        .join(Plan, Subscription.plan_id == Plan.id)
+        db.query(
+            Plan.name.label("plan_name"),
+            func.coalesce(func.sum(Payment.amount), 0.0).label("total_amount"),
+        )
+        .join(Subscription, Subscription.id == Payment.subscription_id)
+        .join(Plan, Plan.id == Subscription.plan_id)
         .filter(Payment.status == "SUCCESS")
     )
-    if start_date is not None:
-        q = q.filter(func.date(Payment.approved_at) >= start_date)
-    if end_date is not None:
-        q = q.filter(func.date(Payment.approved_at) < end_date)
+    q = _base_range_filter(q, start_date, end_date)
+    q = q.group_by(Plan.name)
 
-    rows = q.group_by(Plan.name).all()
-
-    out = {str(_norm_plan(plan)): float(total or Decimal("0")) for plan, total in rows}
-    # 모든 플랜 키 보장
-    for p in PlanType:
-        out.setdefault(p.value, 0.0)
+    rows = q.all()
+    # rows: [("pro", 680000.0), ("enterprise", 300000.0), ...]
+    out = {}
+    for plan_name, total in rows:
+        key = _plan_key(plan_name)  # 문자열이면 그대로, Enum이면 .value
+        out[key] = float(total or 0.0)
     return out
+
+def _sum_by_plan_fallback(db, start_date=None, end_date=None) -> dict[str, float]:
+    q = (
+        db.query(
+            Plan.name.label("plan_name"),
+            func.coalesce(func.sum(Payment.amount), 0.0).label("total_amount"),
+        )
+        .join(
+            Subscription,
+            and_(
+                Subscription.user_id == Payment.user_id,
+                Subscription.period_start <= Payment.approved_at,
+                (Subscription.period_end == None) | (Payment.approved_at < Subscription.period_end),
+            ),
+        )
+        .join(Plan, Plan.id == Subscription.plan_id)
+        .filter(Payment.status == "SUCCESS")
+    )
+    q = _base_range_filter(q, start_date, end_date)
+    q = q.group_by(Plan.name)
+
+    rows = q.all()
+    out = {}
+    for plan_name, total in rows:
+        key = _plan_key(plan_name)
+        out[key] = float(total or 0.0)
+    return out
+
+def get_total_revenue_paid_plans(db, start_date=None, end_date=None):
+    """
+    응답: {"items": [{"plan_id": <int or None>, "plan_name": <str>, "total_amount": <float>}, ...]}
+    ※ plan_id가 꼭 필요 없으면 None으로 두거나, 별도 쿼리로 매핑
+    """
+    by_plan = _sum_by_plan(db, start_date=start_date, end_date=end_date)
+    if not by_plan:
+        by_plan = _sum_by_plan_fallback(db, start_date=start_date, end_date=end_date)
+
+    # plan_id도 내려보내고 싶으면 이 쿼리로 매핑 테이블 확보
+    plan_rows = db.query(Plan.id, Plan.name).all()
+    name_to_id = {str(name): pid for pid, name in plan_rows}
+
+    items = [
+        {
+            "plan_id": name_to_id.get(str(name)),  # 없으면 None
+            "plan_name": str(name),
+            "total_amount": float(amount or 0.0),
+        }
+        for name, amount in by_plan.items()
+    ]
+    # 정렬(옵션)
+    items.sort(key=lambda x: (x["plan_id"] is None, x["plan_id"] if x["plan_id"] is not None else 1e9))
+    return {"items": items}
 
 # ---------------- 1) 최근 일주일 총 매출 / 플랜별 ----------------
 def get_last_7d_revenue_by_plan(db: Session) -> Dict[str, float]:

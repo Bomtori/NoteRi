@@ -17,3 +17,7 @@ class SubscriptionResponse(BaseModel):
     updated_at: Optional[datetime]   # ✅ datetime으로
     is_active: bool
     model_config = {"from_attributes": True}
+
+class PlanUserCount(BaseModel):
+    plan: str
+    user_count: int

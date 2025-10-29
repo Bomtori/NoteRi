@@ -10,7 +10,7 @@ class AdminUserPayment(BaseModel):
     order_id: Optional[str] = None
     approved_at: Optional[datetime] = None
     plan_name: Optional[str] = None
-    
+
 class AdminUserOverview(BaseModel):
     user_id: int
     name: Optional[str] = None

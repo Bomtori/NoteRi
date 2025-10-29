@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from datetime import date
 from typing import Optional
 from sqlalchemy.orm import Session
-
+from pydantic import BaseModel
 from backend.app.db import get_db
 from backend.app.crud.payment_by_plan_crud import (
     get_last_7d_revenue_by_plan,
@@ -11,8 +11,15 @@ from backend.app.crud.payment_by_plan_crud import (
     get_mom_growth_by_plan,
     get_yoy_growth_by_plan,
     get_revenue_share_by_plan,
-    get_total_revenue_paid_plans, get_wow_growth_by_plan, get_dod_growth_by_plan
+    get_total_revenue_by_plan, get_wow_growth_by_plan, get_dod_growth_by_plan
 )
+class RevenueByPlanItem(BaseModel):
+    plan_id: int
+    plan_name: str
+    total_amount: float
+
+class RevenueByPlanResponse(BaseModel):
+    items: list[RevenueByPlanItem]
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
@@ -63,10 +70,12 @@ def revenue_share(
     """
     return get_revenue_share_by_plan(db, start_date=start_date, end_date=end_date)
 
-@router.get("/revenue/paid")
+@router.get("/revenue/paid", response_model=RevenueByPlanResponse)
 def read_revenue_paid_plans(
     db: Session = Depends(get_db),
     start_date: Optional[date] = Query(None),
-    end_date: Optional[date] = Query(None),  # [start_date, end_date) 반열린
+    end_date: Optional[date] = Query(None),
 ):
-    return get_total_revenue_paid_plans(db, start_date=start_date, end_date=end_date)
+    rows = get_total_revenue_by_plan(db, start_date, end_date)
+    return {"items": rows}
+

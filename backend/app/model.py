@@ -22,6 +22,10 @@ class RecordingType(enum.Enum):
     stopped = "stopped"
     saved = "saved"
 
+
+EventStatusEnum = Enum("confirmed", "tentative", "cancelled",
+                       name="event_status")
+
 updated_at = Column(
     TIMESTAMP(timezone=True),
     server_default=func.now(),  # 생성 시

@@ -150,58 +150,65 @@ export default function MeetingPage() {
   };
 
   const stopRecording = async () => {
-    if (recordingState === "idle") return;
-    setRecordingState("idle");
-    pausedRef.current = false;
+  if (recordingState === "idle") return;
+  setRecordingState("idle");
+  pausedRef.current = false;
 
-    try {
-      if (processorRef.current) {
-        processorRef.current.disconnect();
-        processorRef.current.onaudioprocess = null;
-        processorRef.current = null;
-      }
-      if (sourceRef.current) {
-        sourceRef.current.disconnect();
-        sourceRef.current = null;
-      }
-      if (audioContextRef.current && audioContextRef.current.state !== "closed") {
-        audioContextRef.current.close();
-        audioContextRef.current = null;
-      }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
-        streamRef.current = null;
-      }
-    } catch (e) {
-      console.warn("⚠️ cleanup warning:", e);
+  try {
+    if (processorRef.current) {
+      processorRef.current.disconnect();
+      processorRef.current.onaudioprocess = null;
+      processorRef.current = null;
     }
-
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.close(1000, "Normal Closure");
+    if (sourceRef.current) {
+      sourceRef.current.disconnect();
+      sourceRef.current = null;
     }
-    wsRef.current = null;
+    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+  } catch (e) {
+    console.warn("⚠️ cleanup warning:", e);
+  }
 
-    // ⏳ Redis→Postgres 적재 후 sid→session_id 매핑 대기
-    if (sidRef?.current) {
-      setPendingMapping(true);
-      const sid = sidRef.current;
-      let tries = 0;
-      while (tries++ < 60) { // 최대 30초 (요약 생성 대기 포함)
-        try {
-          const res = await fetch(`${API_BASE}/sessions/by-sid/${sid}`);
-          if (res.status === 202) {
-            // pending: 계속 대기
-          } else if (res.ok) {
-            const data = await res.json();
-            console.log("✅ 세션 매핑 완료:", data.id);
-            setSessionId(data.id);
+  if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+    wsRef.current.close(1000, "Normal Closure");
+  }
+  wsRef.current = null;
+
+  // ⏳ Redis→Postgres 적재 후 sid→session_id 매핑 대기
+  if (sidRef?.current) {
+    setPendingMapping(true);
+    const sid = sidRef.current;
+    let tries = 0;
+    let receivedSessionId = null;  // ✅ 로컬 변수로 즉시 추적
+    
+    while (tries++ < 60) {
+      try {
+        const res = await fetch(`${API_BASE}/sessions/by-sid/${sid}`);
+        
+        if (res.status === 202) {
+          // pending: 계속 대기
+          console.log("⏳ Session mapping pending...");
+        } else if (res.ok) {
+          const data = await res.json();
+          
+          if (data.session_id) {
+            receivedSessionId = data.session_id;  // ✅ 로컬 변수에 저장
+            console.log("✅ 세션 매핑 완료:", receivedSessionId);
+            setSessionId(receivedSessionId);
             setPendingMapping(false);
 
             // ✅ [1단계] 프론트 보유 확정 문장(history)으로 전체 요약 생성 & 저장
             try {
               if (history.length > 0) {
                 console.log("🧾 Generating final summary from frontend history…");
-                const finRes = await fetch(`${API_BASE}/sessions/${data.id}/finalize-summary`, {
+                const finRes = await fetch(`${API_BASE}/sessions/${receivedSessionId}/finalize-summary`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ lines: history }),
@@ -209,7 +216,7 @@ export default function MeetingPage() {
 
                 if (finRes.ok) {
                   const fin = await finRes.json();
-                  setFinalSummary(fin); // 바로 UI 반영
+                  setFinalSummary(fin);
                   console.log("🧾 Final summary created via frontend:", fin);
                 } else {
                   console.warn("⚠️ finalize-summary failed:", finRes.status);
@@ -223,7 +230,7 @@ export default function MeetingPage() {
 
             // ✅ [2단계] 백엔드 저장된 전체 요약 다시 확인 (보정용)
             try {
-              const summaryRes = await fetch(`${API_BASE}/sessions/final-summaries/by-session/${data.id}`);
+              const summaryRes = await fetch(`${API_BASE}/sessions/final-summaries/by-session/${receivedSessionId}`);
               if (summaryRes.ok) {
                 const summaryData = await summaryRes.json();
                 setFinalSummary(summaryData);
@@ -235,32 +242,50 @@ export default function MeetingPage() {
               console.warn("⚠️ final summary fetch failed:", err);
             }
 
-            break;
+            break;  // ✅ 루프 탈출 (중요!)
           } else {
-            console.warn("by-sid unexpected status:", res.status);
+            console.warn("⚠️ session_id missing in response:", data);
           }
-        } catch (e) {
-          console.warn("waiting for session id mapping...", e);
+        } else {
+          console.warn("by-sid unexpected status:", res.status);
         }
-        await sleep(500);
+      } catch (e) {
+        console.warn("waiting for session id mapping...", e);
       }
-      // 그래도 못 받았으면 안내만
-      if (!sessionId) setPendingMapping(false);
+      
+      await sleep(500);
     }
-  }
+    
+    // ✅ 루프 종료 후 상태 정리
+    setPendingMapping(false);
+    
+    if (!receivedSessionId) {  // ✅ 로컬 변수로 체크
+      console.error("❌ Failed to get session_id after 30 seconds");
+    } else {
+      console.log("✅ Stop recording completed. Session ID:", receivedSessionId);
+      }
+    }
+  };
 
 
-  // 필요 시: diarization 버튼 누를 때도 마지막 보정 폴링 한번 더
   const ensureSessionId = async () => {
     if (sessionId) return true;
     if (!sidRef.current) return false;
+    
     let tries = 0;
     while (tries++ < 20) {
-      const res = await fetch(`${API_BASE}/sessions/by-sid/${sidRef.current}`);
-      if (res.ok) {
-        const data = await res.json();
-        setSessionId(data.id);
-        return true;
+      try {
+        const res = await fetch(`${API_BASE}/sessions/by-sid/${sidRef.current}`);
+        if (res.ok) {
+          const data = await res.json();
+          // ✅ 수정: data.session_id 사용
+          if (data.session_id) {
+            setSessionId(data.session_id);
+            return true;
+          }
+        }
+      } catch (e) {
+        console.warn("ensureSessionId error:", e);
       }
       await sleep(500);
     }

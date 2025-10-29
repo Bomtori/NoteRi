@@ -2,6 +2,7 @@
 from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, status, BackgroundTasks
 from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status, BackgroundTasks, Response
 
 from backend.app.db import get_db
 from backend.app.util.redis_client import get_redis
@@ -94,14 +95,34 @@ def start_diarization(session_id: int, bg: BackgroundTasks):
     return {"ok": True, "session_id": session_id, "queued": True, "msg": "diarization started"}
 
 @router.get("/by-sid/{sid}")
-async def get_session_id_by_sid(sid: str):
+async def get_session_id_by_sid(sid: str, response: Response):
+    """
+    WebSocket 세션 ID(sid)로 DB에 저장된 recording_session_id를 조회.
+    
+    Response:
+    - 202 Accepted: {"status": "pending", "sid": "..."}
+    - 200 OK: {"session_id": 81, "status": "ready", "sid": "..."}
+    """
+    from backend.app.util.redis_client import get_redis
+    
     r = await get_redis()
     key = f"stt:last_session_id:{sid}"
     val = await r.get(key)
+    
     if not val:
-        # ⏳ 아직 매핑 전: 202(Processing)로 상태를 돌려주면 프론트가 부드럽게 계속 기다릴 수 있음
-        return {"status": "pending"}, 202
-    return {"id": int(val), "status": "ready"}
+        # 아직 매핑 전: 202로 상태 반환
+        response.status_code = status.HTTP_202_ACCEPTED
+        return {
+            "status": "pending",
+            "sid": sid
+        }
+    
+    # ✅ 매핑 완료: session_id 반환 (중요: 'id'가 아니라 'session_id'!)
+    return {
+        "session_id": int(val),  # ← 프론트가 이 필드를 찾음!
+        "status": "ready",
+        "sid": sid
+    }
 
 @router.get("/{board_id}/list", response_model=RecordingSessionListResponse, summary="보드에 속한 RecordingSession 목록 조회",
 )

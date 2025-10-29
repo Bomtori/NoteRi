@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-export default function useRecording({ WS_URL, onData, onStartError }) {
+export default function useRecording({ WS_URL, boardId, onData, onStartError }) {
   const wsRef = useRef(null);
   const audioContextRef = useRef(null);
   const processorRef = useRef(null);
@@ -27,7 +27,15 @@ export default function useRecording({ WS_URL, onData, onStartError }) {
     setRecordingState("recording");
 
     try {
-      wsRef.current = new WebSocket(WS_URL);
+      // ✅ board_id를 query parameter로 포함
+      let wsUrl = WS_URL;
+      if (boardId) {
+        const separator = WS_URL.includes('?') ? '&' : '?';
+        wsUrl = `${WS_URL}${separator}board_id=${boardId}`;
+      }
+      console.log("🔌 WebSocket connecting to:", wsUrl);
+
+      wsRef.current = new WebSocket(wsUrl);
       wsRef.current.binaryType = "arraybuffer";
 
       wsRef.current.onmessage = (event) => {
@@ -39,29 +47,29 @@ export default function useRecording({ WS_URL, onData, onStartError }) {
         }
       };
 
-      streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+        streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
 
-      const source = audioContextRef.current.createMediaStreamSource(streamRef.current);
-      sourceRef.current = source;
+        const source = audioContextRef.current.createMediaStreamSource(streamRef.current);
+        sourceRef.current = source;
 
-      processorRef.current = audioContextRef.current.createScriptProcessor(16384, 1, 1);
-      processorRef.current.onaudioprocess = (e) => {
-        if (pausedRef.current) return;
-        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-        const input = e.inputBuffer.getChannelData(0);
-        const pcm = floatTo16BitPCM(input);
-        wsRef.current.send(pcm);
-      };
+        processorRef.current = audioContextRef.current.createScriptProcessor(16384, 1, 1);
+        processorRef.current.onaudioprocess = (e) => {
+          if (pausedRef.current) return;
+          if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+          const input = e.inputBuffer.getChannelData(0);
+          const pcm = floatTo16BitPCM(input);
+          wsRef.current.send(pcm);
+        };
 
-      source.connect(processorRef.current);
-      processorRef.current.connect(audioContextRef.current.destination);
-    } catch (err) {
-      console.error("❌ 녹음 시작 실패:", err);
-      setRecordingState("idle");
-      if (onStartError) onStartError(err);
-    }
-  };
+        source.connect(processorRef.current);
+        processorRef.current.connect(audioContextRef.current.destination);
+      } catch (err) {
+        console.error("❌ 녹음 시작 실패:", err);
+        setRecordingState("idle");
+        if (onStartError) onStartError(err);
+      }
+    };
 
   // ⏸️ 일시정지
   const pauseRecording = () => {

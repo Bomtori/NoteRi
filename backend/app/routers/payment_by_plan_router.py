@@ -11,7 +11,7 @@ from backend.app.crud.payment_by_plan_crud import (
     get_mom_growth_by_plan,
     get_yoy_growth_by_plan,
     get_revenue_share_by_plan,
-    get_total_revenue_by_plan, get_wow_growth_by_plan, get_dod_growth_by_plan
+    get_total_revenue_by_plan, get_wow_growth_by_plan, get_dod_growth_by_plan, get_total_revenue_paid_plans
 )
 class RevenueByPlanItem(BaseModel):
     plan_id: int
@@ -70,12 +70,11 @@ def revenue_share(
     """
     return get_revenue_share_by_plan(db, start_date=start_date, end_date=end_date)
 
-@router.get("/revenue/paid", response_model=RevenueByPlanResponse)
+@router.get("/revenue/paid")
 def read_revenue_paid_plans(
     db: Session = Depends(get_db),
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
 ):
-    rows = get_total_revenue_by_plan(db, start_date, end_date)
-    return {"items": rows}
+    return get_total_revenue_paid_plans(db, start_date=start_date, end_date=end_date)
 

@@ -18,7 +18,7 @@ load_dotenv()
 config = context.config
 
 # .env에서 DB URL 구성
-DB_URL = (
+DB_URL = os.getenv('DATABASE_URL') or (
     f"postgresql+psycopg2://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}"
     f"@{os.getenv('POSTGRES_HOST')}:{os.getenv('POSTGRES_PORT')}/{os.getenv('POSTGRES_DB')}"
 )

@@ -16,7 +16,9 @@ from backend.ml.stt_model import STTModel
 from backend.ml.vad import VADFilter
 from backend.ml.postprocess.silence_segmenter import SilenceSegmenter
 from backend.ml.postprocess.timestamp_deduplicator import TimestampDeduplicator
-from backend.ml.summarizer import ThreeLineSummarizer
+from backend.ml.preprocessing.realtime_cleaner import RealtimeCleaner
+# from backend.ml.summarizer import ThreeLineSummarizer
+from backend.app.util.llm_client import ollama_summarize_interval
 from backend.config import VAD_THRESHOLD, VAD_SAMPLE_RATE
 from backend.services.diarization import run_diarization_for_session
 from backend.ml.postprocess.text_cleaner import normalize_transcript_lines, TextCleaner
@@ -69,7 +71,8 @@ class STTPipeline:
         self.vad = VADFilter(threshold=VAD_THRESHOLD, sampling_rate=VAD_SAMPLE_RATE)
         self.deduper = TimestampDeduplicator()
         self.segmenter = SilenceSegmenter(silence_limit=1.5, chunk_seconds=1.0, ngram_size=2)
-        self.summarizer = ThreeLineSummarizer(device="cuda")
+        self.realtime_cleaner = RealtimeCleaner(use_typo_correction=True)
+        # self.summarizer = ThreeLineSummarizer(device="cuda")
 
         # ===== 요약/세션 상태 =====
         self.summary_task = None           # asyncio.Task | None
@@ -109,8 +112,22 @@ class STTPipeline:
         if self.session_active:
             return
         self.ws = websocket
+        
+        # ✅ query parameter에서 sid와 board_id 추출
         query_sid = websocket.query_params.get("sid") if hasattr(websocket, "query_params") else None
+        query_board_id = websocket.query_params.get("board_id") if hasattr(websocket, "query_params") else None
+        
         self.sid = (query_sid[:12] if query_sid else None) or self.sid or _short_sid()
+        
+        # ✅ board_id 파싱 (문자열 → 정수 변환)
+        board_id = None
+        if query_board_id:
+            try:
+                board_id = int(query_board_id)
+                logger.info(f"✅ WebSocket connected with board_id={board_id}")
+            except ValueError:
+                logger.warning(f"⚠️ Invalid board_id: {query_board_id}")
+        
         # 날짜 prefix 고정(세션 동안 유지)
         self.redis_prefix = datetime.now().strftime("stt:%Y-%m-%d")
 
@@ -121,19 +138,20 @@ class STTPipeline:
         if self.summary_task is None or self.summary_task.done():
             self.summary_task = asyncio.create_task(self._summary_loop())
 
-        # 메타 시작 기록(날짜 prefix 적용). stt_model 필드 제거됨.
+        # ✅ 메타 시작 기록 시 board_id 포함
         try:
             await init_session_meta(
                 sid=self.sid,
                 prefix=self.redis_prefix,
                 sample_rate=VAD_SAMPLE_RATE,
                 vad_threshold=VAD_THRESHOLD,
-                source=source,  # 메타 필드로 남겨 디버깅 편의
+                source=source,
+                board_id=board_id,  # ✅ board_id 추가
             )
         except Exception as e:
             logger.warning(f"init_session_meta({source}) failed: {e}")
 
-        # ✅ 프론트가 “이번 세션”을 정확히 추적할 수 있도록 SID 알림
+        # ✅ 프론트가 "이번 세션"을 정확히 추적할 수 있도록 SID 알림
         await self._safe_send_json({"event": "session_started", "sid": self.sid})
 
     async def begin_session(self, websocket):
@@ -287,8 +305,7 @@ class STTPipeline:
     async def _flush_interval_summary(self, force: bool):
         """
         마지막 컷(last_cut_ts)부터 지금(now)까지 요약 후 push.
-        force=False: 최소 분량 미달이면 스킵(누적)
-        force=True : 분량 무관 시도(세션 종료용)
+        ✅ 최소 길이 체크 추가
         """
         if self.ws is None:
             return
@@ -299,19 +316,29 @@ class STTPipeline:
         start_ts = self.last_cut_ts
         source_text = self._collect_text_in_interval(start_ts, now)
 
+        # ✅ 최소 길이 체크 (글자 수 기준)
         if not force and len(source_text) < self._min_chars_for_summary:
-            logger.debug("⏭️ Interval too short, carry over to next minute.")
+            logger.debug(f"⭐️ Interval too short ({len(source_text)} chars), carry over.")
             return
+        
         if not source_text:
             self.last_cut_ts = now
             return
 
-        try:
-            summary = await asyncio.to_thread(self.summarizer.summarize, source_text)
-        except Exception as e:
-            logger.warning(f"summary failed: {e}")
-            self.last_cut_ts = now
-            return
+        # ✅ 추가: 50자 미만이면 요약하지 않고 원문 그대로 전송
+        if len(source_text) < 50:
+            logger.info(f"[{self.sid}] ℹ️ Text too short, sending original without summary")
+            summary = f"• {source_text}"
+        else:
+            try:
+                # Ollama로 고품질 요약 생성
+                summary = await ollama_summarize_interval(source_text)
+                logger.info(f"[{self.sid}] 🤖 Ollama interval summary generated ({len(summary)} chars)")
+            except Exception as e:
+                logger.warning(f"Ollama summary failed: {e}, using fallback")
+                # Fallback: 원문을 불릿으로
+                lines = [ln.strip() for ln in source_text.split('.') if ln.strip()]
+                summary = "• " + "\n• ".join(lines[:3]) if lines else f"• {source_text[:100]}"
 
         await self._safe_send_json({"paragraph": source_text, "summary": summary})
 

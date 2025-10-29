@@ -7,7 +7,7 @@ from fastapi.responses import RedirectResponse
 from datetime import datetime, UTC
 from starlette.responses import JSONResponse
 from backend.app.deps.auth import get_current_user
-from backend.app.crud.auth_crud import get_or_create_user, generate_login_response
+from backend.app.crud.auth_crud import get_or_create_user, generate_login_response, assert_login_allowed
 from backend.app.util.auth import create_access_token, create_refresh_token, verify_token
 from backend.app.db import get_db
 from backend.app.model import User
@@ -72,6 +72,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
             nickname=nickname,
             picture=picture,
         )
+        assert_login_allowed(db_user, db)
     except OAuthProviderConflict as e:
         # 이미 다른 provider로 가입된 이메일 → 프론트에서 전용 안내
         # detail 안에 registered_provider를 넣어두었으니 꺼내서 전달

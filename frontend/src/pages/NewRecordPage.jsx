@@ -110,6 +110,7 @@ export default function NewRecordPage() {
     // 🔹 useRecording Hook
     const { recordingState, startRecording, stopRecording } = useRecording({
         WS_URL,
+        boardId,  // ✅ boardId 추가
         onData: (msg) => {
             if (msg.realtime) setLiveText(msg.realtime);
             if (msg.append) setRefinedScript((prev) => [...prev, msg.append]);

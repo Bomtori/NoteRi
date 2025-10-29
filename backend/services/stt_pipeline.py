@@ -112,8 +112,22 @@ class STTPipeline:
         if self.session_active:
             return
         self.ws = websocket
+        
+        # ✅ query parameter에서 sid와 board_id 추출
         query_sid = websocket.query_params.get("sid") if hasattr(websocket, "query_params") else None
+        query_board_id = websocket.query_params.get("board_id") if hasattr(websocket, "query_params") else None
+        
         self.sid = (query_sid[:12] if query_sid else None) or self.sid or _short_sid()
+        
+        # ✅ board_id 파싱 (문자열 → 정수 변환)
+        board_id = None
+        if query_board_id:
+            try:
+                board_id = int(query_board_id)
+                logger.info(f"✅ WebSocket connected with board_id={board_id}")
+            except ValueError:
+                logger.warning(f"⚠️ Invalid board_id: {query_board_id}")
+        
         # 날짜 prefix 고정(세션 동안 유지)
         self.redis_prefix = datetime.now().strftime("stt:%Y-%m-%d")
 
@@ -124,19 +138,20 @@ class STTPipeline:
         if self.summary_task is None or self.summary_task.done():
             self.summary_task = asyncio.create_task(self._summary_loop())
 
-        # 메타 시작 기록(날짜 prefix 적용). stt_model 필드 제거됨.
+        # ✅ 메타 시작 기록 시 board_id 포함
         try:
             await init_session_meta(
                 sid=self.sid,
                 prefix=self.redis_prefix,
                 sample_rate=VAD_SAMPLE_RATE,
                 vad_threshold=VAD_THRESHOLD,
-                source=source,  # 메타 필드로 남겨 디버깅 편의
+                source=source,
+                board_id=board_id,  # ✅ board_id 추가
             )
         except Exception as e:
             logger.warning(f"init_session_meta({source}) failed: {e}")
 
-        # ✅ 프론트가 “이번 세션”을 정확히 추적할 수 있도록 SID 알림
+        # ✅ 프론트가 "이번 세션"을 정확히 추적할 수 있도록 SID 알림
         await self._safe_send_json({"event": "session_started", "sid": self.sid})
 
     async def begin_session(self, websocket):

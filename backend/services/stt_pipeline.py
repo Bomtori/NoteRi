@@ -16,7 +16,7 @@ from backend.ml.stt_model import STTModel
 from backend.ml.vad import VADFilter
 from backend.ml.postprocess.silence_segmenter import SilenceSegmenter
 from backend.ml.postprocess.timestamp_deduplicator import TimestampDeduplicator
-from backend.ml.postprocess.realtime_cleaner import RealtimeCleaner
+from backend.ml.preprocessing.realtime_cleaner import RealtimeCleaner
 # from backend.ml.summarizer import ThreeLineSummarizer
 from backend.app.util.llm_client import ollama_summarize_interval
 from backend.config import VAD_THRESHOLD, VAD_SAMPLE_RATE
@@ -71,7 +71,7 @@ class STTPipeline:
         self.vad = VADFilter(threshold=VAD_THRESHOLD, sampling_rate=VAD_SAMPLE_RATE)
         self.deduper = TimestampDeduplicator()
         self.segmenter = SilenceSegmenter(silence_limit=1.5, chunk_seconds=1.0, ngram_size=2)
-        self.realtime_cleaner = RealtimeCleaner()
+        self.realtime_cleaner = RealtimeCleaner(use_typo_correction=True)
         # self.summarizer = ThreeLineSummarizer(device="cuda")
 
         # ===== 요약/세션 상태 =====

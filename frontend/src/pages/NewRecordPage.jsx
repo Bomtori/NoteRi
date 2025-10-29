@@ -34,8 +34,9 @@ export default function NewRecordPage() {
     const { toast, showToast, clearToast } = useToast();
 
     // 🔹 STT 관련 상태
-    const [liveText, setLiveText] = useState("");
-    const [summaries, setSummaries] = useState([]);
+    const [liveText, setLiveText] = useState("");       // 실시간 한 문장
+    const [liveLines, setLiveLines] = useState([]);     // 현재 1분 동안 쌓이는 STT 라인들
+    const [summaries, setSummaries] = useState([]);     // 완료된 1분 요약 카드들
     const [refinedScript, setRefinedScript] = useState([]);
     const [speakers, setSpeakers] = useState([]);
 
@@ -46,13 +47,30 @@ export default function NewRecordPage() {
         WS_URL,
         onData: (msg) => {
             if (msg.realtime) setLiveText(msg.realtime);
-            if (msg.append) setRefinedScript((prev) => [...prev, msg.append]);
-            if (msg.paragraph || msg.summary) {
-                setSummaries((prev) => [
-                    ...prev,
-                    { paragraph: msg.paragraph || "", summary: msg.summary || "", ts: Date.now() },
-                ]);
-            }
+            // if (msg.append) setRefinedScript((prev) => [...prev, msg.append]);
+            // if (msg.paragraph || msg.summary) {
+            //     setSummaries((prev) => [
+            //         ...prev,
+            //         { paragraph: msg.paragraph || "", summary: msg.summary || "", ts: Date.now() },
+            //     ]);
+            // }
+            // 🟣 실시간 STT 문장 추가
+                if (msg.append) {
+                  setLiveLines((prev) => [...prev, msg.append]);
+                }
+
+                // 🟣 서버에서 1분 요약이 도착한 경우
+                    if (msg.summary) {
+                  setSummaries((prev) => [
+                        ...prev,
+                        {
+                          id: Date.now(),
+                          summary: msg.summary,
+                        },
+                  ]);
+                  // 현재 1분 동안 쌓였던 STT 초기화
+                      setLiveLines([]);
+                }
         },
         onStartError: (err) => console.error("녹음 시작 실패:", err),
     });
@@ -153,10 +171,14 @@ export default function NewRecordPage() {
 
                         <RecordSection
                             activeTab={activeTab}
+                            // liveText={liveText}
+                            // summaries={summaries}
+                            // refinedScript={refinedScript}
+                            // speakers={speakers}
+                            // recordingState={recordingState}
                             liveText={liveText}
+                            liveLines={liveLines}
                             summaries={summaries}
-                            refinedScript={refinedScript}
-                            speakers={speakers}
                             recordingState={recordingState}
                         />
 

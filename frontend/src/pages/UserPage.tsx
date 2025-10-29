@@ -121,40 +121,39 @@ function BillingSection({ billings }: { billings: Billing[] }) {
 // =======================
 // 🧩 노션 연동 섹션
 // =======================
-function NotionIntegration({
-                               connected,
-                               onConnect,
-                               onDisconnect,
-                           }: {
+type Props = {
     connected: boolean;
     onConnect: () => void;
     onDisconnect: () => void;
-}) {
+};
+
+function NotionIntegration({ connected, onConnect, onDisconnect }: Props) {
+    const [loading, setLoading] = useState(false);
+
     return (
         <section className="bg-white rounded-2xl p-6 shadow-sm text-center">
             <h2 className="text-lg font-semibold mb-3">노션 연동</h2>
+
             {connected ? (
                 <>
-                    <p className="text-sm text-gray-600 mb-4">
-                        노션과 연동이 완료되었습니다.
-                    </p>
+                    <p className="text-sm text-gray-600 mb-4">노션과 연동이 완료되었습니다.</p>
                     <button
-                        onClick={onDisconnect}
-                        className="px-4 py-2 rounded-md border border-red-400 text-red-500 hover:bg-red-50 text-sm"
+                        onClick={async () => { setLoading(true); await onDisconnect(); setLoading(false); }}
+                        disabled={loading}
+                        className="px-4 py-2 rounded-md border border-red-400 text-red-500 hover:bg-red-50 text-sm disabled:opacity-60"
                     >
-                        연동 해제
+                        {loading ? "해제 중..." : "연동 해제"}
                     </button>
                 </>
             ) : (
                 <>
-                    <p className="text-sm text-gray-600 mb-4">
-                        노션 계정을 연결하여 회의록을 자동으로 동기화하세요.
-                    </p>
+                    <p className="text-sm text-gray-600 mb-4">노션 계정을 연결하여 회의록을 자동으로 동기화하세요.</p>
                     <button
-                        onClick={onConnect}
-                        className="px-4 py-2 rounded-md bg-[#7E37F9] text-white hover:bg-[#6b29e3] text-sm"
+                        onClick={async () => { setLoading(true); await onConnect(); setLoading(false); }}
+                        disabled={loading}
+                        className="px-4 py-2 rounded-md bg-[#7E37F9] text-white hover:bg-[#6b29e3] text-sm disabled:opacity-60"
                     >
-                        노션 연동하기
+                        {loading ? "연결 준비..." : "노션 연동하기"}
                     </button>
                 </>
             )}
@@ -179,7 +178,14 @@ export default function UserPage() {
                     apiClient.get(`${API_BASE_URL}/recordings/usage`),
                     apiClient.get(`${API_BASE_URL}/subscriptions/me`),
                 ]);
-
+                let notionConnected = false;
+                try {
+                    const notionRes = await apiClient.get(`${API_BASE_URL}/notion/status`);
+                    notionConnected = !!notionRes.data?.connected;
+                } catch {
+                    // 백엔드가 users/me에 notion_connected를 포함한다면 fallback
+                    notionConnected = !!userRes.data?.notion_connected;
+                }
                 const data = userRes.data;
                 const usage = usageRes.data;
                 const subscription = subRes.data;
@@ -209,7 +215,7 @@ export default function UserPage() {
                     plan: { ...plan, end_date: endDate },
                     used_minutes: usedMinutes,
                     billings,
-                    notion_connected: false,
+                    notion_connected: notionConnected,
                 });
             } catch (err) {
                 console.error("사용자 정보 불러오기 실패:", err);
@@ -220,6 +226,13 @@ export default function UserPage() {
         }
 
         fetchUser();
+        // ✅ 노션 콜백에서 ?notion=connected 로 돌아오면 즉시 반영
+        const qs = new URLSearchParams(window.location.search);
+        if (qs.get("notion") === "connected") {
+            setUser((u) => (u ? { ...u, notion_connected: true } : u));
+            // 주소 정리
+            window.history.replaceState({}, "", window.location.pathname);
+        }
     }, [showModal]);
 
     if (loading)
@@ -294,18 +307,41 @@ export default function UserPage() {
                     <BillingSection billings={user.billings} />
                     <NotionIntegration
                         connected={user.notion_connected}
-                        onConnect={() => (window.location.href = `${API_BASE_URL}/notion/login`)}
-                        onDisconnect={async () => {
-                            try {
-                                await apiClient.post(`${API_BASE_URL}/notion/disconnect`);
-                                setUser((prev) =>
-                                    prev ? { ...prev, notion_connected: false } : prev
-                                );
-                                alert("노션 연동이 해제되었습니다.");
-                            } catch (err) {
-                                console.error("노션 연동 해제 실패:", err);
-                                alert("연동 해제 중 오류가 발생했습니다.");
+                        onConnect={async () => {
+                            const token = localStorage.getItem("access_token");
+                            if (!token) return alert("로그인이 필요합니다.");
+                            await fetch(`${API_BASE_URL}/healthz`, {
+                                headers: { "ngrok-skip-browser-warning": "1" },
+                                cache: "no-store",
+                            }).catch(() => { /* 무시해도 됨 */ });
+
+                            // ✅ 요게 핵심: 헤더 붙여 먼저 /notion/login 호출 → JSON { url } 받기
+                            const res = await fetch(`${API_BASE_URL}/notion/login`, {
+                                headers: { Authorization: `Bearer ${token}` },
+                            });
+                            if (!res.ok) {
+                                const text = await res.text();
+                                return alert(`노션 URL 요청 실패: ${res.status} ${text}`);
                             }
+                            const { url } = await res.json();
+
+                            // ✅ 그 다음에 Notion으로 이동 (여기는 헤더 필요 없음)
+                            window.location.href = url;
+                        }}
+                        onDisconnect={async () => {
+                            const token = localStorage.getItem("access_token");
+                            if (!token) return alert("로그인이 필요합니다.");
+                            const res = await fetch(`${API_BASE_URL}/notion/disconnect`, {
+                                method: "DELETE",
+                                headers: { Authorization: `Bearer ${token}` },
+                            });
+                            if (!res.ok) {
+                                const text = await res.text();
+                                return alert(`연동 해제 실패: ${res.status} ${text}`);
+                            }
+                            alert("노션 연동이 해제되었습니다.");
+                            setUser((u) => (u ? { ...u, notion_connected: false } : u));
+                            // 필요 시 상태 갱신
                         }}
                     />
                 </div>

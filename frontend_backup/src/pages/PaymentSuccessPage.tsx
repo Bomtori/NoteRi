@@ -2,7 +2,7 @@
 import { useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import apiClient from "../api/apiClient";
-import { API_BASE_URL } from "../config";
+import { API_BASE_URL } from "@/config";
 
 export default function PaymentSuccessPage() {
     const [params] = useSearchParams();

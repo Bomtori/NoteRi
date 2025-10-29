@@ -16,7 +16,7 @@ import RecordDetailPage from "./pages/RecordDetailPage.jsx";
 import UserPage from "./pages/UserPage.tsx";
 import MeetingPage from "./pages/MeetingPage.jsx";
 import PaymentSuccessPage from "./pages/PaymentSuccessPage.tsx";
-import Calendar from "@/components/calendar/Calendar.js";
+import Calendar from "../../frontend/src/components/calendar/Calendar.js";
 
 function App() {
   return (

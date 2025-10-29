@@ -1,6 +1,8 @@
 import { useState, useMemo, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import RecordList from "../components/recording/RecordList";
+import Calendar from "../components/calendar/Calendar";
+import { FaRegCalendarAlt } from "react-icons/fa";
 import apiClient from "../api/apiClient";
 import { setRecords } from "../features/record/recordSlice.js";
 import { fetchFolders } from "../features/folder/folderSlice";
@@ -9,6 +11,7 @@ export default function RecordListPage() {
     const dispatch = useDispatch();
     const { records } = useSelector((state) => state.record);
     const { folders, status: folderStatus } = useSelector((state) => state.folder);
+    const [calendarOpen, setCalendarOpen] = useState(false);
 
     const [searchTerm, setSearchTerm] = useState("");
     const [sortOption, setSortOption] = useState("latest");
@@ -197,6 +200,7 @@ export default function RecordListPage() {
 
             {/* ===== 오른쪽: GPT 분석 패널 ===== */}
             <aside className="w-[30%] bg-white rounded-2xl shadow-sm p-6 flex flex-col min-h-[700px]">
+
                 <div className="flex gap-2 mb-4 border-b border-gray-200 pb-2">
                     {["gpt"].map((tab) => (
                         <button
@@ -227,6 +231,55 @@ export default function RecordListPage() {
                     </div>
                 )}
             </aside>
+
+            {/* ✅ 캘린더 토글 floating 버튼 */}
+            {!calendarOpen && (
+                <button
+                    onClick={() => setCalendarOpen(true)}
+                    className="
+      fixed bottom-6 right-6
+      z-[200]
+      w-[64px] h-[64px]
+      flex items-center justify-center
+      bg-white rounded-2xl
+      shadow-[0_4px_18px_rgba(0,0,0,0.15)]
+      border border-gray-200
+      hover:bg-gray-50
+      transition
+    "
+                >
+                    <FaRegCalendarAlt size={30} className="text-[#7E37F9]" />
+                </button>
+            )}
+
+
+            {/* ✅ 캘린더 사이드 패널 */}
+            <div
+                className={`
+        fixed top-0 right-0 h-full w-[450px]
+        bg-white shadow-lg border-l
+        p-5 z-[150]
+        transition-transform duration-500
+        ${calendarOpen ? "translate-x-0" : "translate-x-full"}
+    `}
+            >
+                {/* 닫기 버튼 */}
+                <button
+                    onClick={() => setCalendarOpen(false)}
+                    className="
+            absolute top-4 right-4
+            text-gray-500 hover:text-gray-700
+            text-xl font-bold
+        "
+                >
+                    ✕
+                </button>
+
+                <h3 className="font-semibold mb-4 text-lg">""</h3>
+
+                {/* ✅ 캘린더 컴포넌트 */}
+                <Calendar />
+            </div>
         </main>
     );
 }

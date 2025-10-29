@@ -29,7 +29,12 @@ export default function PaymentSuccessPage() {
                 });
                 console.log("✅ 결제 승인 성공:", res.data);
                 alert("결제가 완료되었습니다!");
-                navigate("/user"); // 마이페이지로 이동
+
+                // 🔹 결제 승인 후, 최신 사용자 정보 다시 불러오기
+                const userRes = await apiClient.get(`${API_BASE_URL}/users/me`);
+                localStorage.setItem("user", JSON.stringify(userRes.data));
+
+                navigate("/user"); // 🔹 마이페이지로 이동
             } catch (err) {
                 console.error("❌ 결제 승인 실패:", err);
                 alert("결제 승인 중 오류가 발생했습니다.");

@@ -66,3 +66,44 @@
 .animate-dropdown {
     animation: dropdown 0.18s cubic-bezier(0.25, 1, 0.5, 1);
 }
+/* === 커스텀 스크롤 === */
+.scrollbar-thin {
+    scrollbar-width: thin; /* Firefox */
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgba(126, 55, 249, 0.3);
+    border-radius: 10px;
+}
+
+.scrollbar-thin:hover::-webkit-scrollbar-thumb {
+    background-color: rgba(126, 55, 249, 0.6);
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+}
+/* global.css or index.css */
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+/* 모달 배경이 부드럽게 어두워지는 효과 */
+@keyframes fadeInOverlay {
+    0% {
+        background-color: rgba(0, 0, 0, 0);
+    }
+    100% {
+        background-color: rgba(0, 0, 0, 0.4);
+    }
+}
+.animate-fadeInOverlay {
+    animation: fadeInOverlay 0.25s ease-out forwards;
+}

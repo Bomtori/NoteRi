@@ -3,9 +3,9 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import type { EventClickArg, EventInput } from "@fullcalendar/core";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
+import { Label } from "../ui/label";
+import { Textarea } from "../ui/textarea";
+// import { Switch } from "../ui/switch";
 
 /**
  * Mini month calendar widget (compact corner widget)
@@ -248,140 +248,90 @@ export default function Calendar() {
   900: "#4c1d95",
 };
 
-  return (
-    <div className="w-[400px] rounded-2xl border shadow-sm p-2 bg-background text-foreground"
-     style={
-        {
-          // shadcn 색 변수
-          ["--primary" as any]: LILAC[600],
-          ["--primary-foreground" as any]: "white",
-          ["--muted" as any]: LILAC[50],
-          ["--muted-foreground" as any]: "#4b5563",
-          // FullCalendar 커스텀 변수(임의)
-          ["--fc-lilac" as any]: LILAC[600],
-          ["--fc-lilac-soft" as any]: LILAC[100],
-          ["--fc-lilac-ink" as any]: LILAC[900],
-        } as React.CSSProperties
-      }
-    >
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-semibold">My Calendar</h3>
-        <div className="text-[11px] opacity-70">mini</div>
-      </div>
-
-           <FullCalendar
-        ref={calRef as any}
-        plugins={[dayGridPlugin, interactionPlugin]}
-        initialView="dayGridMonth"
-        headerToolbar={false}
-        height="auto"
-        contentHeight={"auto"}
-        aspectRatio={1.05}
-        selectable
-        selectMirror
-        editable
-        eventResizableFromStart
-        dayMaxEventRows={2}
-        events={events}
-        datesSet={onDatesSet}
-        select={onSelect}
-        eventClick={onEventClick}
-        eventDrop={onEventDrop}
-        eventResize={onEventResize}
-        eventTimeFormat={{ hour: "2-digit", minute: "2-digit", meridiem: false }}
-        dayHeaderFormat={{ weekday: "short" }}
-        buttonText={{ today: "오늘" }}
-        dayCellClassNames={(arg) => {
-          const classes: string[] = [];
-          const dow = arg.date.getDay(); // 0: Sun, 6: Sat
-          const dateStr = ymd(arg.date);
-          if (dow === 0) classes.push("is-sun");
-          if (dow === 6) classes.push("is-sat");
-
-          return classes;
-        }}
-      />
-
-      {showEditor && form && (
-        <div className="mt-3 rounded-xl border p-3 space-y-3 bg-muted/40">
-          <div className="grid gap-2">
-            <Label htmlFor="title">제목</Label>
-            <input
-              id="title"
-              className="w-full rounded-md border px-3 py-2 text-sm bg-background"
-              placeholder="일정 제목"
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
+    return (
+        <div className="w-full bg-white text-foreground">
+            <FullCalendar
+                ref={calRef as any}
+                plugins={[dayGridPlugin, interactionPlugin]}
+                initialView="dayGridMonth"
+                headerToolbar={false}
+                height="auto"
+                contentHeight="auto"
+                aspectRatio={1}
+                selectable
+                selectMirror
+                editable
+                eventResizableFromStart
+                events={events}
+                datesSet={onDatesSet}
+                select={onSelect}
+                eventClick={onEventClick}
+                eventDrop={onEventDrop}
+                eventResize={onEventResize}
+                eventTimeFormat={{ hour: "2-digit", minute: "2-digit", meridiem: false }}
+                dayHeaderFormat={{ weekday: "short" }}
+                buttonText={{ today: "오늘" }}
             />
-          </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="desc">일정</Label>
-            <Textarea
-              id="desc"
-              placeholder="..."
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-            />
-          </div>
+            {showEditor && form && (
+                <div className="mt-4 space-y-3 bg-muted/40 rounded-xl p-4">
+                    <div className="grid gap-2">
+                        <Label htmlFor="title">제목</Label>
+                        <input
+                            id="title"
+                            className="w-full rounded-md border px-3 py-2 text-sm"
+                            placeholder="일정 제목"
+                            value={form.title}
+                            onChange={(e) => setForm({ ...form, title: e.target.value })}
+                        />
+                    </div>
 
-          {/*<div className="flex items-center justify-between">*/}
-          {/*  <div className="flex items-center gap-2">*/}
-          {/*    <Switch*/}
-          {/*      id="allday"*/}
-          {/*      checked={form.allDay}*/}
-          {/*      onCheckedChange={(v) => setForm({ ...form, allDay: !!v })}*/}
-          {/*    />*/}
-          {/*    <Label htmlFor="allday">하루 종일</Label>*/}
-          {/*  </div>*/}
-          {/*  <div className="text-xs opacity-70">*/}
-          {/*    {new Date(form.start).toLocaleString()} {form.end ? "– " + new Date(form.end).toLocaleString() : ""}*/}
-          {/*  </div>*/}
-          {/*</div>*/}
+                    <div className="grid gap-2">
+                        <Label htmlFor="desc">일정</Label>
+                        <Textarea
+                            id="desc"
+                            placeholder="..."
+                            value={form.description}
+                            onChange={(e) => setForm({ ...form, description: e.target.value })}
+                        />
+                    </div>
 
-          <div className="flex items-center gap-2 justify-end">
-            {form.id && (
-              <button
-                type="button"
-                onClick={onDelete}
-                className="text-xs px-3 py-2 rounded-md border hover:bg-destructive/10 hover:text-destructive"
-              >
-                삭제
-              </button>
+                    <div className="calendar-form-actions">
+                        {form.id && (
+                            <button
+                                type="button"
+                                onClick={onDelete}
+                                className="btn-outline"
+                            >
+                                삭제
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={closeEditor}
+                            className="btn-outline"
+                        >
+                            취소
+                        </button>
+                        <button
+                            type="button"
+                            onClick={save}
+                            disabled={isSaving || !form.title.trim()}
+                            className="btn-primary disabled:opacity-50"
+                        >
+                            {form.id ? (isSaving ? "저장중…" : "수정") : (isSaving ? "추가중…" : "추가")}
+                        </button>
+                    </div>
+                </div>
             )}
-            <button
-              type="button"
-              onClick={closeEditor}
-              className="text-xs px-3 py-2 rounded-md border hover:bg-muted"
-            >
-              취소
-            </button>
-            <button
-              type="button"
-              onClick={save}
-              disabled={isSaving || !form.title.trim()}
-              className="text-xs px-3 py-2 rounded-md bg-primary text-primary-foreground disabled:opacity-50"
-            >
-              {form.id ? (isSaving ? "저장중…" : "수정") : (isSaving ? "추가중…" : "추가")}
-            </button>
-          </div>
+
+            <style>{`
+      .fc { font-size: 12px; }
+      .fc .fc-daygrid-day-number { font-size: 11px; margin: 2px; }
+      .fc .fc-event { border-radius: 6px; white-space: nowrap; }
+      .fc .fc-daygrid-day-top { padding: 4px; }
+    `}</style>
         </div>
-      )}
+    );
 
-      {/*<p className="mt-2 text-[11px] text-muted-foreground">*/}
-      {/*  날짜를 드래그해 일정 추가 · 이벤트 드래그/리사이즈로 시간 변경*/}
-      {/*</p>*/}
-
-      <style>{`
-        .fc { font-size: 11px; }
-        .fc .fc-daygrid-day-top { flex-direction: row; padding: 2px 4px; }
-        .fc .fc-daygrid-day-number { font-size: 11px; }
-        .fc .fc-daygrid-dot-event .fc-event-title { white-space: nowrap; }
-        .fc .fc-event { border-radius: 6px; }
-        .fc .is-sun .fc-daygrid-day-number { color: #e11d48; } /* 일요일: 붉은색(rose-600) */
-        .fc .is-sat .fc-daygrid-day-number { color: #2563eb; } /* 토요일: 파란색(blue-600) */
-        .fc .is-holiday .fc-daygrid-day-number { color: #e11d48; } /* 공휴일: 붉은색 */
-      `}</style>
-    </div>
-  );
 }

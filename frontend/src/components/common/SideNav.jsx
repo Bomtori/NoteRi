@@ -12,6 +12,8 @@ import Toast from "../common/Toast";
 import apiClient from "../../api/apiClient";
 import { API_BASE_URL } from "../../config";
 import { Folder, FileText, Mic, Star } from "lucide-react"; // 추가
+import { Palette } from "lucide-react";
+import { updateFolderColorAsync } from "../../features/folder/folderSlice";
 
 // color값에 따라 아이콘 매핑
 const colorToIcon = {
@@ -31,6 +33,9 @@ export default function SideNav() {
     const [editingId, setEditingId] = useState(null);
     const [tempName, setTempName] = useState("");
     const [user, setUser] = useState(null);
+
+    const colorOptions = ["#7E36F9", "#FFD700", "#3B82F6", "#4ADE80", "#EF4444", "#A855F7"];
+    const [colorPickerId, setColorPickerId] = useState(null);
 
     // ✅ 폴더 목록 불러오기
     useEffect(() => {
@@ -119,9 +124,10 @@ export default function SideNav() {
     };
 
     return (
-        <aside className="w-64 bg-white border-r border-gray-200 flex flex-col justify-between">
-            <div>
-                {/* ✅ 로고 */}
+        <aside className="w-64 h-screen bg-white border-r border-gray-200 flex flex-col">
+            {/* ✅ 상단 : 로고 + 버튼 (고정) */}
+            <div className="flex-shrink-0">
+                {/* 로고 */}
                 <div className="p-5 border-b border-gray-200 flex items-center justify-start">
                     <Link to="/" className="flex items-center gap-2 group">
                         <img
@@ -130,12 +136,12 @@ export default function SideNav() {
                             className="w-7 h-7 object-contain group-hover:scale-110 transition-transform duration-300"
                         />
                         <span className="text-lg font-bold text-[#7E37F9] group-hover:text-[#682be0] transition-colors">
-              NoteR<span className="text-black">i</span>
-            </span>
+                    NoteR<span className="text-black">i</span>
+                </span>
                     </Link>
                 </div>
 
-                {/* ✅ 녹음 관련 버튼 */}
+                {/* 녹음 관련 버튼 */}
                 <div className="px-5 py-4 border-b border-gray-200 flex flex-col gap-2">
                     <Link
                         to="/record"
@@ -150,8 +156,11 @@ export default function SideNav() {
                         ➕ 새 녹음 시작
                     </Link>
                 </div>
+            </div>
 
-                {/* ✅ 폴더 목록 */}
+            {/* ✅ 가운데 : 폴더 리스트 (남은 영역 채우고, 스크롤 되지만 스크롤바 숨김) */}
+            <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar">
+                {/* no-scrollbar 클래스 추가 ✅ */}
                 <div className="p-5 border-b border-gray-200 flex justify-between items-center">
                     <h2 className="text-lg font-semibold text-gray-800">폴더</h2>
                     {!isAdding ? (
@@ -189,7 +198,8 @@ export default function SideNav() {
                     )}
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-3">
+                {/* 폴더 리스트 */}
+                <div className="p-3">
                     {status === "loading" ? (
                         <p className="text-sm text-gray-400 mt-4 text-center">불러오는 중...</p>
                     ) : folders.length === 0 ? (
@@ -218,14 +228,15 @@ export default function SideNav() {
                                         to={`/folder/${folder.id}`}
                                         className="flex items-center gap-2 text-sm text-gray-800 truncate hover:text-[#7E37F9]"
                                     >
-                                        {/* ✅ color 기반 아이콘 */}
-                                        {colorToIcon[folder.color] || (
-                                            <Folder className="w-4 h-4 text-gray-400" />
-                                        )}
+                                        <Folder
+                                            className="w-4 h-4"
+                                            style={{ color: folder.color || "#6B7280" }}
+                                        />
                                         <span>{folder.name}</span>
                                     </Link>
                                 )}
 
+                                {/* 색상 변경/수정/삭제 버튼 */}
                                 <div className="opacity-0 group-hover:opacity-100 transition flex gap-1">
                                     <button
                                         onClick={() => {
@@ -242,16 +253,45 @@ export default function SideNav() {
                                     >
                                         삭제
                                     </button>
+                                    <div className="relative overflow-visible">
+                                        <Palette
+                                            className="w-3.5 h-3.5 text-gray-400 hover:text-[#7E37F9] cursor-pointer"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setColorPickerId(folder.id);
+                                            }}
+                                        />
+                                        {colorPickerId === folder.id && (
+                                            <div className="absolute right-0 top-5 bg-white border border-gray-200 shadow-md rounded-md p-2 flex gap-1 z-[9999] overflow-visible">
+                                                {colorOptions.map((color) => (
+                                                    <button
+                                                        key={color}
+                                                        onClick={async () => {
+                                                            await dispatch(
+                                                                updateFolderColorAsync({
+                                                                    id: folder.id,
+                                                                    color,
+                                                                })
+                                                            );
+                                                            setColorPickerId(null);
+                                                            showToast("색상이 변경되었습니다.");
+                                                        }}
+                                                        className="w-5 h-5 rounded-full border border-gray-300 hover:scale-110 transition-transform"
+                                                        style={{ backgroundColor: color }}
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         ))
                     )}
                 </div>
-
             </div>
 
-            {/* ✅ 하단 유저 정보 */}
-            <div className="p-4 border-t border-gray-200">
+            {/* ✅ 하단 : 유저 정보 (고정) */}
+            <div className="flex-shrink-0 p-4 border-t border-gray-200">
                 <Link
                     to={user ? "/user" : "/login"}
                     className="flex items-center gap-3 group transition-colors hover:text-[#7E37F9]"
@@ -262,17 +302,16 @@ export default function SideNav() {
                         className="w-8 h-8 rounded-full object-cover border border-gray-200 group-hover:border-[#7E37F9] transition"
                     />
                     <div className="flex flex-col text-xs leading-tight">
-            <span className="font-medium text-gray-700 group-hover:text-[#7E37F9]">
-              {user?.nickname || user?.name || "로그인 필요"}
-            </span>
+                <span className="font-medium text-gray-700 group-hover:text-[#7E37F9]">
+                    {user?.nickname || user?.name || "로그인 필요"}
+                </span>
                         <span className="text-gray-400">
-              {user ? "마이페이지" : "로그인 페이지"}
-            </span>
+                    {user ? "마이페이지" : "로그인 페이지"}
+                </span>
                     </div>
                 </Link>
             </div>
-
-            <Toast message={message} clearToast={clearToast} />
         </aside>
+
     );
 }

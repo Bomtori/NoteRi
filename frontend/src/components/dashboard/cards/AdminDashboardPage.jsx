@@ -1,11 +1,11 @@
 import React, {useEffect, useState} from 'react';
 import Buttons from "./Buttons.tsx"
 import Menubars from "@/test/components/Menubar.jsx";
-import UserCards from "@/test/components/userDashBoard/UserCards.jsx";
-import PaymentCards from "@/test/components/paymentDashBoard/PaymentCards.jsx";
-import UsageCards from "@/test/components/usageDashBoard/UsageCards.jsx";
+import UserCards from "../../components/dashboard/userDashBoard/UserCards.jsx";
+import PaymentCards from "../components/paymentDashBoard/PaymentCards.jsx";
+import UsageCards from "../components/usageDashBoard/UsageCards.jsx";
 
-export default function Dashboard() {
+export default function AdminDashboardPage() {
   // 주소 변경 없이 내부 탭만 관리
   const [tab, setTab] = useState("users") // "users" | "payments" | "usage"
 

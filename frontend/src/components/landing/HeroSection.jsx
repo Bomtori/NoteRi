@@ -10,7 +10,7 @@ export default function HeroSection({ user }) {
     const [showLogo, setShowLogo] = useState(true);
 
     useEffect(() => {
-        const timer = setTimeout(() => setShowLogo(false), 4000);
+        const timer = setTimeout(() => setShowLogo(false), 500);
         return () => clearTimeout(timer);
     }, []);
 

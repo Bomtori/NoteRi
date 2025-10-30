@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
@@ -23,8 +23,6 @@ export default function NewRecordPage() {
     // 🔹 상태
     const [boardId, setBoardId] = useState(null);
     const [title, setTitle] = useState(localStorage.getItem("draftTitle") || formatDefaultTitle());
-    // const [tempMemo, setTempMemo] = useState(localStorage.getItem("draftMemo") || "");
-    // const [tempQuestion, setTempQuestion] = useState(localStorage.getItem("draftQuestion") || "");
     const [activeTab, setActiveTab] = useState("record");
     const [showTemplateModal, setShowTemplateModal] = useState(false);
     const [isPanelVisible, setIsPanelVisible] = useState(false);
@@ -34,15 +32,17 @@ export default function NewRecordPage() {
     const { toast, showToast, clearToast } = useToast();
 
     // 🔹 STT 관련 상태
-    const [liveText, setLiveText] = useState("");       // 실시간 한 문장
-    const [liveLines, setLiveLines] = useState([]);     // 현재 1분 동안 쌓이는 STT 라인들
-    const [summaries, setSummaries] = useState([]);     // 완료된 1분 요약 카드들
-    const [refinedScript, setRefinedScript] = useState([]);
-    const [speakers, setSpeakers] = useState([]);
+    const [liveText, setLiveText] = useState("");
+    const [liveLines, setLiveLines] = useState([]);
+    const [summaries, setSummaries] = useState([]);
+    const [allHistory, setAllHistory] = useState([]); // ✅ 전체 누적 히스토리
+    const [finalSummary, setFinalSummary] = useState(null); // ✅ 전체 요약
+    const [recordingStopped, setRecordingStopped] = useState(false); // ✅ 녹음 종료 플래그
 
     const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8000/ws/stt";
+    const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-    // 🔹 useRecording hook
+    // ✅ useRecording hook
     const { recordingState, startRecording, stopRecording } = useRecording({
         WS_URL,
         onData: (msg) => {
@@ -153,7 +153,7 @@ export default function NewRecordPage() {
                         setFinalSummary(res.data);
                         console.log("✅ 전체 요약 로드 완료:", res.data);
                         setActiveTab("summary");
-                        showToast("🧾 전체 요약이 생성되었습니다.");
+                        showToast("전체 요약이 생성되었습니다.");
                         return;
                     }
                 } catch (err) {

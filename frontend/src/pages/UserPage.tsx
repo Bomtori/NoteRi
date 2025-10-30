@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import UserHeader from "../components/user/UserHeader";
 import apiClient from "../api/apiClient";
 import { API_BASE_URL } from "../config";
+import { useToast } from "../hooks/useToast";
+
 
 // =======================
 // ✅ 타입 정의
@@ -65,6 +67,7 @@ function ProgressBar({ used, total, mode = "remaining" }: ProgressBarProps) {
     const percentRemaining = 100 - percentUsed;
     const percent = mode === "remaining" ? percentRemaining : percentUsed;
     const [animatedWidth, setAnimatedWidth] = useState(0);
+
 
     useEffect(() => {
         const timeout = setTimeout(() => setAnimatedWidth(percent), 1000);
@@ -168,6 +171,8 @@ export default function UserPage() {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
+    const { showToast } = useToast();
+
 
     useEffect(() => {
         async function fetchUser() {

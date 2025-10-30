@@ -1,30 +1,39 @@
-# backend/app/routers/final_summaries.py
 from __future__ import annotations
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from typing import Optional, Dict, Any
+
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import func, select
-from pydantic import BaseModel, Field
-from typing import Dict, Literal
 from backend.app.db import get_db
-from backend.app.crud.final_summary_crud import (
-    get_final_summaries_by_board,
-    get_latest_final_summary_by_board, set_final_summary_rating,
-list_final_summaries_by_board
-)
-
-from backend.app.model import FinalSummary
+from backend.app.model import RecordingSession, Board, User, FinalSummary
+from backend.app.deps.auth import get_current_user
+from backend.app.crud import final_summary_crud
 from backend.app.schemas.final_summary_schema import (
+    FinalSummaryResponse,
     FinalSummaryListResponse,
-    FinalSummaryResponse, FinalSummaryRatingUpdate,
+    FinalSummaryRatingUpdate, RatingSummaryOut,
 )
 
-router = APIRouter(prefix="/summary/final", tags=["final-summaries"])
+router = APIRouter(prefix="/summary/final", tags=["final_summary"])
 
-class RatingSummaryOut(BaseModel):
-    total: int = 0
-    average: float = 0.0
-    counts: Dict[Literal[1,2,3,4,5], int] = Field(default_factory=lambda:{1:0,2:0,3:0,4:0,5:0})
+# --- 권한 체크(간단: 보드 소유자만) ---
+def _assert_session_access(db: Session, session_id: int, user: User):
+    session = db.query(RecordingSession).get(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="RecordingSession not found")
+    board = db.query(Board).get(session.board_id)
+    if not board:
+        raise HTTPException(status_code=404, detail="Board not found")
+    if board.owner_id != user.id:
+        # 공유 권한 허용하려면 여기에 share 체크 추가
+        raise HTTPException(status_code=403, detail="No permission for this session")
+
+def _assert_board_access(db: Session, board_id: int, user: User):
+    board = db.query(Board).get(board_id)
+    if not board:
+        raise HTTPException(status_code=404, detail="Board not found")
+    if board.owner_id != user.id:
+        raise HTTPException(status_code=403, detail="No permission for this board")
 
 # 평가 점수 가져오기
 @router.get("/ratings", response_model=RatingSummaryOut)
@@ -46,69 +55,110 @@ def get_rating_summary(db: Session = Depends(get_db)):
 
     average = round(ssum/total, 2) if total else 0.0
     return {"total": total, "average": average, "counts": counts}
-@router.get(
-    "/{board_id}/final-summaries",
-    response_model=FinalSummaryListResponse,
-    summary="보드의 (특정/최신) 세션의 FinalSummary 전체 조회",
-)
+
+
+# ------------------------------
+# 단건 조회
+# ------------------------------
+@router.get("/{final_summary_id}", response_model=FinalSummaryResponse)
+def get_final_summary(
+    final_summary_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    obj = final_summary_crud.get(db, final_summary_id)
+    if not obj:
+        raise HTTPException(status_code=404, detail="FinalSummary not found")
+    _assert_session_access(db, obj.recording_session_id, current_user)
+    return obj  # ← 응답 스키마에서 bullets/actions 변환
+
+# ------------------------------
+# 세션별 목록
+# ------------------------------
+@router.get("/sessions/{session_id}", response_model=FinalSummaryListResponse)
+def list_final_summaries_by_session(
+    session_id: int = Path(..., ge=1),
+    order: str = Query("desc", pattern="^(asc|desc)$"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _assert_session_access(db, session_id, current_user)
+    items = final_summary_crud.list_by_session(db, session_id, order=order)
+    return {
+        "board_id": db.query(RecordingSession).get(session_id).board_id,
+        "session_id": session_id,
+        "total": len(items),
+        "items": items,  # ← 각 item 직렬화 시 변환
+    }
+
+# ------------------------------
+# 세션 최신 1건
+# ------------------------------
+@router.get("/sessions/{session_id}/latest", response_model=FinalSummaryResponse)
+def latest_final_summary_by_session(
+    session_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _assert_session_access(db, session_id, current_user)
+    obj = final_summary_crud.latest_by_session(db, session_id)
+    if not obj:
+        raise HTTPException(status_code=404, detail="No final summary found")
+    return obj
+
+# ------------------------------
+# 보드별 목록
+# ------------------------------
+@router.get("/boards/{board_id}", response_model=FinalSummaryListResponse)
 def list_final_summaries_by_board(
     board_id: int = Path(..., ge=1),
-    session_id: Optional[int] = Query(
-        None, description="명시하면 해당 세션의 FinalSummary들, 없으면 보드의 최신 세션 FinalSummary들"
-    ),
+    order: str = Query("desc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    total, resolved_session_id, items = get_final_summaries_by_board(
-        db, board_id, session_id=session_id
-    )
-
-    # ✅ 세션이 없으면 null과 빈 배열로 반환 (404 아님)
-    if resolved_session_id == 0:
-        return {
-            "board_id": board_id,
-            "session_id": None,
-            "total": 0,
-            "items": [],
-        }
-
+    _assert_board_access(db, board_id, current_user)
+    items = final_summary_crud.list_by_board(db, board_id, order=order)
+    # session_id는 단일 값이 아니므로 목록에선 None으로 반환(스키마가 허용)
     return {
         "board_id": board_id,
-        "session_id": resolved_session_id,
-        "total": total,
+        "session_id": None,
+        "total": len(items),
         "items": items,
     }
 
-@router.get(
-    "/{board_id}/latest",
-    response_model=FinalSummaryResponse,
-    summary="보드의 (특정/최신) 세션에서 가장 최근 FinalSummary 1건 조회",
-)
-def read_latest_final_summary_by_board(
-    board_id: int = Path(..., ge=1),
-    session_id: Optional[int] = Query(
-        None, description="명시하면 해당 세션의 최신 FinalSummary, 없으면 보드의 최신 세션에서 최신 FinalSummary"
-    ),
+# ------------------------------
+# 수정(PATCH)
+# ------------------------------
+@router.patch("/{final_summary_id}", response_model=FinalSummaryResponse)
+def update_final_summary(
+    final_summary_id: int = Path(..., ge=1),
+    payload: Dict[str, Any] = Body(...),  # ← 그대로 저장
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    _, resolved_session_id, latest = get_latest_final_summary_by_board(
-        db, board_id, session_id=session_id
-    )
-    if not latest or resolved_session_id == 0:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No final summary found for this board/session.",
-        )
-    return latest
+    obj = final_summary_crud.get(db, final_summary_id)
+    if not obj:
+        raise HTTPException(status_code=404, detail="FinalSummary not found")
+    _assert_session_access(db, obj.recording_session_id, current_user)
 
-# 평가 점수 설정
+    updated = final_summary_crud.update(db, final_summary_id, payload)
+    return updated
+
+# ------------------------------
+# 평점만 별도(PATCH)
+# ------------------------------
 @router.patch("/{final_summary_id}/rating", response_model=FinalSummaryResponse)
 def update_final_summary_rating(
     final_summary_id: int = Path(..., ge=1),
-    body: FinalSummaryRatingUpdate = ...,
+    payload: FinalSummaryRatingUpdate = Body(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    fs = set_final_summary_rating(db, final_summary_id, body.rating)
-    if not fs:
+    obj = final_summary_crud.get(db, final_summary_id)
+    if not obj:
         raise HTTPException(status_code=404, detail="FinalSummary not found")
-    return fs
+    _assert_session_access(db, obj.recording_session_id, current_user)
+
+    updated = final_summary_crud.update_rating(db, final_summary_id, payload.rating)
+    return updated
 

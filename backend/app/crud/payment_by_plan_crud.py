@@ -54,8 +54,8 @@ def _sum_by_plan_fallback(db, start_date=None, end_date=None) -> dict[str, float
             Subscription,
             and_(
                 Subscription.user_id == Payment.user_id,
-                Subscription.period_start <= Payment.approved_at,
-                (Subscription.period_end == None) | (Payment.approved_at < Subscription.period_end),
+                Subscription.start_date <= Payment.approved_at,
+                (Subscription.end_date == None) | (Payment.approved_at < Subscription.end_date),
             ),
         )
         .join(Plan, Plan.id == Subscription.plan_id)
@@ -295,8 +295,8 @@ def get_total_revenue_by_plan(db: Session, start_date: Optional[date]=None, end_
             Subscription,
             and_(
                 Subscription.user_id == Payment.user_id,
-                Subscription.period_start <= Payment.approved_at,
-                (Subscription.period_end == None) | (Payment.approved_at < Subscription.period_end),
+                Subscription.start_date <= Payment.approved_at,
+                (Subscription.end_date == None) | (Payment.approved_at < Subscription.end_date),
             ),
         )
         .join(Plan, Plan.id == Subscription.plan_id)

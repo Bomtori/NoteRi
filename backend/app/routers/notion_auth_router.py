@@ -27,6 +27,17 @@ def notion_headers(token: str):
         "Content-Type": "application/json",
         "Notion-Version": NOTION_VERSION,
     }
+@router.get("/status")
+def notion_status(auth: Optional[NotionAuth] = Depends(crud.get_user_notion_auth)):
+    """
+    현재 로그인 사용자의 노션 연동 상태 조회
+    - Authorization: Bearer <access_jwt> 필요
+    """
+    return {
+        "connected": bool(auth),
+        "workspace_id": getattr(auth, "workspace_id", None),
+        "workspace_name": getattr(auth, "workspace_name", None),
+    }
 
 
 @router.get("/login")

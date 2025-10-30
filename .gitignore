@@ -36,8 +36,10 @@ backend/recordings/
 # =========================================
 # 🔐 Environment variables
 backend/.env
-
+frontend/.env
 .env
+**/.env
+
 
 # =========================================
 # 📦 Seed dummy data (CSV, test seeds)
@@ -45,5 +47,3 @@ backend/app/seed/*.csv
 backend/app/seed/notelee_dummy_*.csv
 backend/app/seed/__pycache__/
 # Environment
-**/.env
-frontend/.env

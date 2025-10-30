@@ -17,6 +17,7 @@ from backend.ml.vad import VADFilter
 from backend.ml.postprocess.silence_segmenter import SilenceSegmenter
 from backend.ml.postprocess.timestamp_deduplicator import TimestampDeduplicator
 from backend.ml.preprocessing.realtime_cleaner import RealtimeCleaner
+from backend.app.tasks.embedding_task import create_embeddings_for_session
 # from backend.ml.summarizer import ThreeLineSummarizer
 from backend.app.util.llm_client import ollama_summarize_interval
 from backend.config import VAD_THRESHOLD, VAD_SAMPLE_RATE
@@ -260,6 +261,14 @@ class STTPipeline:
             logger.error(f"Final summary failed: {e}")
             logger.error(f"Full traceback:\n{traceback.format_exc()}")
             logger.error(f"lines type: {type(lines)}, lines sample: {lines[:2] if lines else 'empty'}")
+
+        if session_id:
+            try:
+                asyncio.create_task(create_embeddings_for_session(session_id))
+                logger.info(f"🔍 Embedding task started for session_id={session_id}")
+            except Exception as e:
+                logger.warning(f"Embedding task failed to start: {e}")
+
     # ---------------------------------------------------------------------
     # 내부 타이머 루프 & 요약 로직
     # ---------------------------------------------------------------------

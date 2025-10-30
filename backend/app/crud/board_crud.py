@@ -9,6 +9,7 @@ from sqlalchemy import or_
 from passlib.hash import argon2
 import re
 import backend.app.model as model
+from backend.app.crud import memo_crud
 from backend.app.model import Board, BoardShare
 from backend.app.schemas import board_schema as schemas
 from sqlalchemy.orm import joinedload
@@ -62,22 +63,31 @@ def create_board(db: Session, current_user_id: int, data: schemas.BoardCreate):
         updated_at=_now(),
     )
 
-    # ✅ 이중 방어: 전처리 + fullmatch + 길이 체크
+    # 비밀번호(PIN) 처리
     if getattr(data, "password", None):
         raw = data.password
-        # ✅ 디버그 로그
         print("DEBUG create_board raw password:", repr(raw), "len:", len(str(raw)))
+
         pin = _normalize_pin(raw)
         print("DEBUG create_board normalized pin:", repr(pin), "len:", len(pin))
-        # ✅ 실패 시 원인을 메시지로 알려주기
+
         if not _PIN_RE.fullmatch(pin):
-            raise ValueError(f"Password must be exactly 4 digits (got={repr(pin)}, len={len(pin)})")
+            raise ValueError(
+                f"Password must be exactly 4 digits (got={repr(pin)}, len={len(pin)})"
+            )
+
         new_board.password_hash = argon2.hash(pin)
+
+    # 1) 보드 먼저 저장
     db.add(new_board)
     db.commit()
     db.refresh(new_board)
-    return new_board
 
+    # 2) 기본 메모 자동 생성
+    memo_crud.create_default_memo(db, new_board.id, current_user_id)
+    db.refresh(new_board, attribute_names=["memos"])  #
+
+    return new_board
 
 # -----------------------------
 # Read (소유 + 공유 받은 보드)

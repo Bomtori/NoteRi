@@ -275,7 +275,7 @@ export default function RecordListPage() {
                     ✕
                 </button>
 
-                <h3 className="font-semibold mb-4 text-lg">📅 My Calendar</h3>
+                <h3 className="font-semibold mb-4 text-lg">""</h3>
 
                 {/* ✅ 캘린더 컴포넌트 */}
                 <Calendar />

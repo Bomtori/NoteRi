@@ -1,121 +1,79 @@
-# backend/app/crud/final_summary_crud.py
 from __future__ import annotations
-from typing import List, Tuple, Optional
+from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import select, desc, func
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
-from backend.app.db import get_db
-from backend.app.model import RecordingSession, FinalSummary
+from sqlalchemy import desc
 
+from backend.app.model import FinalSummary, RecordingSession
 
-def list_final_summaries_by_board(
-    board_id: int = Path(..., ge=1),
-    session_id: Optional[int] = Query(
-        None, description="명시하면 해당 세션의 FinalSummary들, 없으면 보드의 최신 세션 FinalSummary들"
-    ),
-    db: Session = Depends(get_db),
-):
-    total, resolved_session_id, items = get_final_summaries_by_board(
-        db, board_id, session_id=session_id
+# 단건
+def get(db: Session, final_summary_id: int) -> Optional[FinalSummary]:
+    return db.query(FinalSummary).get(final_summary_id)
+
+# 세션별 목록
+def list_by_session(
+    db: Session,
+    session_id: int,
+    order: str = "desc",
+) -> List[FinalSummary]:
+    q = db.query(FinalSummary).filter(FinalSummary.recording_session_id == session_id)
+    q = q.order_by(desc(FinalSummary.created_at)) if order == "desc" else q.order_by(FinalSummary.created_at)
+    return q.all()
+
+# 세션 최신 1건
+def latest_by_session(
+    db: Session,
+    session_id: int,
+) -> Optional[FinalSummary]:
+    return (
+        db.query(FinalSummary)
+        .filter(FinalSummary.recording_session_id == session_id)
+        .order_by(desc(FinalSummary.created_at))
+        .first()
     )
-    if resolved_session_id == 0:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No recording session found for this board (or session_id doesn't belong to this board).",
-        )
-    return {
-        "board_id": board_id,
-        "session_id": resolved_session_id,
-        "total": total,
-        "items": items,
-    }
 
-
-
-def _resolve_session_id_for_board(
+# 보드별 목록 (RecordingSession 조인)
+def list_by_board(
     db: Session,
     board_id: int,
-    session_id: Optional[int] = None,
-) -> Optional[int]:
-    """
-    board_id 기준으로 사용할 recording_session_id를 결정.
-    - session_id가 주어지면, 해당 세션이 그 보드에 속하는지 검증 후 반환
-    - 없으면 해당 보드의 최신 세션(started_at DESC, id DESC fallback) 선택
-    """
-    if session_id is not None:
-        rs = db.execute(
-            select(RecordingSession.id).where(
-                RecordingSession.id == session_id,
-                RecordingSession.board_id == board_id,
-            )
-        ).scalar_one_or_none()
-        return rs
-
-    return db.execute(
-        select(RecordingSession.id)
-        .where(RecordingSession.board_id == board_id)
-        .order_by(desc(RecordingSession.started_at), desc(RecordingSession.id))
-        .limit(1)
-    ).scalar_one_or_none()
-
-
-def get_final_summaries_by_board(
-    db: Session,
-    board_id: int,
-    *,
-    session_id: Optional[int] = None,
-) -> Tuple[int, int, List[FinalSummary]]:
-    """
-    board_id → session_id를 해석한 뒤, 해당 session의 모든 FinalSummary를 반환.
-    최신순(created_at DESC, id DESC)으로 정렬.
-    """
-    resolved_session_id = _resolve_session_id_for_board(db, board_id, session_id)
-    if resolved_session_id is None:
-        return (0, 0, [])
-
-    total = db.scalar(
-        select(func.count(FinalSummary.id)).where(
-            FinalSummary.recording_session_id == resolved_session_id
-        )
-    ) or 0
-
-    stmt = (
-        select(FinalSummary)
-        .where(FinalSummary.recording_session_id == resolved_session_id)
-        .order_by(desc(FinalSummary.created_at), desc(FinalSummary.id))
+    order: str = "desc",
+) -> List[FinalSummary]:
+    q = (
+        db.query(FinalSummary)
+        .join(RecordingSession, RecordingSession.id == FinalSummary.recording_session_id)
+        .filter(RecordingSession.board_id == board_id)
     )
-    items = db.execute(stmt).scalars().all()
-    return (total, resolved_session_id, items)
+    q = q.order_by(desc(FinalSummary.created_at)) if order == "desc" else q.order_by(FinalSummary.created_at)
+    return q.all()
 
-
-def get_latest_final_summary_by_board(
+# 수정(PATCH)
+def update(
     db: Session,
-    board_id: int,
-    *,
-    session_id: Optional[int] = None,
-) -> Tuple[int, int, Optional[FinalSummary]]:
-    """
-    해당 session의 최신 FinalSummary 한 개만 반환.
-    """
-    resolved_session_id = _resolve_session_id_for_board(db, board_id, session_id)
-    if resolved_session_id is None:
-        return (0, 0, None)
-
-    stmt = (
-        select(FinalSummary)
-        .where(FinalSummary.recording_session_id == resolved_session_id)
-        .order_by(desc(FinalSummary.created_at), desc(FinalSummary.id))
-        .limit(1)
-    )
-    latest = db.execute(stmt).scalars().first()
-    return (1 if latest else 0, resolved_session_id if latest else 0, latest)
-
-def set_final_summary_rating(db: Session, final_summary_id: int, rating: int) -> FinalSummary | None:
-    fs = db.get(FinalSummary, final_summary_id)
-    if not fs:
+    final_summary_id: int,
+    data: Dict[str, Any],
+) -> Optional[FinalSummary]:
+    obj = db.query(FinalSummary).get(final_summary_id)
+    if not obj:
         return None
-    fs.rating = int(rating)
-    db.add(fs)
+
+    # 넘어온 필드만 반영
+    for key in ("title", "bullets", "actions", "content", "rating"):
+        if key in data:
+            setattr(obj, key, data[key])
+
     db.commit()
-    db.refresh(fs)
-    return fs
+    db.refresh(obj)
+    return obj
+
+# 평점만 별도 업데이트 (옵션)
+def update_rating(
+    db: Session,
+    final_summary_id: int,
+    rating: int,
+) -> Optional[FinalSummary]:
+    obj = db.query(FinalSummary).get(final_summary_id)
+    if not obj:
+        return None
+    obj.rating = rating
+    db.commit()
+    db.refresh(obj)
+    return obj

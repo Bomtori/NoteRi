@@ -93,6 +93,9 @@ export default function RecordSection({
                         exit={{ opacity: 0, y: -10 }}
                         className="border border-gray-200 rounded-xl p-4 bg-white shadow-sm"
                     >
+                        <p className="font-medium text-[#7E37F9] mb-2 flex items-center gap-1">
+                            🎤 실시간 음성 인식 중...
+                        </p>
 
                         <div className="text-sm leading-relaxed text-gray-700">
                             <p className="flex flex-wrap gap-x-[4px] gap-y-[2px]">
@@ -170,7 +173,7 @@ export default function RecordSection({
         return (
             <div className="flex flex-col gap-4 mt-4 overflow-y-auto flex-1">
                 <div className="border border-gray-200 rounded-xl p-5 bg-white shadow-sm">
-                    <h3 className="font-semibold text-gray-800 mb-3">현재 진행 중</h3>
+                    <h3 className="font-semibold text-gray-800 mb-3">🧾 현재 진행 중</h3>
                     {finalSummary ? (
                         <div className="space-y-4">
                             {/* 제목 */}
@@ -185,7 +188,7 @@ export default function RecordSection({
                             {/* 주요 내용 */}
                             {finalSummary.bullets?.length > 0 && (
                                 <div>
-                                    <p className="font-semibold text-gray-700 mb-2">주요 내용</p>
+                                    <p className="font-semibold text-gray-700 mb-2">📌 주요 내용</p>
                                     <ul className="list-disc ml-5 space-y-1 text-sm text-gray-800">
                                         {finalSummary.bullets.map((bullet, i) => (
                                             <li key={i} className="leading-relaxed">
@@ -199,7 +202,7 @@ export default function RecordSection({
                             {/* 후속 조치 */}
                             {finalSummary.actions?.length > 0 && (
                                 <div>
-                                    <p className="font-semibold text-gray-700 mb-2">후속 조치</p>
+                                    <p className="font-semibold text-gray-700 mb-2">✅ 후속 조치</p>
                                     <ul className="list-disc ml-5 space-y-1 text-sm text-gray-700">
                                         {finalSummary.actions.map((action, i) => (
                                             <li key={i} className="leading-relaxed">

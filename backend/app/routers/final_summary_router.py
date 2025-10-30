@@ -3,15 +3,15 @@ from typing import Optional, Dict, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Body
 from sqlalchemy.orm import Session
-
+from sqlalchemy import func, select
 from backend.app.db import get_db
-from backend.app.model import RecordingSession, Board, User
+from backend.app.model import RecordingSession, Board, User, FinalSummary
 from backend.app.deps.auth import get_current_user
 from backend.app.crud import final_summary_crud
 from backend.app.schemas.final_summary_schema import (
     FinalSummaryResponse,
     FinalSummaryListResponse,
-    FinalSummaryRatingUpdate,
+    FinalSummaryRatingUpdate, RatingSummaryOut,
 )
 
 router = APIRouter(prefix="/summary/final", tags=["final_summary"])
@@ -34,6 +34,28 @@ def _assert_board_access(db: Session, board_id: int, user: User):
         raise HTTPException(status_code=404, detail="Board not found")
     if board.owner_id != user.id:
         raise HTTPException(status_code=403, detail="No permission for this board")
+
+# 평가 점수 가져오기
+@router.get("/ratings", response_model=RatingSummaryOut)
+def get_rating_summary(db: Session = Depends(get_db)):
+    rows = db.execute(
+        select(FinalSummary.rating, func.count(FinalSummary.id))
+        .where(FinalSummary.rating.isnot(None))
+        .group_by(FinalSummary.rating)
+    ).all()
+
+    counts = {1:0,2:0,3:0,4:0,5:0}
+    total = 0
+    ssum = 0
+    for rating, count in rows:
+        if rating and 1 <= rating <= 5:
+            counts[int(rating)] = int(count)
+            total += int(count)
+            ssum += int(rating) * int(count)
+
+    average = round(ssum/total, 2) if total else 0.0
+    return {"total": total, "average": average, "counts": counts}
+
 
 # ------------------------------
 # 단건 조회

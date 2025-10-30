@@ -1,8 +1,8 @@
 # backend/app/schemas/final_summary_schema.py
 from __future__ import annotations
-from typing import List, Optional
+from typing import List, Optional, Dict, Literal
 from datetime import datetime
-from pydantic import BaseModel, conint, field_validator
+from pydantic import BaseModel, conint, field_validator, Field
 
 class BulletItem(BaseModel):
     text: str
@@ -66,3 +66,8 @@ class FinalSummaryListResponse(BaseModel):
 
 class FinalSummaryRatingUpdate(BaseModel):
     rating: conint(ge=1, le=5)
+
+class RatingSummaryOut(BaseModel):
+    total: int = 0
+    average: float = 0.0
+    counts: Dict[Literal[1,2,3,4,5], int] = Field(default_factory=lambda:{1:0,2:0,3:0,4:0,5:0})

@@ -123,8 +123,8 @@ def _grant_free_subscription_and_usage(db: Session, user_id: int) -> None:
             subscription_id=sub.id if hasattr(RecordingUsage, "subscription_id") else None,
             allocated_seconds=alloc_secs,
             used_seconds=0,
-            period_start=start,
-            period_end=end,  # 기간형 요금제면 end, 무기한이면 None
+            start_date=start,
+            end_date=end,  # 기간형 요금제면 end, 무기한이면 None
             created_at=datetime.now(UTC),
         )
         db.add(usage)

@@ -198,7 +198,7 @@ export default function RecordListPage() {
                 )}
             </section>
 
-            {/* ===== 오른쪽: GPT 분석 패널 ===== */}
+            {/* ===== 오른쪽: RAG 분석 패널 ===== */}
             <aside className="w-[30%] bg-white rounded-2xl shadow-sm p-6 flex flex-col min-h-[700px]">
 
                 <div className="flex gap-2 mb-4 border-b border-gray-200 pb-2">

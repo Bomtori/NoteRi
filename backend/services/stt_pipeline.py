@@ -260,6 +260,15 @@ class STTPipeline:
             logger.error(f"Final summary failed: {e}")
             logger.error(f"Full traceback:\n{traceback.format_exc()}")
             logger.error(f"lines type: {type(lines)}, lines sample: {lines[:2] if lines else 'empty'}")
+
+        if session_id:
+            try:
+                from backend.app.tasks.embedding_task import create_embeddings_for_session
+                asyncio.create_task(create_embeddings_for_session(session_id))
+                logger.info(f"🔍 Embedding task started for session_id={session_id}")
+            except Exception as e:
+                logger.warning(f"Embedding task failed to start: {e}")
+
     # ---------------------------------------------------------------------
     # 내부 타이머 루프 & 요약 로직
     # ---------------------------------------------------------------------

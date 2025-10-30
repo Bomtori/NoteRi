@@ -20,6 +20,13 @@ export default function RecordListPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const recordsPerPage = 7;
 
+    // ✅ RAG 상태 추가
+    const [ragQuestion, setRagQuestion] = useState("");
+    const [ragAnswer, setRagAnswer] = useState("");
+    const [ragSources, setRagSources] = useState([]);
+    const [ragLoading, setRagLoading] = useState(false);
+    const [ragError, setRagError] = useState("");
+
     // ✅ 전체 보드 + 폴더 불러오기
     useEffect(() => {
         apiClient
@@ -84,6 +91,45 @@ export default function RecordListPage() {
         if (page < 1 || page > totalPages) return;
         setCurrentPage(page);
         window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+
+    // ✅ RAG 질문 제출
+    const handleRagSubmit = async () => {
+        if (!ragQuestion.trim()) {
+            setRagError("질문을 입력해주세요.");
+            return;
+        }
+
+        setRagLoading(true);
+        setRagError("");
+        setRagAnswer("");
+        setRagSources([]);
+
+        try {
+            const response = await apiClient.post("/rag/ask", {
+                question: ragQuestion,
+                top_k: 5, // 상위 5개 검색
+            });
+
+            setRagAnswer(response.data.answer);
+            setRagSources(response.data.sources || []);
+            console.log("✅ RAG 답변:", response.data);
+        } catch (err) {
+            console.error("❌ RAG 에러:", err);
+            setRagError(
+                err.response?.data?.detail || "답변 생성 중 오류가 발생했습니다."
+            );
+        } finally {
+            setRagLoading(false);
+        }
+    };
+
+    // ✅ Enter 키로 제출
+    const handleKeyPress = (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            handleRagSubmit();
+        }
     };
 
     // ✅ 로딩/실패 시 화면
@@ -200,7 +246,6 @@ export default function RecordListPage() {
 
             {/* ===== 오른쪽: RAG 분석 패널 ===== */}
             <aside className="w-[30%] bg-white rounded-2xl shadow-sm p-6 flex flex-col min-h-[700px]">
-
                 <div className="flex gap-2 mb-4 border-b border-gray-200 pb-2">
                     {["gpt"].map((tab) => (
                         <button
@@ -212,22 +257,113 @@ export default function RecordListPage() {
                                     : "text-gray-500 hover:text-gray-700"
                             }`}
                         >
-                            {tab === "gpt" ? "GPT 분석" : "요약 메모"}
+                            {tab === "gpt" ? "🤖 AI 질문하기" : "요약 메모"}
                         </button>
                     ))}
                 </div>
 
                 {gptTab === "gpt" && (
-                    <div className="text-sm text-gray-600 flex flex-col h-full">
-                        <p className="font-semibold text-[#7E37F9] mb-2">
-                            🤖 자동 분석 결과
-                        </p>
-                        <p className="leading-relaxed text-gray-700">
-                            최근 회의에서 주요 논의된 키워드를 기반으로 자동 요약을 제공합니다.
-                        </p>
-                        <p className="mt-3 text-xs text-gray-400">
-                            (백엔드 연동 전 상태입니다.)
-                        </p>
+                    <div className="flex flex-col h-full">
+                        {/* 질문 입력 영역 */}
+                        <div className="mb-4">
+                            <textarea
+                                value={ragQuestion}
+                                onChange={(e) => setRagQuestion(e.target.value)}
+                                onKeyPress={handleKeyPress}
+                                placeholder="모든 녹음에서 검색할 질문을 입력하세요...&#10;예: 프론트엔드 디자인 언제 완료돼?"
+                                className="w-full h-24 p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-[#7E37F9] focus:outline-none text-sm"
+                                disabled={ragLoading}
+                            />
+                            <div className="flex justify-between items-center mt-2">
+                                <span className="text-xs text-gray-400">
+                                    Enter로 제출 | Shift+Enter로 줄바꿈
+                                </span>
+                                <button
+                                    onClick={handleRagSubmit}
+                                    disabled={ragLoading || !ragQuestion.trim()}
+                                    className="px-4 py-2 bg-[#7E37F9] text-white rounded-lg text-sm font-medium hover:bg-[#6B2DD6] disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+                                >
+                                    {ragLoading ? "검색 중..." : "질문하기"}
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* 에러 메시지 */}
+                        {ragError && (
+                            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+                                ❌ {ragError}
+                            </div>
+                        )}
+
+                        {/* 답변 영역 */}
+                        <div className="flex-1 overflow-y-auto">
+                            {ragLoading && (
+                                <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                                    <div className="w-8 h-8 border-4 border-gray-200 border-t-[#7E37F9] rounded-full animate-spin mb-3" />
+                                    <p className="text-sm">답변 생성 중...</p>
+                                </div>
+                            )}
+
+                            {!ragLoading && ragAnswer && (
+                                <div>
+                                    {/* AI 답변 */}
+                                    <div className="mb-4 p-4 bg-[#F5F3FF] border border-[#7E37F9]/20 rounded-lg">
+                                        <p className="font-semibold text-[#7E37F9] mb-2 text-sm">
+                                            💬 AI 답변
+                                        </p>
+                                        <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                                            {ragAnswer}
+                                        </div>
+                                    </div>
+
+                                    {/* 참조 소스 */}
+                                    {ragSources.length > 0 && (
+                                        <div>
+                                            <p className="font-semibold text-gray-700 mb-2 text-sm">
+                                                📄 참조 문서 ({ragSources.length}개)
+                                            </p>
+                                            <div className="space-y-2">
+                                                {ragSources.map((source, idx) => (
+                                                    <div
+                                                        key={idx}
+                                                        className="p-3 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition cursor-pointer"
+                                                        onClick={() => {
+                                                            // 해당 녹음으로 이동 (선택사항)
+                                                            console.log("소스 클릭:", source);
+                                                        }}
+                                                    >
+                                                        <div className="flex justify-between items-start mb-1">
+                                                            <span className="text-xs font-semibold text-[#7E37F9]">
+                                                                세션 #{source.session_id}
+                                                            </span>
+                                                            <span className="text-xs text-gray-400">
+                                                                유사도: {(source.similarity * 100).toFixed(0)}%
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-xs text-gray-600 line-clamp-3">
+                                                            {source.text}
+                                                        </p>
+                                                        {source.metadata?.date && (
+                                                            <p className="text-xs text-gray-400 mt-1">
+                                                                📅 {new Date(source.metadata.date).toLocaleDateString()}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {!ragLoading && !ragAnswer && (
+                                <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                                    <p className="text-sm text-center">
+                                        💡 모든 녹음 내용에서<br />원하는 정보를 검색해보세요!
+                                    </p>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
             </aside>
@@ -236,48 +372,25 @@ export default function RecordListPage() {
             {!calendarOpen && (
                 <button
                     onClick={() => setCalendarOpen(true)}
-                    className="
-      fixed bottom-6 right-6
-      z-[200]
-      w-[64px] h-[64px]
-      flex items-center justify-center
-      bg-white rounded-2xl
-      shadow-[0_4px_18px_rgba(0,0,0,0.15)]
-      border border-gray-200
-      hover:bg-gray-50
-      transition
-    "
+                    className="fixed bottom-6 right-6 z-[200] w-[64px] h-[64px] flex items-center justify-center bg-white rounded-2xl shadow-[0_4px_18px_rgba(0,0,0,0.15)] border border-gray-200 hover:bg-gray-50 transition"
                 >
                     <FaRegCalendarAlt size={30} className="text-[#7E37F9]" />
                 </button>
             )}
 
-
             {/* ✅ 캘린더 사이드 패널 */}
             <div
-                className={`
-        fixed top-0 right-0 h-full w-[450px]
-        bg-white shadow-lg border-l
-        p-5 z-[150]
-        transition-transform duration-500
-        ${calendarOpen ? "translate-x-0" : "translate-x-full"}
-    `}
+                className={`fixed top-0 right-0 h-full w-[450px] bg-white shadow-lg border-l p-5 z-[150] transition-transform duration-500 ${
+                    calendarOpen ? "translate-x-0" : "translate-x-full"
+                }`}
             >
-                {/* 닫기 버튼 */}
                 <button
                     onClick={() => setCalendarOpen(false)}
-                    className="
-            absolute top-4 right-4
-            text-gray-500 hover:text-gray-700
-            text-xl font-bold
-        "
+                    className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-xl font-bold"
                 >
                     ✕
                 </button>
-
-                <h3 className="font-semibold mb-4 text-lg">""</h3>
-
-                {/* ✅ 캘린더 컴포넌트 */}
+                <h3 className="font-semibold mb-4 text-lg">캘린더</h3>
                 <Calendar />
             </div>
         </main>

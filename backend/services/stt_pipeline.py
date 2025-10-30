@@ -17,6 +17,7 @@ from backend.ml.vad import VADFilter
 from backend.ml.postprocess.silence_segmenter import SilenceSegmenter
 from backend.ml.postprocess.timestamp_deduplicator import TimestampDeduplicator
 from backend.ml.preprocessing.realtime_cleaner import RealtimeCleaner
+from backend.app.tasks.embedding_task import create_embeddings_for_session
 # from backend.ml.summarizer import ThreeLineSummarizer
 from backend.app.util.llm_client import ollama_summarize_interval
 from backend.config import VAD_THRESHOLD, VAD_SAMPLE_RATE
@@ -263,7 +264,6 @@ class STTPipeline:
 
         if session_id:
             try:
-                from backend.app.tasks.embedding_task import create_embeddings_for_session
                 asyncio.create_task(create_embeddings_for_session(session_id))
                 logger.info(f"🔍 Embedding task started for session_id={session_id}")
             except Exception as e:

@@ -44,5 +44,6 @@ backend/.env
 backend/app/seed/*.csv
 backend/app/seed/notelee_dummy_*.csv
 backend/app/seed/__pycache__/
-backend/.env
-.env
+# Environment
+**/.env
+frontend/.env

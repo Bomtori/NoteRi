@@ -318,6 +318,22 @@ export default function RightPanel({ boardId, memoId, tabs = ["memo", "gpt"], on
                   </div>
                 </motion.div>
               ))}
+                {loading && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="flex justify-start"
+                    >
+                        <div className="bg-gray-100 text-gray-500 rounded-2xl px-4 py-2 text-sm shadow-sm flex items-center gap-2">
+                            <div className="flex gap-1">
+                                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></span>
+                            </div>
+                            <span>테리가 생각 중이에요!</span>
+                        </div>
+                    </motion.div>
+                )}
             </div>
 
             {/* 입력창 */}

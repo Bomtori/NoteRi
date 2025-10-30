@@ -159,44 +159,6 @@ function NotionIntegration({ connected, onConnect, onDisconnect }: Props) {
       )}
     </section>
   );
-type Props = {
-    connected: boolean;
-    onConnect: () => void;
-    onDisconnect: () => void;
-};
-
-function NotionIntegration({ connected, onConnect, onDisconnect }: Props) {
-    const [loading, setLoading] = useState(false);
-
-    return (
-        <section className="bg-white rounded-2xl p-6 shadow-sm text-center">
-            <h2 className="text-lg font-semibold mb-3">노션 연동</h2>
-
-            {connected ? (
-                <>
-                    <p className="text-sm text-gray-600 mb-4">노션과 연동이 완료되었습니다.</p>
-                    <button
-                        onClick={async () => { setLoading(true); await onDisconnect(); setLoading(false); }}
-                        disabled={loading}
-                        className="px-4 py-2 rounded-md border border-red-400 text-red-500 hover:bg-red-50 text-sm disabled:opacity-60"
-                    >
-                        {loading ? "해제 중..." : "연동 해제"}
-                    </button>
-                </>
-            ) : (
-                <>
-                    <p className="text-sm text-gray-600 mb-4">노션 계정을 연결하여 회의록을 자동으로 동기화하세요.</p>
-                    <button
-                        onClick={async () => { setLoading(true); await onConnect(); setLoading(false); }}
-                        disabled={loading}
-                        className="px-4 py-2 rounded-md bg-[#7E37F9] text-white hover:bg-[#6b29e3] text-sm disabled:opacity-60"
-                    >
-                        {loading ? "연결 준비..." : "노션 연동하기"}
-                    </button>
-                </>
-            )}
-        </section>
-    );
 }
 
 // =======================

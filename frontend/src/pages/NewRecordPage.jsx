@@ -1,233 +1,282 @@
-import React, { useEffect, useRef, useState } from "react";
-import RightPanel from "../components/recording/RightPanel";
+import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { useSelector, useDispatch } from "react-redux";
+import { motion, AnimatePresence } from "framer-motion";
+import apiClient from "../api/apiClient";
+import { changeRecordFolder } from "../features/record/recordSlice";
+import { useToast } from "../hooks/useToast";
+import useRecording from "../hooks/useRecording";
 
-function floatTo16BitPCM(float32Array) {
-    const buffer = new ArrayBuffer(float32Array.length * 2);
-    const view = new DataView(buffer);
-    let offset = 0;
-    for (let i = 0; i < float32Array.length; i++) {
-        let s = Math.max(-1, Math.min(1, float32Array[i]));
-        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-        offset += 2;
-    }
-    return buffer;
-}
+// components
+import RecordHeader from "../components/recording/RecordHeader";
+import RecordTabs from "../components/recording/RecordTabs";
+import RecordSection from "../components/recording/RecordSection";
+import RecordBar from "../components/recording/RecordBar";
+import RightPanel from "../components/recording/RightPanel";
+import TemplateModal from "../components/recording/TemplateModal";
 
 export default function NewRecordPage() {
-    // ===== 상태 =====
-    const [activeTab, setActiveTab] = useState("record"); // record | script | speaker
-    const [memoText, setMemoText] = useState("");
-    const [isEditing, setIsEditing] = useState(false);
-    const [saveStatus, setSaveStatus] = useState("");
+    const navigate = useNavigate();
+    const dispatch = useDispatch();
+    const { folders } = useSelector((state) => state.record);
 
-    const [liveText, setLiveText] = useState("");
-    const [history, setHistory] = useState([]);
-    const [summaries, setSummaries] = useState([]);
+    // 🔹 상태
+    const [boardId, setBoardId] = useState(null);
+    const [title, setTitle] = useState(localStorage.getItem("draftTitle") || formatDefaultTitle());
+    // const [tempMemo, setTempMemo] = useState(localStorage.getItem("draftMemo") || "");
+    // const [tempQuestion, setTempQuestion] = useState(localStorage.getItem("draftQuestion") || "");
+    const [activeTab, setActiveTab] = useState("record");
+    const [showTemplateModal, setShowTemplateModal] = useState(false);
+    const [isPanelVisible, setIsPanelVisible] = useState(false);
+    const [activeGPTTab, setActiveGPTTab] = useState("memo");
+    const [showLeaveModal, setShowLeaveModal] = useState(false);
+    const [isRecording, setIsRecording] = useState(false);
+    const { toast, showToast, clearToast } = useToast();
+
+    // 🔹 STT 관련 상태
+    const [liveText, setLiveText] = useState("");       // 실시간 한 문장
+    const [liveLines, setLiveLines] = useState([]);     // 현재 1분 동안 쌓이는 STT 라인들
+    const [summaries, setSummaries] = useState([]);     // 완료된 1분 요약 카드들
     const [refinedScript, setRefinedScript] = useState([]);
     const [speakers, setSpeakers] = useState([]);
-    const [merged, setMerged] = useState([]);
-
-    const [recordingState, setRecordingState] = useState("idle"); // idle | recording | paused
-    const pausedRef = useRef(false);
-
-    const wsRef = useRef(null);
-    const audioContextRef = useRef(null);
-    const processorRef = useRef(null);
-    const streamRef = useRef(null);
-    const sourceRef = useRef(null);
 
     const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8000/ws/stt";
-    const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-    // ===== STT WebSocket =====
-    const startRecording = async () => {
-        if (recordingState !== "idle") return;
-        setRecordingState("recording");
-        pausedRef.current = false;
-        setLiveText("");
-        setHistory([]);
-        setSummaries([]);
-        setSpeakers([]);
-        setMerged([]);
-        setRefinedScript([]);
-
-        wsRef.current = new WebSocket(WS_URL);
-        wsRef.current.binaryType = "arraybuffer";
-
-        wsRef.current.onopen = () => console.log("✅ WS connected:", WS_URL);
-
-        wsRef.current.onmessage = (event) => {
-            try {
-                const msg = JSON.parse(event.data);
-                if (msg.realtime) setLiveText(msg.realtime);
-                if (msg.append) setHistory((prev) => [...prev, msg.append]);
-                if (msg.summary) {
-                    setSummaries((prev) => [
-                        ...prev,
-                        { summary: msg.summary, ts: Date.now() },
-                    ]);
+    // 🔹 useRecording hook
+    const { recordingState, startRecording, stopRecording } = useRecording({
+        WS_URL,
+        onData: (msg) => {
+            if (msg.realtime) setLiveText(msg.realtime);
+            // if (msg.append) setRefinedScript((prev) => [...prev, msg.append]);
+            // if (msg.paragraph || msg.summary) {
+            //     setSummaries((prev) => [
+            //         ...prev,
+            //         { paragraph: msg.paragraph || "", summary: msg.summary || "", ts: Date.now() },
+            //     ]);
+            // }
+            // 🟣 실시간 STT 문장 추가
+                if (msg.append) {
+                  setLiveLines((prev) => [...prev, msg.append]);
                 }
-            } catch (e) {
-                console.error("JSON parse error:", e);
+
+                // 🟣 서버에서 1분 요약이 도착한 경우
+                    if (msg.summary) {
+                  setSummaries((prev) => [
+                        ...prev,
+                        {
+                          id: Date.now(),
+                          summary: msg.summary,
+                        },
+                  ]);
+                  // 현재 1분 동안 쌓였던 STT 초기화
+                      setLiveLines([]);
+                }
+        },
+        onStartError: (err) => console.error("녹음 시작 실패:", err),
+    });
+
+    // 🔹 draft 저장
+    // useEffect(() => localStorage.setItem("draftTitle", title), [title]);
+    // useEffect(() => localStorage.setItem("draftMemo", tempMemo), [tempMemo]);
+    // useEffect(() => localStorage.setItem("draftQuestion", tempQuestion), [tempQuestion]);
+
+    // 🔹 날짜 문자열
+    const dateStr = new Date().toLocaleString("ko-KR", {
+        month: "2-digit",
+        day: "2-digit",
+        weekday: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+
+    // 🔹 녹음 시작 → board 생성 + STT 연결
+    const handleStartRecording = async () => {
+        try {
+            if (!boardId) {
+                const res = await apiClient.post("/boards", { title, description: "" });
+                setBoardId(res.data.id);
+                console.log("🎙️ 새 보드 생성:", res.data.id);
             }
-        };
-
-        wsRef.current.onerror = (e) => console.error("❌ WS error:", e);
-        wsRef.current.onclose = (e) => console.log("🔌 WS closed:", e.code, e.reason);
-
-        // 오디오 캡처
-        streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-        const source = audioContextRef.current.createMediaStreamSource(streamRef.current);
-        sourceRef.current = source;
-        processorRef.current = audioContextRef.current.createScriptProcessor(16384, 1, 1);
-        processorRef.current.onaudioprocess = (e) => {
-            if (pausedRef.current) return;
-            if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-            const input = e.inputBuffer.getChannelData(0);
-            const pcm = floatTo16BitPCM(input);
-            wsRef.current.send(pcm);
-        };
-        source.connect(processorRef.current);
-        processorRef.current.connect(audioContextRef.current.destination);
-    };
-
-    const pauseRecording = async () => {
-        if (recordingState !== "recording") return;
-        pausedRef.current = true;
-        setRecordingState("paused");
-        if (audioContextRef.current?.state === "running") await audioContextRef.current.suspend();
-    };
-
-    const resumeRecording = async () => {
-        if (recordingState !== "paused") return;
-        pausedRef.current = false;
-        if (audioContextRef.current?.state === "suspended") await audioContextRef.current.resume();
-        setRecordingState("recording");
-    };
-
-    const stopRecording = () => {
-        if (recordingState === "idle") return;
-        setRecordingState("idle");
-        pausedRef.current = false;
-        try {
-            processorRef.current?.disconnect();
-            sourceRef.current?.disconnect();
-            audioContextRef.current?.close();
-            streamRef.current?.getTracks().forEach((t) => t.stop());
-        } catch (e) {
-            console.warn("⚠️ cleanup warning:", e);
-        }
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-            wsRef.current.close(1000, "Normal Closure");
+            await startRecording();
+            setIsRecording(true);
+        } catch (err) {
+            console.error("녹음 시작 실패:", err);
+            showToast("녹음을 시작할 수 없습니다.");
         }
     };
 
-    // ===== 모델 호출 =====
-    const runRefineScript = async () => {
-        try {
-            const res = await fetch(`${API_BASE}/refine/latest`);
-            if (!res.ok) throw new Error("Refine failed");
-            const data = await res.json();
-            setRefinedScript(data);
-        } catch (e) {
-            console.error("Refine error:", e);
+    // 🔹 녹음 종료
+    const handleStopRecording = () => {
+        stopRecording();
+        setIsRecording(false);
+        if (boardId) {
+            localStorage.removeItem("draftTitle");
+            localStorage.removeItem("draftMemo");
+            localStorage.removeItem("draftQuestion");
+            navigate(`/record/${boardId}`);
+        } else {
+            showToast("보드 생성 중 오류가 발생했습니다.");
         }
     };
 
-    const runDiarization = async () => {
-        try {
-            const res = await fetch(`${API_BASE}/diarize/latest?num_speakers=2`);
-            const data = await res.json();
-            setSpeakers(data.diarization || []);
-            const mergeRes = await fetch(`${API_BASE}/diarize/merge-latest`);
-            const mergeData = await mergeRes.json();
-            setMerged(mergeData || []);
-        } catch (e) {
-            console.error("Diarization error:", e);
-        }
+    // 🔹 페이지 이탈 시 확인
+    const handleNavigateAway = () => {
+
+            // 🔹 녹음 중이 아니고 / 아직 board 생성 전 / draft가 있는 경우
+            if (!isRecording) {
+                setShowLeaveModal(true);
+                return;
+            }
+
+            // 그 외는 그냥 뒤로가기
+        if (window.history.length <= 2) navigate("/");
+        else navigate(-1);
     };
 
-    // ===== UI 렌더 =====
     return (
-        <div className="flex gap-6 p-6 bg-gray-50 min-h-screen">
-            {/* 왼쪽: 녹음/탭 영역 */}
-            <main className="flex-1 bg-white rounded-2xl p-6 shadow-sm flex flex-col">
-                {/* 상단 컨트롤 */}
-                <div className="flex gap-3 mb-4">
-                    <button onClick={startRecording} disabled={recordingState !== "idle"} className="btn-primary">
-                        ▶️ 시작
-                    </button>
-                    {recordingState === "recording" && (
-                        <button onClick={pauseRecording} className="btn-yellow">⏸️ 일시정지</button>
-                    )}
-                    {recordingState === "paused" && (
-                        <button onClick={resumeRecording} className="btn-green">▶️ 재개</button>
-                    )}
-                    <button onClick={stopRecording} disabled={recordingState === "idle"} className="btn-gray">⏹ 종료</button>
-                    <button onClick={runDiarization} className="btn-blue">🗣 화자분리</button>
+        <motion.div
+            className="relative overflow-hidden min-h-screen"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5 }}
+        >
+            <div className="p-6">
+                <button
+                    onClick={handleNavigateAway}
+                    className="text-sm text-gray-400 hover:text-gray-600 mb-4"
+                >
+                    ← 뒤로가기
+                </button>
+
+                <div className="grid grid-cols-[1fr_360px] gap-6">
+                    {/* 🔹 메인 영역 */}
+                    <main className="bg-white rounded-2xl p-6 shadow-sm flex flex-col h-[calc(100vh-140px)]">
+                        <RecordHeader
+                            title={title}
+                            setTitle={setTitle}
+                            dateStr={dateStr}
+                            boardId={boardId}
+                            folders={folders}
+                        />
+
+                        <RecordTabs
+                            tabs={[
+                                { id: "record", label: "회의기록" },
+                                { id: "script", label: "스크립트" },
+                            ]}
+                            activeTab={activeTab}
+                            setActiveTab={setActiveTab}
+                        />
+
+                        <RecordSection
+                            activeTab={activeTab}
+                            // liveText={liveText}
+                            // summaries={summaries}
+                            // refinedScript={refinedScript}
+                            // speakers={speakers}
+                            // recordingState={recordingState}
+                            liveText={liveText}
+                            liveLines={liveLines}
+                            summaries={summaries}
+                            recordingState={recordingState}
+                        />
+
+                        {/* 🔹 하단 컨트롤 */}
+                        <div className="sticky bottom-4 relative">
+                            <RecordBar
+                                boardId={boardId}
+                                onStart={handleStartRecording}
+                                onStop={handleStopRecording}
+                                onCreateTemplate={() => setShowTemplateModal(true)}
+                                onTogglePanel={() => setIsPanelVisible((p) => !p)}
+                            />
+                            <TemplateModal
+                                isOpen={showTemplateModal}
+                                onClose={() => setShowTemplateModal(false)}
+                                onSelect={() => setShowTemplateModal(false)}
+                            />
+                        </div>
+                    </main>
+
+                    {/* 🔹 오른쪽 패널 */}
+                    <AnimatePresence>
+                        {isPanelVisible && (
+                            <motion.aside
+                                key="rightpanel"
+                                initial={{ x: 400, opacity: 0 }}
+                                animate={{ x: 0, opacity: 1 }}
+                                exit={{ x: 400, opacity: 0 }}
+                                transition={{ type: "spring", stiffness: 260, damping: 30 }}
+                                className="fixed top-0 right-0 h-full w-[360px] bg-white shadow-[-4px_0_10px_rgba(0,0,0,0.08)] overflow-hidden z-30 rounded-l-2xl"
+                            >
+                                <RightPanel
+                                    boardId={boardId}
+                                    memoId={boardId}
+                                    activeTab={activeGPTTab}
+                                    onTogglePanel={() => setIsPanelVisible((p) => !p)}
+                                />
+                            </motion.aside>
+                        )}
+                    </AnimatePresence>
                 </div>
+            </div>
 
-                {/* 탭 */}
-                <div className="flex gap-4 border-b pb-2 mb-4">
-                    {["record", "script", "speaker"].map((t) => (
-                        <button
-                            key={t}
-                            onClick={() => setActiveTab(t)}
-                            className={`pb-1 text-sm font-medium ${
-                                activeTab === t ? "border-b-2 border-[#7E37F9] text-[#7E37F9]" : "text-gray-500"
-                            }`}
-                        >
-                            {t === "record" ? "회의기록" : t === "script" ? "스크립트" : "화자분리 결과"}
-                        </button>
-                    ))}
+            {/* 🔹 이탈 경고 모달 */}
+            {showLeaveModal && (
+                <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-[1000]">
+                    <div className="bg-white rounded-2xl shadow-xl p-6 w-[320px] text-center">
+                        <p className="text-gray-700 mb-4 leading-relaxed">
+                            작성 중인 메모와 질문은 기록에 남지 않아요.<br />이동하시겠어요?
+                        </p>
+                        <div className="flex justify-center gap-3">
+                            <button
+                                className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200"
+                                onClick={() => setShowLeaveModal(false)}
+                            >
+                                아니오
+                            </button>
+                            <button
+                                className="px-4 py-2 rounded-lg bg-[#7E37F9] text-white hover:bg-[#6c2de2]"
+                                onClick={() => {
+                                    // localStorage.removeItem("draftTitle");
+                                    // localStorage.removeItem("draftMemo");
+                                    // localStorage.removeItem("draftQuestion");
+                                    navigate(-1);
+                                }}
+                            >
+                                예
+                            </button>
+                        </div>
+                    </div>
                 </div>
+            )}
 
-                {/* 탭 내용 */}
-                <div className="flex-1 overflow-y-auto">
-                    {activeTab === "record" && (
-                        <section className="space-y-4">
-                            <div className="p-4 border rounded bg-gray-50">
-                                <h3 className="font-semibold mb-1">🎤 실시간</h3>
-                                <p>{liveText || "..."}</p>
-                            </div>
-                            <div className="p-4 border rounded bg-gray-50">
-                                <h3 className="font-semibold mb-1">⏱️ 1분 요약</h3>
-                                {summaries.length ? summaries.map((s, i) => (
-                                    <p key={i} className="text-sm text-gray-700">✅ {s.summary}</p>
-                                )) : <p className="text-gray-400">요약 대기 중...</p>}
-                            </div>
-                        </section>
-                    )}
-
-                    {activeTab === "script" && (
-                        <section className="space-y-2">
-                            <button onClick={runRefineScript} className="btn-blue mb-2">✏️ 스크립트 갱신</button>
-                            {refinedScript.length ? refinedScript.map((l, i) => (
-                                <p key={i}><b>{l.speaker}</b>: {l.text}</p>
-                            )) : <p className="text-gray-400">출력 없음</p>}
-                        </section>
-                    )}
-
-                    {activeTab === "speaker" && (
-                        <section className="space-y-2">
-                            {merged.length ? merged.map((m, i) => (
-                                <p key={i}><b>{m.speaker}</b>: {m.text}</p>
-                            )) : <p className="text-gray-400">화자분리 결과 없음</p>}
-                        </section>
-                    )}
-                </div>
-            </main>
-
-            {/* 오른쪽: 메모/GPT */}
-            <RightPanel
-                tabs={["memo", "gpt"]}
-                memoText={memoText}
-                setMemoText={setMemoText}
-                isEditing={isEditing}
-                setIsEditing={setIsEditing}
-                saveStatus={saveStatus}
-            />
-        </div>
+            {/* 🔹 Toast */}
+            <AnimatePresence>
+                {toast.visible && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 30 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 20 }}
+                        transition={{ duration: 0.4 }}
+                        className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-white/80 backdrop-blur-md border border-gray-100 shadow-lg rounded-2xl px-7 py-5 z-[9999]"
+                    >
+                        {toast.content}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </motion.div>
     );
+}
+
+// 🔹 기본 회의 제목
+function formatDefaultTitle() {
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    const hour = now.getHours();
+    const minute = String(now.getMinutes()).padStart(2, "0");
+    const ampm = hour >= 12 ? "오후" : "오전";
+    const displayHour = hour % 12 || 12;
+    return `${month}.${day} ${ampm} ${displayHour}:${minute} 새 회의`;
 }

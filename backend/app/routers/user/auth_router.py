@@ -6,14 +6,23 @@ from backend.app.db import get_db
 from backend.app.model import User
 from backend.app.util.auth import verify_token, create_access_token
 from fastapi.responses import RedirectResponse, JSONResponse
+from urllib.parse import quote
 import os
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN", None)
 KAKAO_CLIENT_ID = os.getenv("KAKAO_CLIENT_ID")
-KAKAO_LOGOUT_REDIRECT = os.getenv("http://localhost:5173/logout")  # ex)
-FRONTEND_LOGOUT_REDIRECT = os.getenv("FRONTEND_LOGOUT_REDIRECT", "http://localhost:5173/logout")
+KAKAO_LOGOUT_REDIRECT = os.getenv("KAKAO_LOGOUT_REDIRECT", "http://localhost:5173/logout")
+FRONTEND_LOGOUT_REDIRECT = os.getenv("FRONTEND_LOGOUT_REDIRECT", "http://localhost:5173")
+
+
+def _delete_cookie(resp: RedirectResponse, key: str):
+    # domain이 비어있으면 인자 자체를 전달하지 않음
+    if COOKIE_DOMAIN:
+        resp.delete_cookie(key, domain=COOKIE_DOMAIN, path="/")
+    else:
+        resp.delete_cookie(key, path="/")
 
 @router.post("/refresh")
 def refresh_access_token(
@@ -51,31 +60,23 @@ def refresh_access_token(
     return {"access_token": new_access, "token_type": "bearer"}
 
 @router.get("/logout")
-async def logout(provider: str | None = Query(default=None, description="google, kakao, naver 중 하나")):
-    """
-    ✅ 통합 로그아웃 엔드포인트
-    - provider query로 구분 (예: /auth/logout?provider=kakao)
-    - 쿠키는 공통으로 삭제
-    - provider 지정 없으면 프론트 로그아웃 리다이렉트로 이동
-    """
-    resp = JSONResponse({"ok": True})
-    resp.delete_cookie("refresh_token", domain=COOKIE_DOMAIN, path="/")
-    resp.delete_cookie("access_token", domain=COOKIE_DOMAIN, path="/")
+def logout(provider: str | None = Query(default=None)):
+    # 1) provider별 리다이렉트 목적지 결정
 
-    # ✅ Provider별 외부 로그아웃 처리
-    if provider == "kakao":
-        url = (
-            f"https://kauth.kakao.com/oauth/logout"
-            f"?client_id={KAKAO_CLIENT_ID}"
-            f"&logout_redirect_uri={KAKAO_LOGOUT_REDIRECT}"
-        )
-        return RedirectResponse(url)
-    elif provider == "google":
-        return RedirectResponse("https://accounts.google.com/Logout")
-    elif provider == "naver":
-        # 네이버는 공식 로그아웃 URL이 없지만,
-        # 프론트 로그아웃 페이지로 리다이렉트
-        return RedirectResponse(FRONTEND_LOGOUT_REDIRECT)
+    if provider == "google":
+        target = "https://accounts.google.com/Logout"
+    elif (provider == "naver" or "kakao"):
+        # 네이버는 별도 로그아웃 URL 실효성이 없어 보통 프론트 로그아웃 페이지로 이동
+        target = FRONTEND_LOGOUT_REDIRECT
     else:
-        # provider 없거나 잘못된 값 → 기본 프론트 로그아웃
-        return RedirectResponse(FRONTEND_LOGOUT_REDIRECT)
+        # 기본: 프론트 로그아웃 페이지
+        target = FRONTEND_LOGOUT_REDIRECT
+
+    # 2) RedirectResponse 하나 생성
+    resp = RedirectResponse(url=target, status_code=302)
+
+    # 3) 같은 객체에 쿠키 삭제 적용 (중요: 이 resp를 그대로 return)
+    _delete_cookie(resp, "refresh_token")
+    _delete_cookie(resp, "access_token")
+
+    return resp

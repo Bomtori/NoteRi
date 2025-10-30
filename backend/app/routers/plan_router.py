@@ -1,32 +1,16 @@
 # backend/app/routers/plan_router.py
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Path
+from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy.orm import Session
 from typing import List
 
 from backend.app.db import get_db
-from backend.app.deps.auth import get_current_user
-from backend.app.model import User
 from backend.app.schemas.plan_schema import (
     PlanRead, PlanCreate, PlanUpdate, PlanPriceUpdate
 )
 from backend.app.crud import plan_crud
+from backend.app.util.authz import require_admin
 
 router = APIRouter(prefix="/plans", tags=["Plans"])
-
-def require_admin(user: User = Depends(get_current_user)) -> User:
-    """
-    - user.is_admin 이 True 이거나
-    - user.role == 'admin' 이면 관리자라고 간주
-    """
-    if hasattr(user, "role") and getattr(user, "role", None) == "admin":
-        is_admin = True
-
-    if not is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="관리자만 접근할 수 있습니다."
-        )
-    return user
 
 # ───────────────────────────────
 # 공개/일반 조회
@@ -57,9 +41,7 @@ def change_plan_price(
     payload: PlanPriceUpdate,
     db: Session = Depends(get_db),
 ):
-    """
-    플랜 가격만 변경(관리자)
-    """
+    """플랜 가격만 변경(관리자)"""
     return plan_crud.update_plan_price(db, plan_id, payload.price)
 
 @router.patch("/{plan_id}", response_model=PlanRead, dependencies=[Depends(require_admin)])
@@ -70,7 +52,7 @@ def update_plan(
 ):
     """
     플랜 일부/전체 업데이트(관리자)
-    - price/duration_days/allocated_minutes/description 중 일부만 보내도 됨
+    - price/duration_days/allocated_seconds/description 중 일부만 보내도 됨
     """
     return plan_crud.update_plan(db, plan_id, payload)
 

@@ -1,24 +1,24 @@
-from datetime import datetime, date
-from decimal import Decimal
-from typing import Optional
+# schemas/payment_schema.py
+from typing import Optional, List
+from datetime import datetime
 from pydantic import BaseModel
-from backend.app.model import PlanType  # enum
+from decimal import Decimal
 
 class PaymentItem(BaseModel):
     id: int
     order_id: str
     amount: Decimal
-    method: Optional[str] = None
+    method: Optional[str]
     status: str
-    transaction_key: Optional[str] = None
-    approved_at: Optional[datetime] = None
-    canceled_at: Optional[datetime] = None
-    plan_name: Optional[PlanType] = None  # pro / enterprise / free / None
-    subscription_id: Optional[int] = None
-
-    class Config:
-        orm_mode = True
-
+    transaction_key: Optional[str]
+    approved_at: Optional[datetime]
+    canceled_at: Optional[datetime]
+    subscription_id: Optional[int]
+    plan_name: Optional[str]
+    model_config = {"from_attributes": True}
+    
 class PaymentListResponse(BaseModel):
     total: int
-    items: list[PaymentItem]
+    items: List[PaymentItem]
+    has_more: bool
+    next_offset: Optional[int] = None

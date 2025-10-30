@@ -1,10 +1,8 @@
-// src/pages/AuthCallbackPage.jsx
 import { useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { setCredentials } from "../features/auth/authSlice";
 import apiClient from "../api/apiClient";
-import { API_BASE_URL } from "../config";
 
 export default function AuthCallbackPage() {
     const navigate = useNavigate();
@@ -15,19 +13,15 @@ export default function AuthCallbackPage() {
         const token = searchParams.get("access_token");
 
         if (token) {
-            // 토큰 저장
+            // 토큰 저장 + axios에 반영
             localStorage.setItem("access_token", token);
+            apiClient.defaults.headers.common["Authorization"] = `Bearer ${token}`;
 
-            // 백엔드에서 사용자 정보 가져오기
+            // 사용자 정보 요청
             apiClient
-                .get(`${API_BASE_URL}/users/me`)
+                .get("/users/me")
                 .then((res) => {
-                    dispatch(
-                        setCredentials({
-                            user: res.data,
-                            token,
-                        })
-                    );
+                    dispatch(setCredentials({ user: res.data, token }));
                     navigate("/record");
                 })
                 .catch((err) => {

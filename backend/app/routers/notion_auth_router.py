@@ -27,6 +27,17 @@ def notion_headers(token: str):
         "Content-Type": "application/json",
         "Notion-Version": NOTION_VERSION,
     }
+@router.get("/status")
+def notion_status(auth: Optional[NotionAuth] = Depends(crud.get_user_notion_auth)):
+    """
+    현재 로그인 사용자의 노션 연동 상태 조회
+    - Authorization: Bearer <access_jwt> 필요
+    """
+    return {
+        "connected": bool(auth),
+        "workspace_id": getattr(auth, "workspace_id", None),
+        "workspace_name": getattr(auth, "workspace_name", None),
+    }
 
 
 @router.get("/login")
@@ -36,7 +47,6 @@ def notion_login(current_user: User = Depends(get_current_user)):
     state에 user_id와 랜덤 시드를 포함. (실서비스에선 state 검증을 반드시 구현)
     """
     state = f"{current_user.id}:{secrets.token_urlsafe(16)}"
-    # TODO: state를 Redis/DB/서버세션 등에 저장하고 callback에서 검증하세요.
     params = {
         "client_id": CLIENT_ID,
         "response_type": "code",
@@ -45,8 +55,11 @@ def notion_login(current_user: User = Depends(get_current_user)):
         "state": state,
     }
     url = "https://api.notion.com/v1/oauth/authorize?" + urllib.parse.urlencode(params)
-    return RedirectResponse(url)
-
+     # ✅ 로그로 전체 URL 찍기
+    logger.info(f"✅ Notion 로그인 시도 by user {current_user.id}")
+    logger.info(f"➡️ 리다이렉트 URL: {url}")
+    logger.info(f"CLIENT_ID={CLIENT_ID}, REDIRECT_URI={REDIRECT_URI}")
+    return {"url": url}
 
 @router.get("/callback", include_in_schema=False)
 def notion_callback(code: str, state: str, db: Session = Depends(get_db)):
@@ -79,8 +92,21 @@ def notion_callback(code: str, state: str, db: Session = Depends(get_db)):
         workspace_id=data.get("workspace_id"),
         workspace_name=data.get("workspace_name"),
     )
-    return {"ok": True, "workspace_id": data.get("workspace_id"), "workspace_name": data.get("workspace_name")}
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+    redirect_to = f"{frontend_url}/user?notion=connected"
+    return RedirectResponse(url=redirect_to, status_code=302)
 
+@router.get("/status")
+def notion_status(auth: Optional[NotionAuth] = Depends(crud.get_user_notion_auth)):
+    """
+    현재 로그인 사용자의 노션 연동 상태 조회
+    - Authorization: Bearer <access_jwt> 필요
+    """
+    return {
+        "connected": bool(auth),
+        "workspace_id": getattr(auth, "workspace_id", None),
+        "workspace_name": getattr(auth, "workspace_name", None),
+    }
 
 @router.post("/upload")
 def upload_to_notion(

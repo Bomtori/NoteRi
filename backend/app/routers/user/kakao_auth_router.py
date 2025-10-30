@@ -10,7 +10,7 @@ import os
 from backend.app.db import get_db
 from backend.app.model import User
 from backend.app.deps.auth import get_current_user
-from backend.app.crud.auth_crud import get_or_create_user
+from backend.app.crud.auth_crud import get_or_create_user, assert_login_allowed
 from backend.app.util.auth import create_access_token, create_refresh_token, verify_token
 from backend.app.util.errors import OAuthProviderConflict
 
@@ -86,6 +86,7 @@ async def kakao_callback(request: Request, db: Session = Depends(get_db)):
             nickname=nickname,
             picture=picture,
         )
+        assert_login_allowed(db_user, db)
     except OAuthProviderConflict as e:
         registered = getattr(e, "detail", {}).get("registered_provider", "")
         return RedirectResponse(
@@ -123,8 +124,7 @@ async def kakao_callback(request: Request, db: Session = Depends(get_db)):
         max_age=REFRESH_MAX_AGE,
         path="/",
     )
-    return RedirectResponse(redirect_to, status_code=302)
-
+    return resp
 
 # ✅ 재가입 처리 (비활성 유저 복구)
 @router.post("/rejoin")

@@ -4,6 +4,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 from backend.app.model import Plan, Subscription
 
+def _coerce_plan_name(x) -> str:
+    # Enum(PlanType) 이든 str 이든 문자열로
+    return str(getattr(x, "value", x) or "none")
+
 def get_subscription_count_by_plan(
     db: Session,
     *,
@@ -64,3 +68,4 @@ def get_subscription_count_by_plan(
             result.append((str(plan_enum), cnt))
 
     return result
+

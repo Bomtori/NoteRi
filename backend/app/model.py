@@ -1,11 +1,13 @@
 from sqlalchemy import (
     Column, Integer, String, Date, Text, Boolean,
-    ForeignKey, Enum, Float, JSON, TIMESTAMP, Numeric
+    ForeignKey, Enum, Float, JSON, TIMESTAMP, Numeric, UniqueConstraint, DateTime
 )
-from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy.orm import relationship, declarative_base, backref
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import JSONB
 import enum
+from pgvector.sqlalchemy import Vector
+from sqlalchemy.dialects.postgresql import JSON
 
 Base = declarative_base()
 
@@ -23,8 +25,17 @@ class RecordingType(enum.Enum):
     saved = "saved"
 
 
+EventStatusEnum = Enum("confirmed", "tentative", "cancelled",
+                       name="event_status")
 
+updated_at = Column(
+    TIMESTAMP(timezone=True),
+    server_default=func.now(),  # 생성 시
+    onupdate=func.now(),   # ORM 업데이트 시 자동
+)
 
+EventStatusEnum = Enum("confirmed", "tentative", "cancelled",
+                       name="event_status")
 
 # Users
 class User(Base):
@@ -37,10 +48,14 @@ class User(Base):
     picture = Column(String(500), nullable=True)
     oauth_provider = Column(String)
     oauth_sub = Column(String)
-    role = Column(String)
+    role = Column(String, default="user")
     is_active = Column(Boolean, default=True)
+    is_banned = Column(Boolean, default=False)
+    banned_reason = Column(Text, nullable=True)
+    banned_until = Column(DateTime, nullable=True)
     created_at = Column(TIMESTAMP)
     updated_at = Column(TIMESTAMP)
+    embeddings = relationship("RecordingEmbedding", back_populates="user", cascade="all, delete-orphan")
 
     subscriptions = relationship("Subscription", back_populates="user")
     payments = relationship("Payment", back_populates="user")
@@ -50,6 +65,23 @@ class User(Base):
     notifications = relationship("Notification", back_populates="user")
     recording_usage = relationship("RecordingUsage", back_populates="user")
     ai_gemini = relationship("AIGemini", back_populates="user")
+    shared_boards = relationship("BoardShare", back_populates="user", cascade="all, delete-orphan")
+
+class UserBanLog(Base):
+    __tablename__ = "user_ban_logs"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    actor_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+
+    is_banned = Column(Boolean, nullable=False)  # True: 밴 / False: 해제
+    reason = Column(Text, nullable=True)
+    until = Column(DateTime, nullable=True)
+
+    created_at = Column(DateTime, server_default=func.now())
+
+    user = relationship("User", foreign_keys=[user_id], backref="ban_logs")
+    actor = relationship("User", foreign_keys=[actor_id])
 
 class Subscription(Base):
     __tablename__ = "subscriptions"
@@ -60,23 +92,30 @@ class Subscription(Base):
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=True)
     is_active = Column(Boolean, default=True)
-    created_at = Column(TIMESTAMP, server_default=func.now())
+
+    # ✅ 자동결제 관련 필드
+    auto_renew = Column(Boolean, nullable=False, server_default="true")          # 자동갱신 여부
+    billing_key = Column(String(200), nullable=True)                             # 토스 billingKey
+    customer_key = Column(String(100), nullable=True)                            # 토스 customerKey
+    next_renew_on = Column(Date, nullable=True)                                  # 다음 결제일 (보통 end_date)
+
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
 
     user = relationship("User", back_populates="subscriptions")
     plan = relationship("Plan", back_populates="subscriptions")
     recording_usage = relationship("RecordingUsage", back_populates="subscription")
     payments = relationship("Payment", back_populates="subscription", cascade="all, delete")
 
-
 # ✅ 플랜 정보 (가격, 시간 등)
 class Plan(Base):
     __tablename__ = "plans"
 
     id = Column(Integer, primary_key=True)
-    name = Column(Enum(PlanType), unique=True, nullable=False)  # free, pro, enterprise
+    name = Column(String(32), unique=True, nullable=False, index=True)  # 문자열로 전환
     price = Column(Numeric(10, 2), nullable=False, default=0.00)  # ex) 0, 10000, 30000
     duration_days = Column(Integer, nullable=False, default=30)   # 구독 기간 (ex. 30일)
-    allocated_minutes = Column(Integer, nullable=False, default=300)  # 녹음 시간
+    allocated_seconds = Column(Integer, nullable=False, default=18000)  # 녹음 시간
     description = Column(Text)
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, onupdate=func.now())
@@ -112,8 +151,8 @@ class RecordingUsage(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     subscription_id = Column(Integer, ForeignKey("subscriptions.id", ondelete="CASCADE"), nullable=False)
-    allocated_minutes = Column(Integer)
-    used_minutes = Column(Integer, default=0)
+    allocated_seconds = Column(Integer, nullable=True)
+    used_seconds = Column(Integer, nullable=False, default=0)
     period_start = Column(Date, nullable=False)
     period_end = Column(Date, nullable=True)
     created_at = Column(TIMESTAMP)
@@ -129,27 +168,29 @@ class Folder(Base):
     parent_id = Column(Integer, ForeignKey("folders.id"))
     name = Column(String, nullable=False)
     color = Column(String(7), nullable=True, default="#7E36F9")
-    created_at = Column(TIMESTAMP)
-    updated_at = Column(TIMESTAMP)
+    # created_at = Column(TIMESTAMP)
+    # updated_at = Column(TIMESTAMP)
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())# 🍒 10.24 front/ 폴더정렬에러로 수정 수정 시 자동 업데이트
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
 
     owner = relationship("User", back_populates="folders")
     boards = relationship("Board", back_populates="folder")
     children = relationship("Folder", backref="parent", remote_side="Folder.id")
 
-
 # Boards
 class Board(Base):
     __tablename__ = "boards"
 
     id = Column(Integer, primary_key=True)
-    folder_id = Column(Integer, ForeignKey("folders.id", ondelete="CASCADE"), nullable=True)
+    folder_id = Column(Integer, ForeignKey("folders.id"), nullable=True) # 🍒 10.23 front, ondelete="CASCADE"
     owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     title = Column(String, nullable=False)
     description = Column(Text)
     invite_token = Column(String, nullable=True)
     invite_role = Column(String, default="editor")
     invite_expires_at = Column(TIMESTAMP, nullable=True)
+    password_hash = Column(String(255), nullable=True)  # ✅ 비밀번호 해시 저장
     created_at = Column(TIMESTAMP)
     updated_at = Column(TIMESTAMP)
 
@@ -160,6 +201,7 @@ class Board(Base):
     audios = relationship("AudioData", back_populates="board", cascade="all, delete-orphan")
     memos = relationship("Memo", back_populates="board", cascade="all, delete-orphan")
     transcripts = relationship("Transcript", back_populates="board", cascade="all, delete-orphan")
+    shared_users = relationship("BoardShare", back_populates="board", cascade="all, delete-orphan")
 
     # 기존 recording_sessions 유지
     recording_sessions = relationship("RecordingSession", back_populates="board")
@@ -192,6 +234,7 @@ class RecordingSession(Base):
     ended_at = Column(TIMESTAMP)
     created_at = Column(TIMESTAMP)
     is_diarized = Column(Boolean, nullable=False, default=False)
+    embeddings = relationship("RecordingEmbedding", back_populates="recording_session", cascade="all, delete-orphan")
 
     board = relationship("Board", back_populates="recording_sessions")
     results = relationship("RecordingResult", back_populates="session")
@@ -256,7 +299,6 @@ class Summary(Base):
     recording_session_id = Column(Integer, ForeignKey("recording_sessions.id", ondelete="CASCADE"), nullable=False)
     summary_type = Column(String)                      # 'interval' | 'final' 등
     content = Column(Text, nullable=False)
-    rating = Column(Boolean)                           # 선택: 사용자 평점/북마크 등
     # 선택: 구간 요약 및 로깅 메타
     interval_start_at = Column(TIMESTAMP, nullable=True)
     interval_end_at   = Column(TIMESTAMP, nullable=True)
@@ -319,3 +361,134 @@ class AIGemini(Base):
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), index=True)
 
     user = relationship("User", lazy="joined")
+
+class BoardShare(Base):
+    __tablename__ = "board_shares"
+
+    id = Column(Integer, primary_key=True)
+    board_id = Column(Integer, ForeignKey("boards.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    role = Column(String, default="viewer")  # viewer | editor
+    created_at = Column(TIMESTAMP, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("board_id", "user_id", name="uq_board_shares_board_user"),
+    )
+    board = relationship("Board", back_populates="shared_users")
+    user = relationship("User", back_populates="shared_boards")
+
+class RecordingUsageLog(Base):
+    __tablename__ = "recording_usage_logs"
+    id = Column(Integer, primary_key=True)
+    usage_id = Column(Integer, ForeignKey("recording_usage.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    board_id = Column(Integer, ForeignKey("boards.id", ondelete="CASCADE"), nullable=False)
+    audio_id = Column(Integer, ForeignKey("audio_data.id", ondelete="CASCADE"), nullable=False,
+                      unique=True)  # 오디오 1회만 차감
+    seconds = Column(Integer, nullable=False)
+    before_used = Column(Integer, nullable=False)
+    after_used = Column(Integer, nullable=False)
+    reason = Column(String(50), nullable=True)  # "audio_duration"
+    created_at = Column(TIMESTAMP, server_default=func.now())
+
+# Final Summaries
+class FinalSummary(Base):
+    __tablename__ = "final_summaries"
+
+    id = Column(Integer, primary_key=True)
+    recording_session_id = Column(
+        Integer,
+        ForeignKey("recording_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    title = Column(String(255))
+    bullets = Column(JSON)  # 핵심 요약 리스트
+    actions = Column(JSON)  # 후속 조치 리스트
+    content = Column(Text)  # 전체 원문 텍스트
+    rating = Column(Integer)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), onupdate=func.now())
+
+    # 관계 (RecordingSession ↔ FinalSummary: 1:N 가능)
+    session = relationship("RecordingSession", backref="final_summaries")
+
+class Calendar(Base):
+    __tablename__ = "calendars"
+
+    id = Column(Integer, primary_key=True)
+    owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    name = Column(String(100), nullable=False, default="My Calendar")
+    timezone = Column(String(64), nullable=False, default="Asia/Seoul")
+
+    default_bg_color = Column(String(20))
+    default_text_color = Column(String(20))
+    default_border_color = Column(String(20))
+
+    # is_primary, visibility 등 다캘린더용 필드가 필요 없으면 제거 권장
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP(timezone=True), onupdate=func.now())
+
+    owner = relationship("User", backref=backref("calendar", uselist=False, cascade="all, delete-orphan"))
+
+class CalendarEvent(Base):
+    __tablename__ = "calendar_events"
+
+    id = Column(Integer, primary_key=True)
+    # ★ 핵심: 캘린더 대신 사용자 기준
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    # (선택) 특정 보드/프로젝트에 묶고 싶다면
+    board_id = Column(Integer, ForeignKey("boards.id", ondelete="SET NULL"), nullable=True)
+
+    title = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    location = Column(String(200), nullable=True)
+    url = Column(String(300), nullable=True)
+
+    start_time = Column(TIMESTAMP(timezone=True), nullable=False)
+    end_time = Column(TIMESTAMP(timezone=True), nullable=True)
+    all_day = Column(Boolean, nullable=False, default=False)
+
+    # FullCalendar 색상 커스텀
+    background_color = Column(String(20), nullable=True)
+    text_color = Column(String(20), nullable=True)
+    border_color = Column(String(20), nullable=True)
+
+    status = Column(EventStatusEnum, nullable=False, default="confirmed")
+
+    # 반복/예외/확장
+    rrule = Column(Text, nullable=True)  # "FREQ=WEEKLY;BYDAY=MO,WE" 등
+    exdates = Column(JSONB, nullable=True)  # ["2025-11-03T00:00:00+09:00", ...]
+    extended_props = Column(JSONB, nullable=True)  # 임의 확장 필드
+
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(TIMESTAMP(timezone=True), onupdate=func.now())
+
+    remind_morning = Column(Boolean, nullable=False, server_default="true")
+
+    user = relationship("User", foreign_keys=[user_id])
+
+class RecordingEmbedding(Base):
+    __tablename__ = "recording_embeddings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    recording_session_id = Column(
+        Integer, 
+        ForeignKey("recording_sessions.id", ondelete="CASCADE"), 
+        nullable=False
+    )
+    user_id = Column(
+        Integer, 
+        ForeignKey("users.id", ondelete="CASCADE"), 
+        nullable=False
+    )
+    text_chunk = Column(Text, nullable=False)
+    embedding = Column(Vector(384), nullable=False)
+    chunk_index = Column(Integer, nullable=False)
+    chunk_metadata = Column(JSON, nullable=True)  # ✅ 변경!
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    
+    # 관계 설정
+    recording_session = relationship("RecordingSession", back_populates="embeddings")
+    user = relationship("User", back_populates="embeddings")

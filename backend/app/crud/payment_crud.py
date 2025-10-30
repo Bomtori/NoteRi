@@ -1,7 +1,7 @@
 from typing import Optional, Tuple, List  # ✅ 확인
 from datetime import date, timedelta
 from decimal import Decimal
-from sqlalchemy import func, text
+from sqlalchemy import func, text, asc, desc
 from sqlalchemy.orm import Session
 from backend.app.model import Payment, Subscription, Plan, PlanType
 from backend.app.util.trend import trend_series
@@ -79,55 +79,37 @@ def get_payment_last_5_years_by_plan(db: Session):
         joins=JOINS, where=WHERE
     )
 
-def get_my_payments(
-    db: Session,
-    user_id: int,
-    *,
-    date_from: Optional[date] = None,
-    date_to: Optional[date] = None,
-    status: Optional[str] = "SUCCESS",
-    limit: int = 20,
-    offset: int = 0,
-) -> Tuple[int, List[Payment]]:   # ✅ (int, list[Payment])
+def get_my_payments(db: Session, *, user_id: int):
     q = (
         db.query(Payment)
-        .outerjoin(Subscription, Payment.subscription_id == Subscription.id)
-        .outerjoin(Plan, Subscription.plan_id == Plan.id)
+        .join(Subscription, Subscription.id == Payment.subscription_id, isouter=True)
+        .join(Plan, Plan.id == Subscription.plan_id, isouter=True)
         .filter(Payment.user_id == user_id)
+        .order_by(Payment.approved_at.desc())
     )
-    if status:
-        q = q.filter(Payment.status == status)
-    if date_from:
-        q = q.filter(func.date(Payment.approved_at) >= date_from)
-    if date_to:
-        q = q.filter(func.date(Payment.approved_at) <= date_to)
 
-    total = q.count()
+    payments = q.all()
 
-    items = (
-        q.order_by(Payment.approved_at.desc().nullslast(), Payment.created_at.desc())
-         .limit(limit)
-         .offset(offset)
-         .all()
-    )
-    for p in items:
-        p.plan_name = p.subscription.plan.name if (p.subscription and p.subscription.plan) else None
-    return total, items
+    # plan_name 관계 접근으로 주입
+    for p in payments:
+        p.plan_name = p.subscription.plan.name if p.subscription and p.subscription.plan else None
+
+    return payments
 
 
-def get_my_payment_detail(
-    db: Session, user_id: int, payment_id: int
-) -> Optional[Payment]:          # ✅ Payment | None
-    p = (
-        db.query(Payment)
-        .outerjoin(Subscription, Payment.subscription_id == Subscription.id)
-        .outerjoin(Plan, Subscription.plan_id == Plan.id)
+def get_my_payment_detail(db: Session, user_id: int, payment_id: int):
+    row = (
+        db.query(Payment, Plan.name.label("plan_name"))
+        .join(Subscription, Subscription.id == Payment.subscription_id, isouter=True)
+        .join(Plan, Plan.id == Subscription.plan_id, isouter=True)
         .filter(Payment.user_id == user_id, Payment.id == payment_id)
         .first()
     )
-    if p:
-        p.plan_name = p.subscription.plan.name if (p.subscription and p.subscription.plan) else None
-    return p
+    if not row:
+        return None
+    payment, plan_name = row
+    setattr(payment, "plan_name", plan_name)
+    return payment
 
 # 플랜별 총 매출
 

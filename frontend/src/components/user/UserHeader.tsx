@@ -1,5 +1,6 @@
 import { useState } from "react";
 import apiClient from "../../api/apiClient";
+import useLogout from "../../hooks/useLogout";
 
 interface Props {
     user: {
@@ -14,31 +15,21 @@ interface Props {
 export default function UserHeader({ user }: Props) {
     const [nickname, setNickname] = useState(user.nickname);
     const [preview, setPreview] = useState(user.picture);
+    const handleLogout = useLogout(); // ✅ 훅만 남김
 
-    // ✅ 프로필 이미지 변경 및 업로드
     const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-
-        // 미리보기 즉시 반영
         const localPreview = URL.createObjectURL(file);
         setPreview(localPreview);
-
         try {
-            // 1️⃣ 파일을 form-data로 서버에 업로드
             const formData = new FormData();
             formData.append("file", file);
-
             const uploadRes = await apiClient.post("/upload", formData, {
                 headers: { "Content-Type": "multipart/form-data" },
             });
-
-            const uploadedUrl = uploadRes.data.url; // 절대경로
-            console.log("📸 업로드 완료:", uploadedUrl);
-
-            // 2️⃣ 사용자 프로필 picture 업데이트
+            const uploadedUrl = uploadRes.data.url;
             await apiClient.patch("/users/me", { picture: uploadedUrl });
-
             alert("프로필 사진이 변경되었습니다 ✅");
         } catch (err) {
             console.error("이미지 업로드 실패:", err);
@@ -46,7 +37,6 @@ export default function UserHeader({ user }: Props) {
         }
     };
 
-    // ✅ 닉네임 수정
     const handleNicknameSave = async () => {
         try {
             await apiClient.patch("/users/me", { nickname });
@@ -56,19 +46,8 @@ export default function UserHeader({ user }: Props) {
         }
     };
 
-    // ✅ 로그아웃
-    const handleLogout = async () => {
-        try {
-            localStorage.removeItem("access_token");
-            window.location.href = "/login";
-        } catch {
-            console.error("로그아웃 실패");
-        }
-    };
-
     return (
         <section className="bg-white rounded-2xl p-6 shadow-sm flex items-center gap-6">
-            {/* 프로필 이미지 */}
             <div className="relative">
                 <img
                     src={preview}
@@ -86,7 +65,6 @@ export default function UserHeader({ user }: Props) {
                 </label>
             </div>
 
-            {/* 사용자 정보 */}
             <div>
                 <div className="flex items-center gap-2 mb-1">
                     <input
@@ -112,7 +90,7 @@ export default function UserHeader({ user }: Props) {
                 </p>
 
                 <button
-                    onClick={handleLogout}
+                    onClick={() => handleLogout(user.oauth_provider)} //  훅 사용
                     className="mt-3 px-3 py-1 text-xs rounded-md bg-gray-100 hover:bg-gray-200"
                 >
                     로그아웃

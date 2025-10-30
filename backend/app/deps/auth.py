@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from backend.app.db import get_db
 from backend.app.model import User
 from backend.app.util.auth import verify_token
-
+from typing import Optional
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 def get_current_user(
@@ -36,3 +36,10 @@ def get_current_user(
         raise HTTPException(status_code=404, detail="User not found")
 
     return user
+
+# 기존 get_current_user 재사용 가정
+def get_current_user_optional() -> Optional[User]:
+    try:
+        return get_current_user()  # 토큰 없거나 유효하지 않으면 예외 → except에서 None
+    except Exception:
+        return None

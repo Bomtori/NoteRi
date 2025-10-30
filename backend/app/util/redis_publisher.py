@@ -1,8 +1,12 @@
 # backend/app/util/redis_publisher.py
 
 import time
+import json
+import logging
 from typing import Optional, Dict, Any
 from .redis_client import get_redis
+
+logger = logging.getLogger(__name__)
 
 # 기본 포맷(접미사)
 SEG_SUFFIX  = "{sid}:segments"
@@ -82,7 +86,7 @@ async def publish_segment(
     raw_text: str,
     *,
     finalized_at_ms: Optional[int] = None,
-    speaker_label: str = "A",
+    speaker_label: Optional[str] = None,
     confidence: Optional[float] = None,
     ts_start_ms: Optional[int] = None,
     ts_end_ms: Optional[int] = None,
@@ -91,9 +95,11 @@ async def publish_segment(
     r = await get_redis()
     fields: Dict[str, Any] = {
         "raw_text": raw_text,
-        "speaker_label": speaker_label,
         "finalized_at_ms": finalized_at_ms or now_ms(),
     }
+    # 🔸 None이면 필드 자체를 생략해서 XADD 필드가 비어들어가지 않도록
+    if speaker_label:
+        fields["speaker_label"] = speaker_label
     if confidence is not None:
         fields["confidence"] = confidence
     if ts_start_ms is not None:
@@ -101,9 +107,14 @@ async def publish_segment(
     if ts_end_ms is not None:
         fields["ts_end_ms"] = ts_end_ms
 
-    # 스트림 길이 제한(근사치) 유지
-    return await r.xadd(_k(prefix, SEG_SUFFIX, sid), fields, maxlen=20000, approximate=True)
-
+    # 스트림 길이 제한(근사치) 유지 + 로깅
+    key = _k(prefix, SEG_SUFFIX, sid)
+    msg_id = await r.xadd(key, fields, maxlen=20000, approximate=True)
+    try:
+        logger.info(f"[XADD] {key} <- {json.dumps(fields, ensure_ascii=False)} id={msg_id}")
+    except Exception:
+        pass
+    return msg_id
 
 # ── 1분 요약(Stream) ──────────────────────────────────────────────────
 async def publish_summary(
@@ -133,4 +144,10 @@ async def publish_summary(
     if source_text is not None:
         fields["source_text"] = source_text
 
-    return await r.xadd(_k(prefix, SUM_SUFFIX, sid), fields, maxlen=5000, approximate=True)
+    key = _k(prefix, SUM_SUFFIX, sid)
+    msg_id = await r.xadd(key, fields, maxlen=5000, approximate=True)
+    try:
+        logger.info(f"[XADD] {key} <- {json.dumps(fields, ensure_ascii=False)} id={msg_id}")
+    except Exception:
+        pass
+    return msg_id

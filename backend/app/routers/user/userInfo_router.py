@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from datetime import datetime, UTC
+from sqlalchemy.orm import joinedload # 🍒 10.22 front 추가
 
 from backend.app.deps.auth import get_current_user
 from backend.app.model import User, Subscription, Plan
@@ -22,6 +23,7 @@ async def get_user_me(
     from sqlalchemy import desc
     active_sub = (
         db.query(Subscription)
+        .options(joinedload(Subscription.plan))  # 🍒 10.22 front 추가
         .filter(
             Subscription.user_id == current_user.id,
             Subscription.is_active == True,
@@ -32,9 +34,9 @@ async def get_user_me(
 
     # Plan.name 이 Enum(PlanType)이면 .value 로 문자열 뽑기
     plan_name = (
-        active_sub.plan.name.value
+        active_sub.plan.name
         if active_sub and active_sub.plan
-        else None
+        else "free" # 🍒 10.22 front None -> "free" 로변경 [만약 플랜이없으면 free로가라]
     )
 
     return {
@@ -45,6 +47,7 @@ async def get_user_me(
         "picture": current_user.picture,
         "oauth_provider": current_user.oauth_provider,
         "is_active": current_user.is_active,
+        "role" : current_user.role,
         "created_at": current_user.created_at,
         "updated_at": current_user.updated_at,
         "plan_name": plan_name,

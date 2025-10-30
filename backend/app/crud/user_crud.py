@@ -1,9 +1,11 @@
 from zoneinfo import ZoneInfo
 
+from dateutil.relativedelta import relativedelta
+from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
-from sqlalchemy import func, extract, text, case
-from backend.app.model import User, Plan, Subscription
-from datetime import datetime, timedelta, date
+from sqlalchemy import func, extract, text, case, select
+from backend.app.model import User, Plan, Subscription, UserBanLog
+from datetime import datetime, timedelta, date, timezone
 from typing import Dict, Any, List, Tuple, Optional
 from backend.app.util.trend import trend_series
 from backend.app.util.day_calculation import (
@@ -13,6 +15,9 @@ _growth_rate,
 _month_bounds,
 _year_bounds,
 )
+
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
 
 # 모든 유저 숫자 확인
 def get_total_users_count(db: Session) -> int:
@@ -226,3 +231,96 @@ def get_yoy_signup_growth(db: Session) -> dict:
 
     growth_rate = None if previous == 0 else (current - previous) / previous
     return {"current": current, "previous": previous, "growth_rate": growth_rate}
+
+# 이탈 유저 숫자
+def inactive_stats_last_6_months(db):
+    cutoff = _now_utc() - relativedelta(months=6)
+
+    total_active_q = select(func.count()).select_from(User).where(User.is_active == True)
+    inactive_q = (
+        select(func.count())
+        .select_from(User)
+        .where(User.is_active == True)
+        .where(User.updated_at < cutoff)
+    )
+
+    total_active = db.scalar(total_active_q) or 0
+    inactive = db.scalar(inactive_q) or 0
+    ratio = (inactive / total_active) if total_active else 0.0
+
+    return {"total_active_users": total_active, "inactive_users": inactive, "inactive_ratio": ratio}
+
+def set_ban_state(
+    db: Session,
+    user_id: int,
+    *,
+    is_banned: bool,
+    reason: Optional[str] = None,
+    until: Optional[datetime] = None,
+    actor_id: Optional[int] = None,
+) -> User:
+    user = db.query(User).filter(User.id == user_id).one_or_none()
+    if not user:
+        raise NoResultFound(f"User({user_id}) not found")
+
+    if is_banned:
+        if until is not None and until <= _now_utc():
+            until = None
+        user.is_banned = True
+        user.banned_reason = reason
+        user.banned_until = until
+    else:
+        user.is_banned = False
+        user.banned_reason = None
+        user.banned_until = None
+
+    # ✅ 로그 남기기
+    log = UserBanLog(
+        user_id=user_id,
+        actor_id=actor_id,
+        is_banned=is_banned,
+        reason=reason,
+        until=until,
+    )
+    db.add(log)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def ban_user(
+    db: Session,
+    user_id: int,
+    *,
+    reason: Optional[str] = None,
+    until: Optional[datetime] = None,
+    actor_id: Optional[int] = None,
+) -> User:
+    """밴 전용 헬퍼."""
+    return set_ban_state(
+        db,
+        user_id,
+        is_banned=True,
+        reason=reason,
+        until=until,
+        actor_id=actor_id,
+    )
+
+
+def unban_user(
+    db: Session,
+    user_id: int,
+    *,
+    actor_id: Optional[int] = None,
+) -> User:
+    """밴 해제 전용 헬퍼."""
+    return set_ban_state(
+        db,
+        user_id,
+        is_banned=False,
+        reason=None,
+        until=None,
+        actor_id=actor_id,
+    )
+

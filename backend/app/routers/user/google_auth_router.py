@@ -7,7 +7,7 @@ from fastapi.responses import RedirectResponse
 from datetime import datetime, UTC
 from starlette.responses import JSONResponse
 from backend.app.deps.auth import get_current_user
-from backend.app.crud.auth_crud import get_or_create_user, generate_login_response
+from backend.app.crud.auth_crud import get_or_create_user, generate_login_response, assert_login_allowed
 from backend.app.util.auth import create_access_token, create_refresh_token, verify_token
 from backend.app.db import get_db
 from backend.app.model import User
@@ -72,6 +72,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
             nickname=nickname,
             picture=picture,
         )
+        assert_login_allowed(db_user, db)
     except OAuthProviderConflict as e:
         # 이미 다른 provider로 가입된 이메일 → 프론트에서 전용 안내
         # detail 안에 registered_provider를 넣어두었으니 꺼내서 전달
@@ -114,7 +115,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
         path="/",
     )
 
-    return RedirectResponse(redirect_to, status_code=302)
+    return resp
 
 @router.post("/rejoin")
 def google_rejoin(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -151,24 +152,3 @@ def google_rejoin(db: Session = Depends(get_db), current_user: User = Depends(ge
             "picture": current_user.picture,
         }
     })
-
-@router.post("/refresh")
-def refresh_access_token(
-    db: Session = Depends(get_db),
-    refresh_token: str | None = Cookie(default=None)
-    # 또는 Body/Authorization 헤더로 받으려면 파라미터를 바꾸세요.
-):
-    if not refresh_token:
-        raise HTTPException(status_code=401, detail="Refresh token missing")
-
-    payload = verify_token(refresh_token, token_type="refresh")
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
-
-    user_id = int(payload["sub"])
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    new_access = create_access_token({"sub": str(user.id), "email": user.email})
-    return {"access_token": new_access, "token_type": "bearer"}

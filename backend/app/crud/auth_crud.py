@@ -2,11 +2,136 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime, UTC, date, timedelta
 from fastapi.responses import JSONResponse
-from fastapi import status
+from fastapi import status, HTTPException
 
-from backend.app.model import User, Subscription, Plan, PlanType  # PlanType 꼭 import
+from backend.app.model import User, Subscription, Plan, PlanType, Folder, RecordingUsage  # PlanType 꼭 import
 from backend.app.util.errors import OAuthProviderConflict
 from backend.app.util.auth import create_access_token, create_refresh_token
+
+def assert_login_allowed(db_user: User, db: Session | None = None) -> None:
+    """
+    로그인 직전에 호출해서 밴 유저 차단.
+    - active ban: 403 차단
+    - expired ban: 즉시 해제( db 세션이 있으면 DB 반영 ), 없으면 통과만 시킴
+    """
+    now = datetime.now(UTC)
+    if not db_user.is_banned:
+        return
+
+    # 만료된 밴이면 바로 해제
+    if db_user.banned_until and db_user.banned_until <= now:
+        if db is not None:
+            db_user.is_banned = False
+            db_user.banned_reason = None
+            db_user.banned_until = None
+            db.add(db_user)
+            db.commit()
+        return
+
+    # 영구밴 또는 아직 유효한 밴이면 차단
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Banned account")
+
+def _ensure_free_plan(db: Session) -> Plan:
+    free = db.query(Plan).filter(Plan.name == PlanType.free.value).first()
+    if free:
+        return free
+    # 새 프로젝트라면 최소 스켈레톤만 생성(기간/할당량은 관리자가 Plan에서 관리)
+    free = Plan(
+        name=PlanType.free.value,
+        price=0,
+        # duration_days / 할당량은 Plan 테이블 스키마에 맞게 관리자 화면에서 설정
+        description="기본 무료 플랜",
+        created_at=datetime.now(UTC),
+    )
+    db.add(free)
+    db.commit()
+    db.refresh(free)
+    return free
+
+def _plan_alloc_seconds(plan: Plan) -> int | None:
+    """
+    Plan에 allocated_seconds 또는 allocated_minutes 둘 중 무엇이든 존재하면 읽어
+    초 단위로 반환. 값이 없거나 0이면 무제한(None)으로 간주.
+    """
+    secs = None
+    if hasattr(plan, "allocated_seconds") and plan.allocated_seconds is not None:
+        secs = int(plan.allocated_seconds)
+    elif hasattr(plan, "allocated_minutes") and plan.allocated_minutes is not None:
+        secs = int(plan.allocated_minutes) * 60
+
+    if secs is None or secs <= 0:
+        return None  # 무제한
+    return secs
+
+def _subscription_end_by_plan(plan: Plan, start: date) -> date | None:
+    """
+    Plan.duration_days가 있으면 종료일 계산, 없으면 None(무기한/관리자 정책).
+    """
+    dur = getattr(plan, "duration_days", None)
+    if dur is None or int(dur) <= 0:
+        return None
+    return start + timedelta(days=int(dur))
+
+
+def _create_default_shared_folder(db: Session, user_id: int) -> None:
+    """신규 가입자 전용: '공유받은 회의' 폴더가 없으면 만든다."""
+    exists = (
+        db.query(Folder)
+        .filter(Folder.user_id == user_id, Folder.name == "공유받은 회의")
+        .first()
+    )
+    if exists:
+        return
+    folder = Folder(
+        user_id=user_id,
+        name="공유받은 회의",
+        color="#7E36F9",
+    )
+    db.add(folder)
+    db.commit()
+
+def _grant_free_subscription_and_usage(db: Session, user_id: int) -> None:
+    free_plan = _ensure_free_plan(db)
+
+    # 이미 활성 구독 있으면 스킵
+    has_active = (
+        db.query(Subscription)
+        .filter(Subscription.user_id == user_id, Subscription.is_active == True)
+        .first()
+    )
+    if not has_active:
+        start = date.today()
+        end = _subscription_end_by_plan(free_plan, start)  # None이면 무기한
+        sub = Subscription(
+            user_id=user_id,
+            plan_id=free_plan.id,
+            start_date=start,
+            end_date=end,
+            is_active=True,
+            created_at=datetime.now(UTC),
+            # next_renew_on 등은 모델에 있으면 사용
+            next_renew_on=end,
+        )
+        db.add(sub)
+        db.commit()
+        db.refresh(sub)
+
+        # RecordingUsage 도 Plan 기준으로 부여
+        alloc_secs = _plan_alloc_seconds(free_plan)  # None이면 무제한
+        usage = RecordingUsage(
+            user_id=user_id,
+            subscription_id=sub.id if hasattr(RecordingUsage, "subscription_id") else None,
+            allocated_seconds=alloc_secs,
+            used_seconds=0,
+            start_date=start,
+            end_date=end,  # 기간형 요금제면 end, 무기한이면 None
+            created_at=datetime.now(UTC),
+        )
+        db.add(usage)
+        db.commit()
+
+    # 기본 폴더
+    _create_default_shared_folder(db, user_id)
 
 def get_or_create_user(
     db: Session,
@@ -17,112 +142,71 @@ def get_or_create_user(
     nickname: str,
     picture: str,
 ) -> User:
-    # 1) provider + sub로 조회 (이미 그 provider로 로그인한 적 있음)
+    # 1) provider+sub
     user = (
         db.query(User)
         .filter(User.oauth_provider == provider, User.oauth_sub == sub)
         .first()
     )
     if user:
-        # 프로필 보강(비어있을 때만)
-        user.name = user.name or name
-        user.nickname = user.nickname or nickname
-        user.picture = user.picture or picture
+        if not user.name: user.name = name
+        if not user.nickname: user.nickname = nickname
+        if not user.picture: user.picture = picture
         user.updated_at = datetime.now(UTC)
         db.commit()
         db.refresh(user)
         return user
 
-    # 2) 이메일로 조회 (이미 같은 이메일로 다른 provider 가입 여부 확인)
+    # 2) email로 기존 계정
     existing = db.query(User).filter(User.email == email).first()
     if existing:
-        # 기존 계정이 소셜 연동된 상태이고, 그 provider가 현재 시도한 provider와 다르면 충돌 처리
         if existing.oauth_provider and existing.oauth_provider != provider:
-            # 예: 기존 'google', 시도는 'naver' → 병합 금지, 안내
-            raise OAuthProviderConflict(registered_provider=existing.oauth_provider)
-
-        # 여기서부터는 다음 케이스:
-        # - 기존 계정이 있는데 아직 oauth_provider가 비어있음 → 이번 provider로 연결 허용
-        # - 혹은 기존 provider와 같음(드문 케이스지만) → sub만 업데이트
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"이미 {existing.oauth_provider}로 가입된 이메일입니다."
+            )
         existing.oauth_provider = provider
         existing.oauth_sub = sub
-        existing.name = existing.name or name
-        existing.nickname = existing.nickname or nickname
-        existing.picture = existing.picture or picture
+        if not existing.name: existing.name = name
+        if not existing.nickname: existing.nickname = nickname
+        if not existing.picture: existing.picture = picture
         existing.updated_at = datetime.now(UTC)
         db.commit()
         db.refresh(existing)
         return existing
 
-    # 3) 신규 생성 + 무료 구독 부여
+    # 3) 신규 생성 → 무료 플랜 부여 + 기본 폴더
+    user = User(
+        email=email,
+        name=name,
+        nickname=nickname,
+        picture=picture,
+        oauth_provider=provider,
+        oauth_sub=sub,
+        role="user",
+        is_active=True,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    db.add(user)
     try:
-        user = User(
-            email=email,
-            name=name,
-            nickname=nickname,
-            picture=picture,
-            oauth_provider=provider,
-            oauth_sub=sub,
-            role="user",
-            is_active=True,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        )
-        db.add(user)
         db.commit()
-        db.refresh(user)
     except IntegrityError:
         db.rollback()
-        # 경합이나 다른 곳에서 선점된 경우 이메일 재조회
-        existing = db.query(User).filter(User.email == email).first()
-        if not existing:
-            raise
-        if existing.oauth_provider and existing.oauth_provider != provider:
-            # 이미 다른 provider로 가입돼 있었음 → 충돌
-            raise OAuthProviderConflict(registered_provider=existing.oauth_provider)
+        raise
+    db.refresh(user)
 
-        # 비어있거나 같은 provider면 연결
-        existing.oauth_provider = provider
-        existing.oauth_sub = sub
-        existing.updated_at = datetime.now(UTC)
-        db.commit()
-        db.refresh(existing)
-        return existing
-
-    # ---- 여기까지 오면 완전 신규 유저 → 무료 플랜/구독 처리 ----
-    # (1) 무료 Plan 조회 또는 생성
-    free_plan = db.query(Plan).filter(Plan.name == PlanType.free).first()
-    if not free_plan:
-        free_plan = Plan(name=PlanType.free, price=0)
-        db.add(free_plan)
-        db.commit()
-        db.refresh(free_plan)
-
-    # (2) 활성 구독 없으면 무료 구독 부여
-    has_active = (
-        db.query(Subscription)
-        .filter(Subscription.user_id == user.id, Subscription.is_active == True)
-        .first()
-    )
-    if not has_active:
-        free_sub = Subscription(
-            user_id=user.id,
-            plan_id=free_plan.id,
-            start_date=date.today(),
-            end_date=date.today() + timedelta(days=365 * 100),
-            is_active=True,
-            created_at=datetime.now(UTC),
-        )
-        db.add(free_sub)
-        db.commit()
-        db.refresh(free_sub)
-
+    _grant_free_subscription_and_usage(db, user.id)
     return user
 
 
 def generate_login_response(db_user: User):
-    access_token = create_access_token({"sub": str(db_user.id), "email": db_user.email})
-    refresh_token = create_refresh_token({"sub": str(db_user.id), "email": db_user.email})
+    now = datetime.now(UTC)
+    if db_user.is_banned and (db_user.banned_until is None or db_user.banned_until > now):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Banned account")
+
+    access_token = create_access_token({"sub": str(db_user.id), "email": db_user.email, "role": db_user.role,})  # 🍒 10.28 frontend 토큰 권한추가
+    refresh_token = create_refresh_token({"sub": str(db_user.id), "email": db_user.email, "role": db_user.role,})  # 🍒 10.28 frontend 토큰 권한추가
 
     response = JSONResponse({
         "access_token": access_token,
@@ -134,6 +218,7 @@ def generate_login_response(db_user: User):
             "name": db_user.name,
             "nickname": db_user.nickname,
             "picture": db_user.picture,
+            "role": db_user.role, # 🍒 10.28 frontend 토큰 권한추가
         },
     })
 

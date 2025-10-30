@@ -17,6 +17,7 @@ import PaymentSuccessPage from "./pages/PaymentSuccessPage.tsx";
 import AdminLayout from "./layouts/AdminLayout";
 import AdminUserPage from "./pages/AdminUserPage";
 import MeetingPage from "./pages/MeetingPage";
+import ChannelTalk from "./pages/ChannelTalk.js";
 
 export default function App() {
     return (
@@ -74,6 +75,7 @@ export default function App() {
                     <Route path="users" element={<AdminUserPage />} />
                     <Route path="settings" element={<AdminSettingsPage />} />
                 </Route>
+                <Route path="/channeltalk" element={<ChannelTalk/>}/>
             </Routes>
         </Router>
     );

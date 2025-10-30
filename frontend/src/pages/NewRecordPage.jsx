@@ -46,39 +46,32 @@ export default function NewRecordPage() {
     const { recordingState, startRecording, stopRecording } = useRecording({
         WS_URL,
         onData: (msg) => {
-            if (msg.realtime) setLiveText(msg.realtime);
-            // if (msg.append) setRefinedScript((prev) => [...prev, msg.append]);
-            // if (msg.paragraph || msg.summary) {
-            //     setSummaries((prev) => [
-            //         ...prev,
-            //         { paragraph: msg.paragraph || "", summary: msg.summary || "", ts: Date.now() },
-            //     ]);
-            // }
-            // 🟣 실시간 STT 문장 추가
-                if (msg.append) {
-                  setLiveLines((prev) => [...prev, msg.append]);
-                }
+            // 🎙️ 실시간 STT
+            if (msg.realtime) {
+                setLiveText(msg.realtime);
+            }
 
-                // 🟣 서버에서 1분 요약이 도착한 경우
-                    if (msg.summary) {
-                  setSummaries((prev) => [
-                        ...prev,
-                        {
-                          id: Date.now(),
-                          summary: msg.summary,
-                        },
-                  ]);
-                  // 현재 1분 동안 쌓였던 STT 초기화
-                      setLiveLines([]);
-                }
+            // 📝 후처리 완료 문장 (현재 1분 구간 + 전체 히스토리에 추가)
+            if (msg.append) {
+                const cleanText = msg.append.replace(/^•\s*/, "");
+                setLiveLines((prev) => [...prev, cleanText]); // 1분 구간
+                setAllHistory((prev) => [...prev, cleanText]); // 전체 누적
+            }
+
+            // ⏱️ 1분 요약 도착 (현재 1분 구간 초기화)
+            if (msg.summary) {
+                setSummaries((prev) => [
+                    ...prev,
+                    {
+                        id: Date.now(),
+                        summary: msg.summary,
+                    },
+                ]);
+                setLiveLines([]); // 현재 1분 구간만 초기화
+            }
         },
         onStartError: (err) => console.error("녹음 시작 실패:", err),
     });
-
-    // 🔹 draft 저장
-    // useEffect(() => localStorage.setItem("draftTitle", title), [title]);
-    // useEffect(() => localStorage.setItem("draftMemo", tempMemo), [tempMemo]);
-    // useEffect(() => localStorage.setItem("draftQuestion", tempQuestion), [tempQuestion]);
 
     // 🔹 날짜 문자열
     const dateStr = new Date().toLocaleString("ko-KR", {
@@ -99,39 +92,108 @@ export default function NewRecordPage() {
             }
             await startRecording();
             setIsRecording(true);
+            setRecordingStopped(false);
         } catch (err) {
             console.error("녹음 시작 실패:", err);
             showToast("녹음을 시작할 수 없습니다.");
         }
     };
 
-    // 🔹 녹음 종료
-    const handleStopRecording = () => {
-        stopRecording();
+    // 🔹 녹음 종료 → 전체 요약 대기
+    const handleStopRecording = async () => {
+        const sid = await stopRecording();
         setIsRecording(false);
-        if (boardId) {
-            localStorage.removeItem("draftTitle");
-            localStorage.removeItem("draftMemo");
-            localStorage.removeItem("draftQuestion");
-            navigate(`/record/${boardId}`);
-        } else {
-            showToast("보드 생성 중 오류가 발생했습니다.");
+        setRecordingStopped(true);
+
+        // ✅ 세션 ID 매핑 대기 (MeetingPage 방식)
+        if (sid) {
+            const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+            let sessionId = null;
+            let tries = 0;
+
+            console.log("⏳ 세션 ID 매핑 대기 중... sid:", sid);
+
+            // 1단계: sid → session_id 매핑 대기
+            while (tries++ < 60) {
+                try {
+                    const res = await apiClient.get(`/sessions/by-sid/${sid}`);
+                    console.log(`[${tries}] by-sid 응답:`, res.status, res.data);
+
+                    if (res.status === 200 && res.data?.id) {
+                        sessionId = res.data.id;
+                        console.log("✅ 세션 매핑 완료 sessionId:", sessionId);
+                        break;
+                    }
+                } catch (err) {
+                    const status = err.response?.status;
+                    if (status === 202) {
+                        console.log(`[${tries}] pending, 재시도...`);
+                    } else {
+                        console.warn(`[${tries}] by-sid 오류:`, status);
+                    }
+                }
+                await sleep(500);
+            }
+
+            if (!sessionId) {
+                console.error("❌ 세션 ID 매핑 실패");
+                showToast("세션 정보를 가져올 수 없습니다.");
+                return;
+            }
+
+            // 2단계: 전체 요약 생성 대기 (백엔드 자동 생성)
+            console.log("⏳ 전체 요약 생성 대기 중... sessionId:", sessionId);
+            tries = 0;
+            while (tries++ < 60) {
+                try {
+                    const res = await apiClient.get(`/sessions/final-summaries/by-session/${sessionId}`);
+                    console.log(`[${tries}] final-summary 응답:`, res.status, res.data);
+
+                    if (res.status === 200 && res.data) {
+                        setFinalSummary(res.data);
+                        console.log("✅ 전체 요약 로드 완료:", res.data);
+                        setActiveTab("summary");
+                        showToast("🧾 전체 요약이 생성되었습니다.");
+                        return;
+                    }
+                } catch (err) {
+                    const status = err.response?.status;
+                    if (status === 404) {
+                        console.log(`[${tries}] 아직 생성 중... 재시도`);
+                    } else {
+                        console.warn(`[${tries}] final-summary 오류:`, status);
+                    }
+                }
+                await sleep(500);
+            }
+
+            console.warn("⚠️ 전체 요약 생성 시간 초과");
+            showToast("전체 요약 생성에 시간이 걸리고 있습니다.");
         }
     };
 
     // 🔹 페이지 이탈 시 확인
     const handleNavigateAway = () => {
+        if (!isRecording) {
+            setShowLeaveModal(true);
+            return;
+        }
 
-            // 🔹 녹음 중이 아니고 / 아직 board 생성 전 / draft가 있는 경우
-            if (!isRecording) {
-                setShowLeaveModal(true);
-                return;
-            }
-
-            // 그 외는 그냥 뒤로가기
         if (window.history.length <= 2) navigate("/");
         else navigate(-1);
     };
+
+    // 🔹 녹음 종료 후 탭 설정
+    const tabs = recordingStopped
+        ? [
+            { id: "record", label: "회의기록" },
+            { id: "script", label: "스크립트" },
+            { id: "summary", label: "전체 요약" }, // ✅ 녹음 종료 후에만 표시
+        ]
+        : [
+            { id: "record", label: "회의기록" },
+            { id: "script", label: "스크립트" },
+        ];
 
     return (
         <motion.div
@@ -160,31 +222,26 @@ export default function NewRecordPage() {
                         />
 
                         <RecordTabs
-                            tabs={[
-                                { id: "record", label: "회의기록" },
-                                { id: "script", label: "스크립트" },
-                            ]}
+                            tabs={tabs}
                             activeTab={activeTab}
                             setActiveTab={setActiveTab}
                         />
 
                         <RecordSection
                             activeTab={activeTab}
-                            // liveText={liveText}
-                            // summaries={summaries}
-                            // refinedScript={refinedScript}
-                            // speakers={speakers}
-                            // recordingState={recordingState}
                             liveText={liveText}
                             liveLines={liveLines}
                             summaries={summaries}
                             recordingState={recordingState}
+                            allHistory={allHistory}
+                            finalSummary={finalSummary}
                         />
 
                         {/* 🔹 하단 컨트롤 */}
                         <div className="sticky bottom-4 relative">
                             <RecordBar
                                 boardId={boardId}
+                                recordingState={recordingStopped ? "stopped" : recordingState}
                                 onStart={handleStartRecording}
                                 onStop={handleStopRecording}
                                 onCreateTemplate={() => setShowTemplateModal(true)}
@@ -237,12 +294,7 @@ export default function NewRecordPage() {
                             </button>
                             <button
                                 className="px-4 py-2 rounded-lg bg-[#7E37F9] text-white hover:bg-[#6c2de2]"
-                                onClick={() => {
-                                    // localStorage.removeItem("draftTitle");
-                                    // localStorage.removeItem("draftMemo");
-                                    // localStorage.removeItem("draftQuestion");
-                                    navigate(-1);
-                                }}
+                                onClick={() => navigate(-1)}
                             >
                                 예
                             </button>

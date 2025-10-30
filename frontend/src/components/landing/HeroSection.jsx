@@ -45,14 +45,14 @@ export default function HeroSection({ user }) {
             <div className="lens-flare absolute top-1/2 left-1/2 w-[300px] h-[300px] rounded-full blur-3xl opacity-0 pointer-events-none z-10"></div>
 
             {/* 로고 애니메이션 */}
-            {showLogo && (
-                <motion.div
-                    key="logo"
-                    className="absolute inset-0 flex items-center justify-center z-20 bg-black/20 backdrop-blur-sm"
-                >
-                    <LogoAnimation onComplete={() => setShowLogo(false)} />
-                </motion.div>
-            )}
+            {/*{showLogo && (*/}
+            {/*    <motion.div*/}
+            {/*        key="logo"*/}
+            {/*        className="absolute inset-0 flex items-center justify-center z-20 bg-black/20 backdrop-blur-sm"*/}
+            {/*    >*/}
+            {/*        <LogoAnimation onComplete={() => setShowLogo(false)} />*/}
+            {/*    </motion.div>*/}
+            {/*)}*/}
 
             {/* Hero 콘텐츠 */}
             {!showLogo && (

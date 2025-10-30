@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import RecordList from "../components/recording/RecordList";
 import Calendar from "../components/calendar/Calendar";
+import { useCallback } from "react";
 import { FaRegCalendarAlt } from "react-icons/fa";
 import apiClient from "../api/apiClient";
 import { setRecords } from "../features/record/recordSlice.js";
@@ -12,6 +13,7 @@ export default function RecordListPage() {
     const { records } = useSelector((state) => state.record);
     const { folders, status: folderStatus } = useSelector((state) => state.folder);
     const [calendarOpen, setCalendarOpen] = useState(false);
+    const [upcomingEvents, setUpcomingEvents] = useState([]);
 
     const [searchTerm, setSearchTerm] = useState("");
     const [sortOption, setSortOption] = useState("latest");
@@ -66,6 +68,33 @@ export default function RecordListPage() {
             return 0;
         });
     }, [records, searchTerm, sortOption, selectedFolder]);
+
+    const fetchUpcoming = useCallback(async () => {
+        try {
+            const now = new Date();
+            const nextMonth = new Date();
+            nextMonth.setMonth(now.getMonth() + 1); // 앞으로 1개월 범위
+
+            const params = new URLSearchParams({
+                start: now.toISOString(),
+                end: nextMonth.toISOString(),
+            });
+
+            const res = await apiClient.get(`/calendar?${params.toString()}`);
+            const allEvents = res.data || [];
+
+            const future = allEvents
+                .filter(ev => new Date(ev.start) >= now)
+                .sort((a, b) => new Date(a.start) - new Date(b.start))
+                .slice(0, 4);
+
+            setUpcomingEvents(future);
+        } catch (err) {
+            console.error("📅 일정 불러오기 실패:", err);
+        }
+    }, []);
+
+
 
     // ✅ 폴더 변경 핸들러
     const handleFolderChange = (recordId, folder) => {
@@ -244,8 +273,36 @@ export default function RecordListPage() {
                 )}
             </section>
 
-            {/* ===== 오른쪽: RAG 분석 패널 ===== */}
+            {/* ===== 오른쪽: GPT 분석 패널 ===== */}
             <aside className="w-[30%] bg-white rounded-2xl shadow-sm p-6 flex flex-col min-h-[700px]">
+                {/* ✅ 일정 미리보기 */}
+                <div className="mb-6 border-b border-gray-200 pb-3">
+                    <h3 className="font-semibold text-gray-800 mb-2">📅 다가오는 일정</h3>
+
+                    {upcomingEvents.length === 0 ? (
+                        <p className="text-xs text-gray-400">예정된 일정이 없습니다.</p>
+                    ) : (
+                        <ul className="space-y-2">
+                            {upcomingEvents.map(ev => (
+                                <li key={ev.id} className="flex items-center gap-2 text-sm">
+            <span
+                className="w-2 h-2 rounded-full"
+                style={{ backgroundColor: ev.extended_props?.color || "#7E37F9" }}
+            ></span>
+                                    <span className="text-gray-700 font-medium">{ev.title}</span>
+                                    <span className="text-xs text-gray-400 ml-auto">
+              {new Date(ev.start).toLocaleDateString("ko-KR", {
+                  month: "numeric",
+                  day: "numeric",
+                  weekday: "short",
+              })}
+            </span>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
+
                 <div className="flex gap-2 mb-4 border-b border-gray-200 pb-2">
                     {["gpt"].map((tab) => (
                         <button
@@ -257,7 +314,7 @@ export default function RecordListPage() {
                                     : "text-gray-500 hover:text-gray-700"
                             }`}
                         >
-                            {tab === "gpt" ? "🤖 AI 질문하기" : "요약 메모"}
+                            {tab === "gpt" ? "GPT 분석" : "요약 메모"}
                         </button>
                     ))}
                 </div>
@@ -378,19 +435,32 @@ export default function RecordListPage() {
                 </button>
             )}
 
+
             {/* ✅ 캘린더 사이드 패널 */}
             <div
-                className={`fixed top-0 right-0 h-full w-[450px] bg-white shadow-lg border-l p-5 z-[150] transition-transform duration-500 ${
-                    calendarOpen ? "translate-x-0" : "translate-x-full"
-                }`}
+                className={`
+        fixed top-0 right-0 h-full w-[450px]
+        bg-white shadow-lg border-l
+        p-5 z-[150]
+        transition-transform duration-500
+        ${calendarOpen ? "translate-x-0" : "translate-x-full"}
+    `}
             >
+                {/* 닫기 버튼 */}
                 <button
                     onClick={() => setCalendarOpen(false)}
-                    className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-xl font-bold"
+                    className="
+            absolute top-4 right-4
+            text-gray-500 hover:text-gray-700
+            text-xl font-bold
+        "
                 >
                     ✕
                 </button>
-                <h3 className="font-semibold mb-4 text-lg">캘린더</h3>
+
+                <h3 className="font-semibold mb-4 text-lg">""</h3>
+
+                {/* ✅ 캘린더 컴포넌트 */}
                 <Calendar />
             </div>
         </main>

@@ -47,10 +47,10 @@ if _missing:
         "환경변수 누락: " + ", ".join(_missing) +
         "\n예시 (.env):\n"
         "POSTGRES_USER=kobo\nPOSTGRES_PASSWORD=1234\n"
-        "POSTGRES_HOST=localhost\nPOSTGRES_PORT=5432\nPOSTGRES_DB=mydb"
+        "POSTGRES_HOST=localhost\nPOSTGRES_PORT=5433\nPOSTGRES_DB=mydb"
     )
 
-# 포트 파싱(없으면 None → URL에서 생략되어 기본 5432 사용)
+# 포트 파싱(없으면 None → URL에서 생략되어 기본 5433 사용)
 pg_port_int: Optional[int] = None
 if PG_PORT is not None:
     try:

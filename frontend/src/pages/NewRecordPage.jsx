@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelector, useDispatch } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
@@ -17,8 +17,8 @@ import TemplateModal from "../components/recording/TemplateModal";
 
 export default function NewRecordPage() {
     const navigate = useNavigate();
-    const dispatch = useDispatch();
-    const { folders } = useSelector((state) => state.record);
+    // const dispatch = useDispatch();
+    const { folders } = useSelector((state) => state.folder);
 
     // 🔹 상태
     const [boardId, setBoardId] = useState(null);
@@ -30,6 +30,7 @@ export default function NewRecordPage() {
     const [showLeaveModal, setShowLeaveModal] = useState(false);
     const [isRecording, setIsRecording] = useState(false);
     const { toast, showToast, clearToast } = useToast();
+    const [showDropdown, setShowDropdown] = useState(false);
 
     // 🔹 STT 관련 상태
     const [liveText, setLiveText] = useState("");
@@ -183,6 +184,19 @@ export default function NewRecordPage() {
         else navigate(-1);
     };
 
+    // 폴더선택 동작
+    const handleSelectFolder = async (folder) => {
+        if (!folder || !boardId) return;
+        try {
+            await apiClient.patch(`/boards/${boardId}/folder`, { folder_id: folder.id });
+            setShowDropdown(false);
+            showToast(`📂 "${folder.name}" 폴더로 이동했습니다.`);
+        } catch (err) {
+            console.error("폴더 이동 실패:", err);
+            showToast("폴더 이동 중 오류가 발생했습니다.");
+        }
+    };
+
     // 🔹 녹음 종료 후 탭 설정
     const tabs = recordingStopped
         ? [
@@ -219,6 +233,9 @@ export default function NewRecordPage() {
                             dateStr={dateStr}
                             boardId={boardId}
                             folders={folders}
+                            showDropdown={showDropdown}
+                            setShowDropdown={setShowDropdown}
+                            onSelectFolder={handleSelectFolder}
                         />
 
                         <RecordTabs

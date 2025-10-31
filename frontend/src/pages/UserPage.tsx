@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState} from "react";
 import UserHeader from "../components/user/UserHeader";
 import apiClient from "../api/apiClient";
 import { API_BASE_URL } from "../config";
@@ -163,25 +163,41 @@ function NotionIntegration({ connected, onConnect, onDisconnect }: Props) {
     </section>
   );
 }
+// =======================
+// 🔔 알림 타입 정의
+// =======================
+interface NotificationItem {
+    id: number;
+    type: string;
+    content: string;
+    is_read: boolean;
+    created_at: string;
+}
+
 
 // =======================
 // 🧭 메인 UserPage
 // =======================
 export default function UserPage() {
+    const prevUnreadRef = useRef(0);
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const { showToast } = useToast();
+    const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+    const [unreadCount, setUnreadCount] = useState(0);
+
 
 
     useEffect(() => {
         async function fetchUser() {
             try {
-                const [userRes, paymentsRes, usageRes, subRes] = await Promise.all([
+                const [userRes, paymentsRes, usageRes, subRes, notiRes] = await Promise.all([
                     apiClient.get(`${API_BASE_URL}/users/me`),
                     apiClient.get(`${API_BASE_URL}/payments/me`),
                     apiClient.get(`${API_BASE_URL}/recordings/usage`),
                     apiClient.get(`${API_BASE_URL}/subscriptions/me`),
+                    apiClient.get(`${API_BASE_URL}/notifications`),
                 ]);
                 let notionConnected = false;
                       try {
@@ -222,6 +238,7 @@ export default function UserPage() {
                     billings,
                     notion_connected: notionConnected,
                 });
+                setNotifications(notiRes.data ?? []);
             } catch (err) {
                 console.error("사용자 정보 불러오기 실패:", err);
                 setUser(null);
@@ -239,6 +256,32 @@ export default function UserPage() {
             window.history.replaceState({}, "", window.location.pathname);
           }
     }, [showModal]);
+    // ✅ 새 알림/목록 동기 갱신 함수
+    const refreshNotifications = useCallback(async () => {
+        try {
+            const unreadRes = await apiClient.get(`${API_BASE_URL}/notifications/unread`, { withCredentials: true });
+            const unread = unreadRes.data.length;
+
+            if (unread > prevUnreadRef.current) {
+                showToast(unread === 1 ? "🔔 새 알림이 1개 도착했습니다." : `🔔 새 알림이 ${unread}개 도착했습니다.`);
+                // 새 알림 목록 즉시 반영
+                const listRes = await apiClient.get(`${API_BASE_URL}/notifications`);
+                setNotifications(listRes.data ?? []);
+            }
+
+            setUnreadCount(unread);
+            prevUnreadRef.current = unread;
+        } catch (e) {
+            console.error("알림 확인 실패:", e);
+        }
+    }, [showToast]);
+    // ✅ 새 알림 감지 및 자동 갱신
+    useEffect(() => {
+        refreshNotifications();                 // 진입 시 1회
+        const interval = setInterval(refreshNotifications, 15000); // 15초 주기
+        return () => clearInterval(interval);
+    }, [refreshNotifications]);
+
 
     if (loading)
         return (
@@ -305,12 +348,51 @@ export default function UserPage() {
                             남은 시간: {remaining.toLocaleString()}분
                         </p>
                     </section>
+
                 </div>
 
                 {/* 오른쪽: 결제 내역 + 노션 */}
                 <div className="space-y-6">
                     <BillingSection billings={user.billings} />
-                   <NotionIntegration
+                    {/* ✅ 알림 섹션 */}
+                    <section className="bg-white rounded-2xl p-6 shadow-sm">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-lg font-semibold text-gray-800">알림</h2>
+                            <button
+                                onClick={async () => {
+                                    try {
+                                        await apiClient.post(`${API_BASE_URL}/notifications/read-all`);
+                                        setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+                                        refreshNotifications();
+                                        showToast("모든 알림을 읽음 처리했습니다.");
+                                    } catch {
+                                        showToast("알림 처리 중 오류가 발생했습니다.");
+                                    }
+                                }}
+                                className="text-sm text-[#7E37F9] hover:underline"
+                            >
+                                모두 읽음
+                            </button>
+                        </div>
+
+                        {notifications.length === 0 ? (
+                            <p className="text-sm text-gray-400">새 알림이 없습니다.</p>
+                        ) : (
+                            <ul className="space-y-2 max-h-72 overflow-y-auto no-scrollbar">
+                                {[...notifications]
+                                    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                                    .map((n) => (
+                                        <li key={n.id} className={`p-3 rounded-lg border transition ${n.is_read ? "bg-gray-50 border-gray-200" : "bg-[#F3EFFF] border-[#E0CFFF]"}`}>
+                                            <p className="text-sm text-gray-800">{n.content}</p>
+                                            <p className="text-xs text-gray-400 mt-1">{new Date(n.created_at).toLocaleString("ko-KR")}</p>
+                                        </li>
+                                    ))}
+                            </ul>
+
+                        )}
+                    </section>
+
+                    <NotionIntegration
                       connected={user.notion_connected}
                       onConnect={async () => {
                         const token = localStorage.getItem("access_token");
@@ -351,6 +433,23 @@ export default function UserPage() {
                     />
                 </div>
             </div>
+            <button
+                onClick={async () => {
+                    try {
+                        const token = localStorage.getItem("access_token"); // 쓰고 있다면
+                        // "아침 알림 테스트" 버튼: 트리거 후 자동 반영
+                        await apiClient.post(`${API_BASE_URL}/notifications/trigger-morning`, null, { withCredentials: true, headers: token ? { Authorization: `Bearer ${token}` } : {} });
+                        showToast("🌅 아침 알림 트리거가 실행되었습니다.");
+                        setTimeout(() => { refreshNotifications(); }, 800); // 트리거 후 살짝 기다렸다 갱신
+                    } catch (err) {
+                        showToast("트리거 실행 실패");
+                        console.error(err);
+                    }
+                }}
+                className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+            >
+                아침 알림 테스트
+            </button>
         </main>
     );
 }

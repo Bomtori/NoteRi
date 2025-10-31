@@ -19,6 +19,7 @@ export default function RecordDetailPage() {
 
     // 🔹 기존 상태
     const [board, setBoard] = useState(null);
+    const [memo, setMemo] = useState(null);
     const [noSession, setNoSession] = useState(false);
     const [title, setTitle] = useState("");
     const [dateStr, setDateStr] = useState("");
@@ -32,6 +33,11 @@ export default function RecordDetailPage() {
     const { folders } = useSelector((state) => state.folder);
     const [showDropdown, setShowDropdown] = useState(false);
     const [currentFolder, setCurrentFolder] = useState(null);
+    const [sharedUsers, setSharedUsers] = useState([]);
+    const [userRole, setUserRole] = useState("owner"); // 기본값은 owner
+    const user = JSON.parse(localStorage.getItem("user")); // 로그인한 유저 정보 (email, id 등)
+
+
 
 
 
@@ -43,24 +49,27 @@ export default function RecordDetailPage() {
     // 🔹 회의 불러오기 (보호 여부 포함)
     const fetchBoard = async () => {
         try {
-            const res = await apiClient.get(`/boards/${id}`);
+            const res = await apiClient.get(`/boards/${id}/full`);
             const data = res.data;
-            setBoard(data);
-            setTitle(data.title);
-            setDateStr(
-                new Date(data.created_at).toLocaleString("ko-KR", {
-                    month: "2-digit",
-                    day: "2-digit",
-                    weekday: "short",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                })
-            );
+            setBoard(data.board);
+            setTitle(data.board.title);
+            setDateStr(new Date(data.board.created_at).toLocaleString("ko-KR"));
+            setMemo(data.memo);
 
             // 🔹 보호 여부 감지 (URL 쿼리 + 서버 응답 둘 다 확인)
             const protectedQuery = searchParams.get("protected") === "true";
             if (data.is_protected || protectedQuery) {
                 setIsLocked(true);
+            }
+            // 공유멤버
+            const shareRes = await apiClient.get(`/boards/${id}/shares`);
+            setSharedUsers(shareRes.data || []);
+
+            // 공유멤버 조회 후 role 결정
+            if (shareRes.data && user) {
+                const myShare = shareRes.data.find(u => u.user_id === user.id);
+                if (myShare) setUserRole(myShare.role); // viewer/editor
+                else if (data.board.owner_id === user.id) setUserRole("owner");
             }
         } catch (err) {
             const status = err.response?.status;
@@ -73,7 +82,10 @@ export default function RecordDetailPage() {
                     setBoard({ id }); // 최소 데이터 세팅
                     return;
                 }
-
+            // 소유자가 아니면 403 에러 발생 → 무시
+            if (err.response?.status !== 403) {
+                console.warn("공유 멤버 조회 실패:", err);
+            }
             if (status === 404) {
                     console.warn("🔹 존재하지 않거나 접근 불가한 보드 → 빈 회의로 처리");
                     setBoard({ id, title: "새 회의", created_at: new Date().toISOString() });
@@ -144,6 +156,7 @@ export default function RecordDetailPage() {
             }
         }
     };
+
 
     // 🔹 비밀번호 검증 요청
     const handleVerifyPin = async () => {
@@ -225,6 +238,13 @@ export default function RecordDetailPage() {
                     <main className="bg-white rounded-2xl p-6 shadow-sm flex flex-col h-[calc(100vh-140px)]">
                         <RecordHeader
                             title={board.title}
+                            etTitle={(t) => {
+                                if (userRole === "viewer") {
+                                    showToast("⚠️ 수정 권한이 없습니다.");
+                                    return;
+                                }
+                                setBoard({ ...board, title: t });
+                            }}
                             setTitle={(t) => setBoard({ ...board, title: t })}
                             dateStr={new Date(board.created_at).toLocaleString("ko-KR")}
                             boardId={board.id}
@@ -234,6 +254,28 @@ export default function RecordDetailPage() {
                             onSelectFolder={handleSelectFolder}
                             currentFolder={currentFolder}
                         />
+                        {/* ✅ 공유 중인 멤버 표시 */}
+                        {sharedUsers.length > 0 && (
+                            <div className="flex items-center gap-2 mb-4">
+                                <span className="text-xs text-gray-500">공유 중:</span>
+                                <div className="flex -space-x-2">
+                                    {sharedUsers.slice(0, 3).map((user) => (
+                                        <img
+                                            key={user.id}
+                                            src={user.user_picture || '/default-avatar.png'}
+                                            alt={user.user_name}
+                                            title={`${user.user_name} (${user.role})`}
+                                            className="w-8 h-8 rounded-full border-2 border-white"
+                                        />
+                                    ))}
+                                    {sharedUsers.length > 3 && (
+                                        <div className="w-8 h-8 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-xs">
+                                            +{sharedUsers.length - 3}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                         <RecordTabs
                             tabs={[
                                 { id: "record", label: "회의기록" },
@@ -283,7 +325,7 @@ export default function RecordDetailPage() {
                             >
                                 <RightPanel
                                     boardId={board.id}
-                                    memoId={board.id}
+                                    memoId={memo?.id}
                                     activeTab={activeGPTTab}
                                     onTogglePanel={() => setIsPanelVisible((p) => !p)}
                                 />
@@ -294,7 +336,13 @@ export default function RecordDetailPage() {
                     <RecordBar
                         boardId={board?.id}
                         recordingState="stopped"              // ✅ 세 개 버튼만 노출
-                        onCreateTemplate={() => setShowTemplateModal(true)}
+                        onCreateTemplate={() => {
+                            if (userRole === "viewer") {
+                                showToast("⚠️ 템플릿을 추가할 권한이 없습니다.");
+                                return;
+                            }
+                            setShowTemplateModal(true);
+                        }}
                         onTogglePanel={() => setIsPanelVisible((p) => !p)}
                     />
 

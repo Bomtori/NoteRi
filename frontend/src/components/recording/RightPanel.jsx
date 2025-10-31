@@ -37,7 +37,7 @@ function MemoEditor({ boardId, memoId, saveStatus, setSaveStatus }) {
     (async () => {
       try {
         const res = await apiClient.get(
-          `${API_BASE_URL}/boards/${boardId}/memos/${memoId}`
+          `/boards/${boardId}/memos/${memoId}`
         );
         if (res.data?.content) {
           editor?.commands.setContent(res.data.content);
@@ -57,7 +57,7 @@ function MemoEditor({ boardId, memoId, saveStatus, setSaveStatus }) {
     saveTimeout.current = setTimeout(async () => {
       try {
         setSaveStatus("저장 중...");
-        await apiClient.patch(`${API_BASE_URL}/boards/${boardId}/memos/${memoId}`, {
+        await apiClient.patch(`/boards/${boardId}/memos/${memoId}`, {
           content,
         });
         setSaveStatus("저장됨 ✓");
@@ -174,7 +174,7 @@ export default function RightPanel({ boardId, memoId, tabs = ["memo", "gpt"], on
     setLoading(true);
 
     try {
-      const res = await apiClient.post(`${API_BASE_URL}/gemini/chat`, {
+      const res = await apiClient.post(`/gemini/chat`, {
         prompt: message,
         temperature: 0.3,
         max_output_tokens: 256,

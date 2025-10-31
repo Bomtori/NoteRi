@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FaLink, FaUserPlus, FaLock, FaUnlock, FaTimes } from "react-icons/fa";
+import { FaLink, FaUserPlus, FaLock, FaUnlock, FaTimes, FaUsers } from "react-icons/fa";
 import { useToast } from "../../hooks/useToast";
 import apiClient from "../../api/apiClient";
 
@@ -8,7 +8,8 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
     const ref = useRef(null);
     const [activeTab, setActiveTab] = useState("link");
     const [inviteEmail, setInviteEmail] = useState("");
-    const [invited, setInvited] = useState([]);
+    const [invited, setInvited] = useState([]);  // 로컬 추가만 (아직 저장 안됨)
+    const [sharedUsers, setSharedUsers] = useState([]);  // ✅ 실제 공유된 사용자 목록
     const [pin, setPin] = useState("");
     const [hasPassword, setHasPassword] = useState(false);
     const { showToast } = useToast();
@@ -24,7 +25,7 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [onClose]);
 
-    // ✅ 비밀번호 존재 여부 확인
+    // ✅ 비밀번호 상태 확인
     useEffect(() => {
         if (!boardId) return;
         (async () => {
@@ -37,6 +38,30 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
         })();
     }, [boardId]);
 
+    // 공유된 사용자 목록 불러오기
+    useEffect(() => {
+        if (!boardId || activeTab !== "invite") return;
+
+        (async () => {
+            try {
+                const res = await apiClient.get(`/boards/${boardId}/shares`);
+
+                        const normalized = (res.data || []).map(u => ({
+                        user_id: u.user_id,
+                        user_name: u.nickname || u.user_name,
+                        user_email: u.email || u.user_email,
+                        user_picture: u.picture || u.user_picture,
+                        role: u.role,
+                    }));
+
+                    setSharedUsers(normalized);
+                // console.log("공유 중인 멤버 (정상화됨):", normalized);
+            } catch (err) {
+                console.warn("공유 목록 조회 실패:", err.data);
+            }
+        })();
+    }, [boardId, activeTab, invited]);  // invited 변경 시에도 갱신
+
     // ✅ 비밀번호 설정
     const handleSetPassword = async () => {
         if (pin.length !== 4) {
@@ -44,7 +69,7 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
             return;
         }
         try {
-            await apiClient.patch(`/boards/${boardId}/password`, { password: pin });
+            await apiClient.patch(`/boards/${boardId}`, { password: pin });
             setHasPassword(true);
             showToast("🔒 비밀번호가 설정되었습니다!");
         } catch (err) {
@@ -56,7 +81,7 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
     // ✅ 비밀번호 해제
     const handleClearPassword = async () => {
         try {
-            await apiClient.delete(`/boards/${boardId}/password`);
+            await apiClient.patch(`/boards/${boardId}`, { password: null });
             setHasPassword(false);
             setPin("");
             showToast("🔓 비밀번호가 제거되었습니다.");
@@ -66,23 +91,17 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
         }
     };
 
-    // ✅ 초대 버튼 (올바른 필드명 사용)
+    // ✅ 초대 버튼
     const handleInvite = async () => {
         if (inviteEmail.trim() === "") {
             showToast("⚠️ 이메일을 입력해주세요!");
             return;
         }
 
-        if (invited.includes(inviteEmail)) {
-            showToast("⚠️ 이미 초대한 이메일입니다!");
-            return;
-        }
-
         try {
-            // ✅ 백엔드 스키마에 맞춘 필드명
             await apiClient.post(`/boards/${boardId}/shares`, {
                 email: inviteEmail,
-                role: "editor",     // ✅ role → invite_role
+                role: "viewer",  // 기본값
             });
 
             setInvited((prev) => [...prev, inviteEmail]);
@@ -92,17 +111,47 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
             const status = err.response?.status;
             const detail = err.response?.data?.detail;
 
-            console.error("공유 요청 실패:", err.response?.data || err);
-
             if (status === 404) {
                 showToast("❌ 존재하지 않는 사용자입니다.");
             } else if (status === 400) {
                 showToast("⚠️ 이미 공유된 사용자입니다!");
-            } else if (status === 422) {
-                showToast(`❌ 잘못된 요청입니다.\n${detail || "입력값을 확인해주세요."}`);
             } else {
-                showToast("⚠️ 공유 요청 중 알 수 없는 오류가 발생했습니다.");
+                showToast(`❌ ${detail || "공유 중 오류가 발생했습니다."}`);
             }
+        }
+    };
+
+    // ✅ 권한 변경
+    const handleChangeRole = async (targetUserId, newRole) => {
+        try {
+            await apiClient.patch(`/boards/${boardId}/shares/${targetUserId}`, {
+                role: newRole
+            });
+            showToast(`권한이 ${newRole === 'editor' ? '편집' : '보기'}으로 변경되었습니다!`);
+
+            // 목록 갱신
+            const res = await apiClient.get(`/boards/${boardId}/shares`);
+            setSharedUsers(res.data || []);
+        } catch (err) {
+            console.error("권한 변경 실패:", err);
+            showToast("권한 변경 중 오류가 발생했습니다.");
+        }
+    };
+
+    // ✅ 공유 해제
+    const handleRemoveShare = async (targetUserId, userEmail) => {
+        if (!confirm(`${userEmail}님과의 공유를 해제하시겠습니까?`)) return;
+
+        try {
+            await apiClient.delete(`/boards/${boardId}/shares/${targetUserId}`);
+            showToast("공유가 해제되었습니다.");
+
+            // 목록 갱신
+            const res = await apiClient.get(`/boards/${boardId}/shares`);
+            setSharedUsers(res.data || []);
+        } catch (err) {
+            console.error("공유 해제 실패:", err);
+            showToast("공유 해제 중 오류가 발생했습니다.");
         }
     };
 
@@ -121,7 +170,7 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
                         ref={ref}
                         layout
                         transition={{ type: "spring", stiffness: 280, damping: 26 }}
-                        className="bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.1)] w-[340px] p-5 border border-gray-100 overflow-hidden"
+                        className="bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.1)] w-[400px] p-5 border border-gray-100 overflow-hidden"
                     >
                         {/* 탭 */}
                         <div className="relative flex bg-gray-100 rounded-full p-1 mb-5">
@@ -169,7 +218,7 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
 
                                         {/* 링크 복사 */}
                                         <div className="flex items-center bg-gray-50 border rounded-lg px-3 py-2 justify-between">
-                                            <span className="text-xs text-gray-500 truncate max-w-[200px]">
+                                            <span className="text-xs text-gray-500 truncate max-w-[250px]">
                                                 {shareUrl}
                                             </span>
                                             <button
@@ -233,6 +282,7 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
                                     >
                                         <p className="text-sm text-gray-600">초대할 팀원의 이메일을 입력하세요.</p>
 
+                                        {/* 이메일 입력 */}
                                         <div className="flex items-center gap-2">
                                             <input
                                                 value={inviteEmail}
@@ -254,38 +304,52 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
                                             </button>
                                         </div>
 
-                                        <div className="mt-3 max-h-[120px] overflow-y-auto">
-                                            <AnimatePresence>
-                                                {invited.length === 0 ? (
-                                                    <p className="text-xs text-gray-400 text-center py-3">
-                                                        아직 초대한 팀원이 없습니다.
-                                                    </p>
-                                                ) : (
-                                                    invited.map((email) => (
-                                                        <motion.div
-                                                            key={email}
-                                                            initial={{ opacity: 0, y: 10 }}
-                                                            animate={{ opacity: 1, y: 0 }}
-                                                            exit={{ opacity: 0, y: -10 }}
-                                                            transition={{ duration: 0.2 }}
-                                                            className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 mb-2"
-                                                        >
-                                                            <span className="text-sm text-gray-700">{email}</span>
-                                                            <button
-                                                                onClick={() =>
-                                                                    setInvited((prev) =>
-                                                                        prev.filter((e) => e !== email)
-                                                                    )
-                                                                }
-                                                                className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1"
-                                                            >
-                                                                <FaTimes size={10} />
-                                                                취소
-                                                            </button>
-                                                        </motion.div>
-                                                    ))
-                                                )}
-                                            </AnimatePresence>
+                                        {/* ✅ 공유 중인 멤버 목록 */}
+                                        <div className="mt-4 border-t pt-4">
+                                            <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                                                <FaUsers />
+                                                공유 중인 팀원 ({sharedUsers.length})
+                                            </h3>
+
+                                            {sharedUsers.length === 0 ? (
+                                                <p className="text-xs text-gray-400 text-center py-3">
+                                                    아직 공유한 팀원이 없습니다.
+                                                </p>
+                                            ) : (
+                                                <ul className="space-y-2 max-h-[200px] overflow-y-auto">
+                                                    {sharedUsers.map((share) => (
+                                                        <li key={share.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <img
+                                                                    src={share.user_picture || '/default-avatar.png'}
+                                                                    alt={share.user_name}
+                                                                    className="w-8 h-8 rounded-full"
+                                                                />
+                                                                <div>
+                                                                    <p className="text-sm font-medium">{share.user_name}</p>
+                                                                    <p className="text-xs text-gray-500">{share.user_email}</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <select
+                                                                    value={share.role}
+                                                                    onChange={(e) => handleChangeRole(share.user_id, e.target.value)}
+                                                                    className="text-xs border rounded px-2 py-1"
+                                                                >
+                                                                    <option value="viewer">보기</option>
+                                                                    <option value="editor">편집</option>
+                                                                </select>
+                                                                <button
+                                                                    onClick={() => handleRemoveShare(share.user_id, share.user_email)}
+                                                                    className="text-red-500 hover:text-red-700"
+                                                                >
+                                                                    <FaTimes size={12} />
+                                                                </button>
+                                                            </div>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            )}
                                         </div>
                                     </motion.div>
                                 )}

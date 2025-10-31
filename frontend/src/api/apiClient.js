@@ -7,6 +7,7 @@ const apiClient = axios.create({
     withCredentials: true, // refresh_token 쿠키 자동 포함
     headers: {
         "Content-Type": "application/json", // headers 포함하기
+        'ngrok-skip-browser-warning': '1', // ngrok 사용시 추가할것?
     },
 });
 

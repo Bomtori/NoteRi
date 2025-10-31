@@ -31,7 +31,6 @@ def set_board_password(db: Session, board_id: int, current_user_id: int, pin_4di
         db.commit()
         db.refresh(board)
 
-        # TODO: PIN 변경 시 기존 게스트 토큰/세션 무효화 로직이 있다면 여기서 호출
         # revoke_guest_sessions(db, board.id)
 
         return board

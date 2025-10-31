@@ -1,10 +1,23 @@
 # backend/app/tasks/redis_to_pg.py
 
 import sys
+import os
 from datetime import datetime
 import psycopg2
 import redis
-from backend.config import REDIS_URL, DATABASE_URL, resolve_board_id, resolve_user_id
+from dotenv import load_dotenv
+
+# 환경변수 로드
+load_dotenv()
+
+# 필요한 경우 config에서 가져오기
+try:
+    from backend.config import REDIS_URL, resolve_board_id, resolve_user_id
+except ImportError:
+    REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+    def resolve_board_id(meta): return int(meta.get("board_id", 1))
+    def resolve_user_id(meta): return int(meta.get("user_id", 1))
+
 from backend.app.util.crypto_path import encrypt_path
 
 
@@ -20,10 +33,29 @@ def _redis_client():
 
 def _pg_connect():
     """
-    config.DATABASE_URL 사용.
+    PostgreSQL 5433 포트 연결
     """
-    conn = psycopg2.connect(DATABASE_URL)
-    # ⚠️ 트랜잭션 열리지 않게 먼저 autocommit 켜고 핑
+    # 환경변수 직접 읽기
+    import os
+    from dotenv import load_dotenv
+    
+    load_dotenv()
+    
+    # DATABASE_URL 파싱 또는 직접 구성
+    database_url = os.getenv("DATABASE_URL")
+    
+    if database_url:
+        conn = psycopg2.connect(database_url)
+    else:
+        # fallback: 직접 구성
+        conn = psycopg2.connect(
+            host=os.getenv("POSTGRES_HOST", "localhost"),
+            port=int(os.getenv("POSTGRES_PORT", "5433")),
+            user=os.getenv("POSTGRES_USER", "postgres"),
+            password=os.getenv("POSTGRES_PASSWORD", "1234"),
+            database=os.getenv("POSTGRES_DB", "mydb")
+        )
+    
     conn.autocommit = True
     with conn.cursor() as c:
         c.execute("SELECT 1;")
@@ -44,20 +76,29 @@ def _to_ts(ms_val):
         return None
 
 
-def ingest_one_session(prefix: str, sid: str):
+def ingest_one_session(sid: str, prefix: str):
     """
-    지정 세션(prefix, sid) 하나를 Postgres로 적재한다.
-    - recording_sessions row 생성 후 id 확보
-    - segments → recording_results
-    - summaries → summaries
-    - audio_data → audio_data
+    지정 세션(sid, prefix) 하나를 Postgres로 적재한다.
+    
+    Args:
+        sid: 세션 ID (recording_sessions.id로 사용될 값)
+        prefix: Redis 키 프리픽스 (예: stt:2025-10-30)
+        
+    Returns:
+        int: recording_sessions.id
+        
+    Note:
+        - sid를 recording_sessions.id로 직접 사용
+        - 멱등성: 이미 적재된 경우 해당 session_id 반환
     """
     KEY_SEG, KEY_SUM, KEY_META = _keys(prefix, sid)
     r = _redis_client()
+    
     # ✅ 이미 적재된 SID면 바로 해당 session_id 반환 (멱등)
     cached = r.get(f"{prefix}:{sid}:ingested_session_id")
     if cached:
         return int(cached)
+    
     conn = _pg_connect()
     conn.autocommit = False
     cur = conn.cursor()
@@ -73,16 +114,26 @@ def ingest_one_session(prefix: str, sid: str):
         board_id = resolve_board_id(meta)
         user_id  = resolve_user_id(meta)
 
+        # ✅ SID를 session_id로 직접 사용
+        session_id = int(sid)
+
         # 0-1) recording_sessions
         cur.execute("""
             INSERT INTO recording_sessions
-              (board_id, user_id, status, started_at, ended_at, created_at, is_diarized)
+              (id, board_id, user_id, status, started_at, ended_at, created_at, is_diarized)
             VALUES
-              (%s, %s, 'saved',
+              (%s, %s, %s, 'saved',
                to_timestamp(%s/1000.0), to_timestamp(%s/1000.0), NOW(), FALSE)
+            ON CONFLICT (id) DO NOTHING
             RETURNING id;
-        """, (board_id, user_id, base_ms, ended_ms))
-        session_id = cur.fetchone()[0]
+        """, (session_id, board_id, user_id, base_ms, ended_ms))
+        
+        result = cur.fetchone()
+        if result is None:
+            # 이미 존재하는 경우
+            print(f"[INFO] {sid} already exists in recording_sessions")
+        else:
+            print(f"[OK] {sid} recording_sessions created with id={session_id}")
 
         # 1) segments → recording_results
         seg_entries = r.xrange(KEY_SEG, "-", "+")
@@ -131,8 +182,8 @@ def ingest_one_session(prefix: str, sid: str):
             except Exception:
                 tokens_out = None
 
-            interval_start_at = _to_ts(base_ms + int(istart_ms)) if istart_ms is not None else None
-            interval_end_at   = _to_ts(base_ms + int(iend_ms))   if iend_ms   is not None else None
+            interval_start_at = _to_ts(istart_ms) if istart_ms is not None else None
+            interval_end_at   = _to_ts(iend_ms)   if iend_ms   is not None else None
 
             cur.execute("""
                 INSERT INTO summaries
@@ -148,15 +199,20 @@ def ingest_one_session(prefix: str, sid: str):
             inserted_summaries += 1
 
         conn.commit()
-        print(f"[OK] {sid} recording_results inserted={inserted_segments}, summaries inserted={inserted_summaries}")
+        print(f"[OK] {sid} summaries inserted={inserted_summaries}")
 
         # 3) audio_data
         audio_path  = meta.get("audio_path")
         duration_ms = meta.get("duration_ms")
         language    = meta.get("language")
-        cipher_path = encrypt_path(audio_path)
 
         if audio_path:
+            try:
+                cipher_path = encrypt_path(audio_path)
+            except Exception as e:
+                print(f"[WARN] Failed to encrypt path: {e}")
+                cipher_path = audio_path
+
             try:
                 duration_sec = int(int(duration_ms) / 1000) if duration_ms is not None else None
             except Exception:
@@ -164,16 +220,14 @@ def ingest_one_session(prefix: str, sid: str):
 
             cur.execute("""
                 INSERT INTO audio_data (board_id, recording_session_id, file_path, duration, language, created_at)
-                VALUES (%s, %s, %s, %s, %s, NOW());
+                VALUES (%s, %s, %s, %s, %s, NOW())
+                ON CONFLICT DO NOTHING;
             """, (board_id, session_id, cipher_path, duration_sec, language))
 
         conn.commit()
-        print(f"[OK] {sid} recording_results inserted={inserted_segments}, "
-              f"summaries inserted={inserted_summaries}, "
-              f"audio_data inserted (encrypted)")
+        print(f"[OK] {sid} audio_data inserted")
 
-        # ✅ 재실행 방지: 세션ID를 SID에 매핑해 캐시(7일) + 원본 키는 TTL만 부여(디버깅 편의)
-            # 🔸 기존엔 rename으로 사라져 보였음 → 디버깅 위해 그대로 두되 TTL만 걸어둠
+        # ✅ 재실행 방지: 세션ID를 SID에 매핑해 캐시(7일)
         try:
             r.setex(f"{prefix}:{sid}:ingested_session_id", 7 * 24 * 3600, str(session_id))
             ttl = 24 * 3600  # 24h 보존
@@ -189,8 +243,9 @@ def ingest_one_session(prefix: str, sid: str):
         # ✅ 이 세션의 PK 반환
         return session_id
 
-    except Exception:
+    except Exception as e:
         conn.rollback()
+        print(f"[ERROR] Failed to ingest {sid}: {e}")
         raise
     finally:
         cur.close()
@@ -204,21 +259,28 @@ def ingest_all_for_prefix(prefix: str):
     r = _redis_client()
     sids = sorted(r.smembers(f"{prefix}:sids"))
     for sid in sids:
-        ingest_one_session(prefix, sid)
+        ingest_one_session(sid, prefix)
 
 
 if __name__ == "__main__":
     # CLI 사용:
-    # 1) 한 세션:  python backend/app/tasks/redis_to_pg.py stt:YYYY-MM-DD <sid>
-    # 2) 하루 전체: python backend/app/tasks/redis_to_pg.py stt:YYYY-MM-DD --all
+    # 1) 한 세션:  python backend/app/tasks/redis_to_pg.py <sid> stt:YYYY-MM-DD
+    # 2) 하루 전체: python backend/app/tasks/redis_to_pg.py --all stt:YYYY-MM-DD
     if len(sys.argv) < 2:
-        print("Usage: python backend/app/tasks/redis_to_pg.py <stt:YYYY-MM-DD> [<sid>|--all]")
+        print("Usage: python backend/app/tasks/redis_to_pg.py <sid> <stt:YYYY-MM-DD>")
+        print("   or: python backend/app/tasks/redis_to_pg.py --all <stt:YYYY-MM-DD>")
         sys.exit(1)
-    prefix = sys.argv[1]
-    if len(sys.argv) == 3 and sys.argv[2] == "--all":
+    
+    if sys.argv[1] == "--all":
+        if len(sys.argv) < 3:
+            print("Missing prefix for --all")
+            sys.exit(1)
+        prefix = sys.argv[2]
         ingest_all_for_prefix(prefix)
-    elif len(sys.argv) >= 3:
-        ingest_one_session(prefix, sys.argv[2])
     else:
-        print("Missing <sid> or --all")
-        sys.exit(1)
+        if len(sys.argv) < 3:
+            print("Missing prefix")
+            sys.exit(1)
+        sid = sys.argv[1]
+        prefix = sys.argv[2]
+        ingest_one_session(sid, prefix)

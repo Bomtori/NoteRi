@@ -95,31 +95,41 @@ def start_diarization(session_id: int, bg: BackgroundTasks):
     return {"ok": True, "session_id": session_id, "queued": True, "msg": "diarization started"}
 
 @router.get("/by-sid/{sid}")
-async def get_session_id_by_sid(sid: str, response: Response):
+async def get_session_id_by_sid(sid: str, response: Response, db: Session = Depends(get_db)):
     """
     WebSocket 세션 ID(sid)로 DB에 저장된 recording_session_id를 조회.
     
+    Args:
+        sid: 세션 ID (recording_sessions.id와 동일)
+    
     Response:
-    - 202 Accepted: {"status": "pending", "sid": "..."}
-    - 200 OK: {"session_id": 81, "status": "ready", "sid": "..."}
+        - 202 Accepted: {"status": "pending", "sid": "..."}
+        - 200 OK: {"session_id": 81, "status": "ready", "sid": "..."}
+        
+    Note:
+        이제 SID가 recording_sessions.id와 동일하므로 직접 조회
     """
-    from backend.app.util.redis_client import get_redis
+    try:
+        session_id = int(sid)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid sid format")
     
-    r = await get_redis()
-    key = f"stt:last_session_id:{sid}"
-    val = await r.get(key)
+    # recording_sessions 테이블에서 직접 조회
+    session = db.query(RecordingSession).filter(
+        RecordingSession.id == session_id
+    ).first()
     
-    if not val:
-        # 아직 매핑 전: 202로 상태 반환
+    if not session:
+        # 아직 저장 안 됨: 202로 상태 반환
         response.status_code = status.HTTP_202_ACCEPTED
         return {
             "status": "pending",
             "sid": sid
         }
     
-    # ✅ 매핑 완료: session_id 반환 (중요: 'id'가 아니라 'session_id'!)
+    # ✅ 세션 존재: session_id 반환
     return {
-        "session_id": int(val),  # ← 프론트가 이 필드를 찾음!
+        "session_id": session.id,
         "status": "ready",
         "sid": sid
     }

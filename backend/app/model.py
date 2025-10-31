@@ -484,7 +484,7 @@ class RecordingEmbedding(Base):
         nullable=False
     )
     text_chunk = Column(Text, nullable=False)
-    embedding = Column(Vector(384), nullable=False)
+    embedding = Column(Vector(768), nullable=False)
     chunk_index = Column(Integer, nullable=False)
     chunk_metadata = Column(JSON, nullable=True)  # ✅ 변경!
     created_at = Column(DateTime, server_default=func.now(), nullable=False)

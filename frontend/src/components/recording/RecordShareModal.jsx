@@ -11,10 +11,10 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
     const [invited, setInvited] = useState([]);
     const [pin, setPin] = useState("");
     const [hasPassword, setHasPassword] = useState(false);
-    const {showToast} = useToast();
+    const { showToast } = useToast();
 
     const baseUrl = `${window.location.origin}/record/${boardId || ""}`;
-    const shareUrl = hasPassword ? `${baseUrl}?protected=true` : baseUrl; // ✅ 보호 여부에 따라 링크 변경
+    const shareUrl = hasPassword ? `${baseUrl}?protected=true` : baseUrl;
 
     useEffect(() => {
         const handleClickOutside = (e) => {
@@ -44,16 +44,12 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
             return;
         }
         try {
-            await apiClient.patch(`/boards/${boardId}/password`, {password: pin});
+            await apiClient.patch(`/boards/${boardId}/password`, { password: pin });
             setHasPassword(true);
-            showToast(
-                <div className="flex flex-col items-center gap-1 text-center">
-                    <p className="text-sm font-medium text-gray-800">🔒 비밀번호가 설정되었습니다!</p>
-                    <p className="text-xs text-gray-500">{`${shareUrl}`}</p>
-                </div>
-            );
+            showToast("🔒 비밀번호가 설정되었습니다!");
         } catch (err) {
-            showToast("비밀번호 설정 중 오류가 발생했습니다.");
+            console.error("비밀번호 설정 실패:", err);
+            showToast("❌ 비밀번호 설정 중 오류가 발생했습니다.");
         }
     };
 
@@ -63,14 +59,50 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
             await apiClient.delete(`/boards/${boardId}/password`);
             setHasPassword(false);
             setPin("");
-            showToast(
-                <div className="flex flex-col items-center gap-1 text-center">
-                    <p className="text-sm font-medium text-gray-800">🔓 비밀번호가 제거되었습니다.</p>
-                    <p className="text-xs text-gray-500">{`${baseUrl}`}</p>
-                </div>
-            );
+            showToast("🔓 비밀번호가 제거되었습니다.");
         } catch (err) {
-            showToast("비밀번호 제거 중 오류가 발생했습니다.");
+            console.error("비밀번호 제거 실패:", err);
+            showToast("❌ 비밀번호 제거 중 오류가 발생했습니다.");
+        }
+    };
+
+    // ✅ 초대 버튼 (올바른 필드명 사용)
+    const handleInvite = async () => {
+        if (inviteEmail.trim() === "") {
+            showToast("⚠️ 이메일을 입력해주세요!");
+            return;
+        }
+
+        if (invited.includes(inviteEmail)) {
+            showToast("⚠️ 이미 초대한 이메일입니다!");
+            return;
+        }
+
+        try {
+            // ✅ 백엔드 스키마에 맞춘 필드명
+            await apiClient.post(`/boards/${boardId}/shares`, {
+                email: inviteEmail,
+                role: "editor",     // ✅ role → invite_role
+            });
+
+            setInvited((prev) => [...prev, inviteEmail]);
+            setInviteEmail("");
+            showToast("✅ 팀원에게 공유되었습니다!");
+        } catch (err) {
+            const status = err.response?.status;
+            const detail = err.response?.data?.detail;
+
+            console.error("공유 요청 실패:", err.response?.data || err);
+
+            if (status === 404) {
+                showToast("❌ 존재하지 않는 사용자입니다.");
+            } else if (status === 400) {
+                showToast("⚠️ 이미 공유된 사용자입니다!");
+            } else if (status === 422) {
+                showToast(`❌ 잘못된 요청입니다.\n${detail || "입력값을 확인해주세요."}`);
+            } else {
+                showToast("⚠️ 공유 요청 중 알 수 없는 오류가 발생했습니다.");
+            }
         }
     };
 
@@ -78,21 +110,20 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
         <AnimatePresence>
             {isOpen && (
                 <motion.div
-                    layout               // ✅ 부모에도 layout 추가
+                    layout
                     initial={{ opacity: 0, y: 40 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 40 }}
-                    transition={{ type: "spring", stiffness: 250, damping: 25 }} // ✅ layout용도 함께 적용
+                    transition={{ type: "spring", stiffness: 250, damping: 25 }}
                     className="fixed bottom-[90px] left-1/2 -translate-x-1/2 z-[100]"
                 >
-                    {/* ✅ layout 추가 (모달 박스 높이도 함께 스르륵) */}
                     <motion.div
                         ref={ref}
                         layout
-                        transition={{ type: "spring", stiffness: 280, damping: 26 }} // ✅ nested layout에도 spring 적용
+                        transition={{ type: "spring", stiffness: 280, damping: 26 }}
                         className="bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.1)] w-[340px] p-5 border border-gray-100 overflow-hidden"
                     >
-                        {/* 🔹 탭 */}
+                        {/* 탭 */}
                         <div className="relative flex bg-gray-100 rounded-full p-1 mb-5">
                             {["link", "invite"].map((tab) => (
                                 <button
@@ -112,14 +143,14 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
                                         />
                                     )}
                                     <span className="relative z-10 flex items-center gap-1">
-                  {tab === "link" ? <FaLink /> : <FaUserPlus />}
+                                        {tab === "link" ? <FaLink /> : <FaUserPlus />}
                                         {tab === "link" ? "링크 공유" : "팀원 초대"}
-                </span>
+                                    </span>
                                 </button>
                             ))}
                         </div>
 
-                        {/* 🔹 탭 콘텐츠 (내부 높이도 layout 동기화) */}
+                        {/* 탭 콘텐츠 */}
                         <motion.div layout>
                             <AnimatePresence mode="wait">
                                 {activeTab === "link" ? (
@@ -138,9 +169,9 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
 
                                         {/* 링크 복사 */}
                                         <div className="flex items-center bg-gray-50 border rounded-lg px-3 py-2 justify-between">
-                    <span className="text-xs text-gray-500 truncate max-w-[200px]">
-                      {shareUrl}
-                    </span>
+                                            <span className="text-xs text-gray-500 truncate max-w-[200px]">
+                                                {shareUrl}
+                                            </span>
                                             <button
                                                 onClick={() => {
                                                     navigator.clipboard.writeText(shareUrl);
@@ -152,12 +183,12 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
                                             </button>
                                         </div>
 
-                                        {/* 비밀번호 설정 / 해제 */}
+                                        {/* 비밀번호 설정/해제 */}
                                         <div className="mt-4 border-t pt-4">
                                             <p className="text-sm font-medium mb-2 flex items-center gap-2">
-                                                {hasPassword ? <FaLock /> : <FaUnlock />} 비밀번호 보호
+                                                {hasPassword ? <FaLock /> : <FaUnlock />}
+                                                비밀번호 보호
                                             </p>
-
                                             {hasPassword ? (
                                                 <div className="flex items-center justify-between">
                                                     <span className="text-sm text-gray-600">현재 보호 중</span>
@@ -200,27 +231,23 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
                                         transition={{ duration: 0.25, ease: "easeInOut" }}
                                         className="space-y-3"
                                     >
-                                        <p className="text-sm text-gray-600">
-                                            초대할 팀원의 이메일을 입력하세요.
-                                        </p>
+                                        <p className="text-sm text-gray-600">초대할 팀원의 이메일을 입력하세요.</p>
 
                                         <div className="flex items-center gap-2">
                                             <input
                                                 value={inviteEmail}
                                                 onChange={(e) => setInviteEmail(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter") {
+                                                        e.preventDefault();
+                                                        handleInvite();
+                                                    }
+                                                }}
                                                 placeholder="예: teammate@noteri.com"
                                                 className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-[#7E37F9]"
                                             />
                                             <button
-                                                onClick={() => {
-                                                    if (inviteEmail.trim() === "")
-                                                        return showToast("이메일을 입력해주세요!");
-                                                    if (invited.includes(inviteEmail))
-                                                        return showToast("이미 초대한 이메일입니다!");
-                                                    setInvited((prev) => [...prev, inviteEmail]);
-                                                    setInviteEmail("");
-                                                    showToast("✅ 팀원 초대가 추가되었습니다!");
-                                                }}
+                                                onClick={handleInvite}
                                                 className="px-3 py-2 bg-[#7E37F9] text-white rounded-lg hover:bg-[#692ed9] text-sm transition"
                                             >
                                                 추가
@@ -252,7 +279,8 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
                                                                 }
                                                                 className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1"
                                                             >
-                                                                <FaTimes size={10} /> 취소
+                                                                <FaTimes size={10} />
+                                                                취소
                                                             </button>
                                                         </motion.div>
                                                     ))
@@ -268,5 +296,4 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
             )}
         </AnimatePresence>
     );
-
 }

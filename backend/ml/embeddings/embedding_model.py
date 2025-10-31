@@ -19,7 +19,7 @@ class KoreanEmbedder:
         """
         print(f"📥 임베딩 모델 로딩 중: {model_name}")
         self.model = SentenceTransformer(model_name)
-        self.dimension = 384  # ko-sbert-nli 출력 차원
+        self.dimension = 768  # ko-sbert-nli 출력 차원
         print("✅ 임베딩 모델 로딩 완료!")
         
     def embed_text(self, text: str) -> np.ndarray:
@@ -30,7 +30,7 @@ class KoreanEmbedder:
             text: 입력 텍스트
             
         Returns:
-            384차원 벡터
+            768차원 벡터
         """
         embedding = self.model.encode(text, convert_to_numpy=True)
         return embedding

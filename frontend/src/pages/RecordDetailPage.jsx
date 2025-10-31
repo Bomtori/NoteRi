@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
+import { useSelector } from "react-redux";
 import apiClient from "../api/apiClient";
 import { useToast } from "../hooks/useToast";
 import RecordHeader from "../components/recording/RecordHeader";
@@ -28,6 +29,10 @@ export default function RecordDetailPage() {
     const [isPanelVisible, setIsPanelVisible] = useState(false);
     const [activeGPTTab, setActiveGPTTab] = useState("memo");
     const [showTemplateModal, setShowTemplateModal] = useState(false);
+    const { folders } = useSelector((state) => state.folder);
+    const [showDropdown, setShowDropdown] = useState(false);
+    const [currentFolder, setCurrentFolder] = useState(null);
+
 
 
     // 🔹 추가된 상태: 보호 회의 접근 제어용
@@ -88,6 +93,20 @@ export default function RecordDetailPage() {
                 }
         }
     };
+    // 🔹 폴더목록 불러오기
+    const handleSelectFolder = async (folder) => {
+        if (!folder || !board?.id) return;
+        try {
+            await apiClient.patch(`/boards/${board.id}/move`, { folder_id: folder.id });
+            setShowDropdown(false);
+            setCurrentFolder(folder);
+            showToast(`📂 "${folder.name}" 폴더로 이동했습니다.`);
+        } catch (err) {
+            console.error("폴더 이동 실패:", err);
+            showToast("폴더 이동 중 오류가 발생했습니다.");
+        }
+    };
+
 
     // 🔹 녹음 결과 불러오기 (기존 유지)
     const fetchRecordingResults = async () => {
@@ -205,12 +224,16 @@ export default function RecordDetailPage() {
                     {/* 🔹 메인 콘텐츠 */}
                     <main className="bg-white rounded-2xl p-6 shadow-sm flex flex-col h-[calc(100vh-140px)]">
                         <RecordHeader
-                            title={title}
-                            setTitle={setTitle}
-                            dateStr={dateStr}
+                            title={board.title}
+                            setTitle={(t) => setBoard({ ...board, title: t })}
+                            dateStr={new Date(board.created_at).toLocaleString("ko-KR")}
                             boardId={board.id}
+                            folders={folders}
+                            showDropdown={showDropdown}
+                            setShowDropdown={setShowDropdown}
+                            onSelectFolder={handleSelectFolder}
+                            currentFolder={currentFolder}
                         />
-
                         <RecordTabs
                             tabs={[
                                 { id: "record", label: "회의기록" },

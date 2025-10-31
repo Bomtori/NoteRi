@@ -13,6 +13,7 @@ export default function RecordHeader({
                                          showDropdown,
                                          setShowDropdown,
                                          onSelectFolder,
+                                         currentFolder,
                                      }) {
     const dispatch = useDispatch();
     const [saveStatus, setSaveStatus] = useState("idle");
@@ -62,7 +63,7 @@ export default function RecordHeader({
                                 : "text-gray-300 bg-gray-100 cursor-not-allowed"
                         }`}
                     >
-                        폴더에 넣기
+                        {currentFolder ? `📂 ${currentFolder.name}` : "폴더에 넣기"}
                     </button>
 
                     {showDropdown && (

@@ -168,8 +168,6 @@ class Folder(Base):
     parent_id = Column(Integer, ForeignKey("folders.id"))
     name = Column(String, nullable=False)
     color = Column(String(7), nullable=True, default="#7E36F9")
-    # created_at = Column(TIMESTAMP)
-    # updated_at = Column(TIMESTAMP)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())# 🍒 10.24 front/ 폴더정렬에러로 수정 수정 시 자동 업데이트
     updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
@@ -187,9 +185,6 @@ class Board(Base):
     owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     title = Column(String, nullable=False)
     description = Column(Text)
-    invite_token = Column(String, nullable=True)
-    invite_role = Column(String, default="editor")
-    invite_expires_at = Column(TIMESTAMP, nullable=True)
     password_hash = Column(String(255), nullable=True)  # ✅ 비밀번호 해시 저장
     created_at = Column(TIMESTAMP)
     updated_at = Column(TIMESTAMP)
@@ -200,11 +195,10 @@ class Board(Base):
     # ✅ Board 직속 소유 데이터들
     audios = relationship("AudioData", back_populates="board", cascade="all, delete-orphan")
     memos = relationship("Memo", back_populates="board", cascade="all, delete-orphan")
-    transcripts = relationship("Transcript", back_populates="board", cascade="all, delete-orphan")
     shared_users = relationship("BoardShare", back_populates="board", cascade="all, delete-orphan")
 
     # 기존 recording_sessions 유지
-    recording_sessions = relationship("RecordingSession", back_populates="board")
+    recording_sessions = relationship("RecordingSession", back_populates="board",cascade="all, delete-orphan", passive_deletes=True,)
 
 
 # Audio Data
@@ -256,25 +250,6 @@ class RecordingResult(Base):
     created_at = Column(TIMESTAMP)
 
     session = relationship("RecordingSession", back_populates="results")
-    transcripts = relationship("Transcript", back_populates="result")
-
-
-# Transcripts
-class Transcript(Base):
-    __tablename__ = "transcripts"
-
-    id = Column(Integer, primary_key=True)
-    result_id = Column(Integer, ForeignKey("recording_results.id", ondelete="CASCADE"), nullable=False)
-    board_id = Column(Integer, ForeignKey("boards.id", ondelete="CASCADE"), nullable=False)  # ✅ 새 연결
-    speaker_label = Column(String)
-    start_time = Column(Float)
-    end_time = Column(Float)
-    text = Column(Text, nullable=False)
-    created_at = Column(TIMESTAMP)
-
-    result = relationship("RecordingResult", back_populates="transcripts")
-    board = relationship("Board", back_populates="transcripts")  # ✅ 추가
-
 
 # Memos
 class Memo(Base):

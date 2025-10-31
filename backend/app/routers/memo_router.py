@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 from backend.app.db import get_db
 from backend.app.schemas import memo_schema as schemas
-from backend.app.crud import memo_crud as crud
+from backend.app.crud import memo_crud as crud, memo_crud
 from backend.app.deps.auth import get_current_user
 from backend.app.model import User
 
@@ -11,9 +11,16 @@ router = APIRouter(prefix="/boards/{board_id}/memos", tags=["memos"])
 
 
 # # ✅ Read all
-# @router.get("/", response_model=list[schemas.MemoResponse])
-# def read_memos(board_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-#     return crud.get_memos(db, board_id)
+@router.get("/", response_model=list[schemas.MemoResponse])
+def read_board_memo(
+    board_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    memo = memo_crud.get_memo_by_board(db, board_id)
+    if not memo:
+        raise HTTPException(status_code=404, detail="Memo not found")
+    return memo
 
 
 # ✅ Read one

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, constr
+from pydantic import BaseModel, EmailStr, constr, ConfigDict
 from typing import Optional
 from datetime import datetime
 
@@ -25,3 +25,13 @@ class ShareResponse(BaseModel):
 
     class Config:
         orm_mode = True
+
+class BoardShareUserInfo(BaseModel):
+    user_id: int
+    email: Optional[str] = None
+    nickname: Optional[str] = None
+    picture: Optional[str] = None
+    role: str  # viewer / editor / owner
+    shared_at: Optional[datetime] = None  # 언제 초대됐는지
+
+    model_config = ConfigDict(from_attributes=True)

@@ -200,33 +200,6 @@ def get_shared_boards(db: Session, user_id: int, *, skip=0, limit=10):
         .all()
     )
 
-def get_boards_in_folder(db: Session, user_id: int, folder_id: int, *, skip=0, limit=None):
-    folder = db.query(model.Folder).filter(model.Folder.id == folder_id, model.Folder.user_id == user_id).first()
-    if not folder:
-        return None
-
-    # ✅ "공유받은 회의" 폴더면 공유받은 보드만 표시
-    if folder.name == "공유받은 회의":
-        q = (
-            db.query(model.Board)
-            .join(model.BoardShare, model.BoardShare.board_id == model.Board.id)
-            .filter(model.BoardShare.user_id == user_id)
-            .order_by(model.Board.updated_at.desc().nullslast())
-        )
-        if limit:
-            q = q.limit(limit)
-        return q.all()
-
-    # 일반 폴더는 내가 소유한 보드
-    q = (
-        db.query(model.Board)
-        .filter(model.Board.folder_id == folder_id, model.Board.owner_id == user_id)
-        .order_by(model.Board.updated_at.desc().nullslast())
-    )
-    if limit:
-        q = q.limit(limit)
-    return q.all()
-
 # -----------------------------
 # Update (owner 또는 editor 이상만)
 # -----------------------------
@@ -277,12 +250,17 @@ def move_board(db: Session, board_id: int, current_user: model.User, move: schem
 # -----------------------------
 # Delete (오너만)
 # -----------------------------
-def delete_board(db: Session, current_user: model.User, board_id: int):
+def delete_board(db: Session, current_user: model.User, board_id: int) -> model.Board | None:
     board = db.query(model.Board).filter(model.Board.id == board_id).first()
-    if not board or not _is_owner(board, current_user.id):
-        return None
+    if not board:
+        return None  # 존재 안 함
+    if not _is_owner(board, current_user.id):
+        return None  # 권한 없음
+
+    # 선택: 삭제 직전 정보 복사하고 싶으면 여기서 dict로 빼둘 수 있음
     db.delete(board)
     db.commit()
+    # commit 후 board 객체는 세션에서 expired 상태라 보통은 그대로 리턴 안 쓰기도 함
     return board
 
 

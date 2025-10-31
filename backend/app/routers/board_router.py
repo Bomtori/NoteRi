@@ -146,14 +146,13 @@ def verify_board_password(board_id: int, body: BoardPasswordVerify, db: Session 
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid password")
     return {"ok": True}
 
-# 공유받은 회의 폴더 보드 보기
-@router.get("/folder/{folder_id}", response_model=list[schemas.BoardResponse])
-def read_boards_in_folder(
-    folder_id: int,
+# ✅ 공유받은 회의 페이지 전용: 내가 공유받은 보드만
+@router.get("/shared-received", response_model=list[schemas.BoardResponse])
+def read_shared_received_boards(
+    skip: int = 0,
+    limit: int = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    boards = crud.get_boards_in_folder(db, current_user.id, folder_id)
-    if boards is None:
-        raise HTTPException(status_code=404, detail="Folder not found")
+    boards = crud.get_shared_boards(db, current_user.id, skip=skip, limit=limit)
     return boards

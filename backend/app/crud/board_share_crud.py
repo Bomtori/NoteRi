@@ -149,3 +149,52 @@ def remove_share(db: Session, board_id: int, owner_id: int, target_user_id: int)
     except SQLAlchemyError:
         db.rollback()
         raise
+
+def get_board_members(db: Session, board_id: int):
+    """
+    이 보드에 참여 중인 모든 사용자(owner + 공유자들)를 반환.
+    owner는 role='owner'로 붙여서 맨 앞에 넣어줌.
+    """
+    # 1) 보드와 owner 정보
+    board = (
+        db.query(model.Board)
+        .options(joinedload(model.Board.owner))
+        .filter(model.Board.id == board_id)
+        .first()
+    )
+    if not board:
+        return None
+
+    owner_user = board.owner  # relationship("User", backref="boards_owned") 가 있다고 가정
+    members = []
+
+    if owner_user:
+        members.append({
+            "user_id": owner_user.id,
+            "email": owner_user.email,
+            "nickname": owner_user.nickname,
+            "picture": owner_user.picture,
+            "role": "owner",
+            "shared_at": board.created_at,  # owner는 생성 시점부터
+        })
+
+    # 2) 공유받은 사용자들 (board_shares)
+    shares = (
+        db.query(model.BoardShare)
+        .join(model.User, model.BoardShare.user_id == model.User.id)
+        .add_entity(model.User)
+        .filter(model.BoardShare.board_id == board_id)
+        .all()
+    )
+
+    for share, user in shares:
+        members.append({
+            "user_id": user.id,
+            "email": user.email,
+            "nickname": user.nickname,
+            "picture": user.picture,
+            "role": share.role,  # e.g. "viewer" / "editor"
+            "shared_at": share.created_at if hasattr(share, "created_at") else None,
+        })
+
+    return members

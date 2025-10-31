@@ -9,7 +9,7 @@ from backend.app.deps.guest import get_principal
 from backend.app.util.access import can_read_board
 from backend.app.schemas import board_schema as schemas
 from backend.app.db import get_db
-from backend.app.crud import board_crud as crud
+from backend.app.crud import board_crud as crud, board_crud
 from backend.app.deps.auth import get_current_user
 from backend.app.model import User, Board
 from pydantic import BaseModel, StringConstraints
@@ -105,6 +105,22 @@ def read_board(
     if not board:
         raise HTTPException(status_code=404, detail="Board not found")
     return board
+
+# read board and all
+@router.get("/{board_id}/full")
+def get_board_full(
+    board_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    """
+    보드 1개를 audio, memo, recording_sessions, summaries, final_summaries, recording_results와 함께 반환.
+    """
+    data = board_crud.get_board_full(db, current_user.id, board_id)
+    if data is None:
+        # 존재하지 않거나 권한 없음
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BOARD_NOT_FOUND_OR_UNAUTHORIZED")
+    return data
 
 # Update
 @router.patch("/{board_id}", response_model=schemas.BoardResponse)

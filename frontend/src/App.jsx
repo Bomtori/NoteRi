@@ -21,6 +21,7 @@ import MeetingPage from "./pages/MeetingPage";
 import RecordShareModal from "@/components/recording/RecordShareModal.jsx";
 import SharedFolderPage from "@/pages/SharedFolderPage.jsx";
 
+import ChannelTalk from "./pages/ChannelTalk.js";
 
 export default function App() {
     return (
@@ -80,6 +81,7 @@ export default function App() {
                         <Route path="users" element={<AdminUserPage />} />
                         <Route path="settings" element={<AdminSettingsPage />} />
                     </Route>
+                    <Route path="/channeltalk" element={<ChannelTalk/>}/>
                 </Routes>
             </Router>
         // </ToastProvider>

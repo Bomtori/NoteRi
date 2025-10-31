@@ -1,12 +1,15 @@
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from typing import Optional
 
 from backend.app.db import get_db
 from backend.app.model import Notification
 from backend.app.deps.auth import get_current_user # 실제 프로젝트 인증 의존성 사용
+from backend.app.crud import notification_crud
+from backend.app.schemas.notification_schema import NotificationsDeleteRequest
 from backend.app.tasks.scheduler import send_morning_calendar_notifications
 
 router = APIRouter(prefix="/notifications", tags=["notifications"]) # /api 쓰면 main에서 prefix 추가
@@ -38,9 +41,6 @@ def list_notifications(
     rows = q.order_by(Notification.created_at.desc()).limit(limit).all()
     return [_row_to_dict(n) for n in rows]
 
-
-
-
 @router.get("/unread", response_model=list[dict])
 def list_unread(
     db: Session = Depends(get_db),
@@ -53,9 +53,6 @@ def list_unread(
     .all()
     )
     return [_row_to_dict(n) for n in rows]
-
-
-
 
 @router.post("/{noti_id}/read", response_model=dict)
 def mark_read(
@@ -74,9 +71,6 @@ current_user=Depends(get_current_user),
     db.commit()
     return {"ok": True}
 
-
-
-
 @router.post("/read-all", response_model=dict)
 def mark_all_read(
 db: Session = Depends(get_db),
@@ -89,21 +83,57 @@ current_user=Depends(get_current_user),
     )
     db.commit()
     return {"ok": True}
-@router.post("/trigger-morning")
-def trigger_morning(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    # 1) 스케줄러 함수 실행
-    send_morning_calendar_notifications()  # 필요 시 인자(db, user_id) 넘기도록 수정
 
-    # 2) 디버그: 최소 1건은 보장하게 샘플 알림 생성
-    sample = Notification(
-        user_id=current_user.id,
-        type="calendar",
-        content="(테스트) 아침 알림 트리거가 실행되었습니다.",
-        is_read=False,
-    )
-    db.add(sample)
-    db.commit()
+@router.post("/trigger-morning")
+def trigger_morning(current_user=Depends(get_current_user)):
+    # if not current_user.is_admin: raise HTTPException(403, "forbidden")
+    send_morning_calendar_notifications()   # 바로 실행
     return {"ok": True}
+
+@router.delete("/{notification_id}", status_code=204)
+def delete_one_notification(
+    notification_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    ok = notification_crud.delete_notification(
+        db, user_id=current_user.id, notification_id=notification_id
+    )
+    if not ok:
+        raise HTTPException(status_code=404, detail="NOTIFICATION_NOT_FOUND")
+    return  # 204
+
+@router.delete("", status_code=200)
+def delete_many_notifications(
+    payload: NotificationsDeleteRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    # ✅ 빈 선택 방지
+    if not payload.ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="NO_SELECTION: 삭제할 항목이 없습니다."
+        )
+
+    deleted = notification_crud.delete_notifications_by_ids(
+        db, user_id=current_user.id, ids=payload.ids
+    )
+    # 선택은 있었지만 권한/존재 문제로 실제 삭제 0건인 경우
+    if deleted == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="NOTIFICATIONS_NOT_FOUND_OR_FORBIDDEN"
+        )
+    return {"deleted": deleted}
+
+@router.delete("/all", status_code=200)
+def clear_all_notifications(
+    older_than: Optional[datetime] = Query(None, description="이 시각보다 이전 알림만 삭제"),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    deleted = notification_crud.clear_notifications(
+        db, user_id=current_user.id, older_than=older_than
+    )
+    return {"deleted": deleted}

@@ -1,11 +1,17 @@
-import { useState, useMemo } from "react";
-import { useSelector } from "react-redux";
+import {useState, useMemo, useEffect} from "react";
+import { useSelector, useDispatch  } from "react-redux";
 import { useParams } from "react-router-dom";
+
 import RecordList from "../components/recording/RecordList";
+import {fetchRecords} from "@/features/record/recordSlice.js";
+import {fetchFolders} from "@/features/folder/folderSlice.js";
 
 export default function FolderListPage() {
     const { id } = useParams(); // ✅ URL 파라미터에서 폴더 ID 가져오기
     const folderId = Number(id);
+
+    const dispatch = useDispatch();
+
     const { records } = useSelector((state) => state.record);
     const { folders } = useSelector((state) => state.folder);
 
@@ -13,6 +19,13 @@ export default function FolderListPage() {
     const [sortOption, setSortOption] = useState("latest");
 
     const currentFolder = folders.find((f) => f.id === folderId);
+
+    useEffect(() => {
+        if (folderId) {
+            dispatch(fetchFolders());
+            dispatch(fetchRecords());
+        }
+    }, [dispatch, folderId]); // 폴더 ID가 바뀔 때마다 다시 fetchRecords 실행
 
     // ✅ 폴더 내 회의 필터링 + 검색 + 정렬
     const filteredRecords = useMemo(() => {

@@ -8,12 +8,14 @@ import {
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useToast } from "../../hooks/useToast";
-import Toast from "../common/Toast";
 import apiClient from "../../api/apiClient";
 import { API_BASE_URL } from "../../config";
 import { Folder, FileText, Mic, Star } from "lucide-react"; // 추가
 import { Palette } from "lucide-react";
 import { updateFolderColorAsync } from "../../features/folder/folderSlice";
+import { Bell } from "lucide-react";
+import Toast from "../common/Toast";
+
 
 // color값에 따라 아이콘 매핑
 const colorToIcon = {
@@ -41,6 +43,26 @@ export default function SideNav() {
     useEffect(() => {
         dispatch(fetchFolders());
     }, [dispatch]);
+    const [unreadCount, setUnreadCount] = useState(0);
+    // ✅ user알람
+    useEffect(() => {
+        async function fetchUnread() {
+            if (!user) return;
+            try {
+                const res = await apiClient.get(`${API_BASE_URL}/notifications/unread`, {
+                    withCredentials: true,
+                });
+                setUnreadCount(res.data.length);
+            } catch (err) {
+                console.error("알림 불러오기 실패:", err);
+            }
+        }
+        fetchUnread();
+
+        // ✅ 1분마다 자동 갱신
+        const interval = setInterval(fetchUnread, 60000);
+        return () => clearInterval(interval);
+    }, [user]);
 
     // ✅ 로그인된 유저 정보
     useEffect(() => {
@@ -57,6 +79,7 @@ export default function SideNav() {
         }
         fetchUser();
     }, []);
+
 
     // ✅ 새 폴더 추가
     const handleAddFolder = async () => {
@@ -147,13 +170,19 @@ export default function SideNav() {
                         to="/record"
                         className="text-sm font-medium text-gray-700 hover:text-[#7E37F9] flex items-center gap-2"
                     >
-                        🎧 모든 녹음 보기
+                        모든 녹음 보기
                     </Link>
                     <Link
                         to="/new"
                         className="text-sm font-medium text-gray-700 hover:text-[#7E37F9] flex items-center gap-2"
                     >
-                        ➕ 새 녹음 시작
+                        새 녹음 시작
+                    </Link>
+                    <Link
+                        to="/shared"
+                        className="text-sm font-medium text-gray-700 hover:text-[#7E37F9] flex items-center gap-2"
+                    >
+                        공유받은 회의
                     </Link>
                 </div>
             </div>
@@ -292,25 +321,37 @@ export default function SideNav() {
 
             {/* ✅ 하단 : 유저 정보 (고정) */}
             <div className="flex-shrink-0 p-4 border-t border-gray-200">
-                <Link
-                    to={user ? "/user" : "/login"}
-                    className="flex items-center gap-3 group transition-colors hover:text-[#7E37F9]"
-                >
-                    <img
-                        src={user?.picture || "https://via.placeholder.com/32"}
-                        alt="user profile"
-                        className="w-8 h-8 rounded-full object-cover border border-gray-200 group-hover:border-[#7E37F9] transition"
-                    />
-                    <div className="flex flex-col text-xs leading-tight">
-                <span className="font-medium text-gray-700 group-hover:text-[#7E37F9]">
-                    {user?.nickname || user?.name || "로그인 필요"}
-                </span>
-                        <span className="text-gray-400">
-                    {user ? "마이페이지" : "로그인 페이지"}
-                </span>
-                    </div>
-                </Link>
+                <div className="flex items-center justify-between">
+                    {/* 프로필 링크 */}
+                    <Link
+                        to={user ? "/user" : "/login"}
+                        className="flex items-center gap-3 group transition-colors hover:text-[#7E37F9]"
+                    >
+                        <img
+                            src={user?.picture || "https://via.placeholder.com/32"}
+                            alt="user profile"
+                            className="w-8 h-8 rounded-full object-cover border border-gray-200 group-hover:border-[#7E37F9] transition"
+                        />
+                        <div className="flex flex-col text-xs leading-tight">
+        <span className="font-medium text-gray-700 group-hover:text-[#7E37F9]">
+          {user?.nickname || user?.name || "로그인 필요"}
+        </span>
+                            <span className="text-gray-400">
+          {user ? "마이페이지" : "로그인 페이지"}
+        </span>
+                        </div>
+                    </Link>
+
+                    {/* ✅ 알림 아이콘 (옆에 배치) */}
+                    <Link to="/user" title="알림 보기" className="relative">
+                        <Bell className={`w-5 h-5 transition-colors ${unreadCount > 0 ? "text-[#7E37F9]" : "text-gray-400 hover:text-[#7E37F9]"}`} />
+                        {unreadCount > 0 && (
+                            <span className="absolute -top-1 -right-1 w-2 h-2 bg-[#7E37F9] rounded-full animate-wiggle" />
+                        )}
+                    </Link>
+                </div>
             </div>
+
         </aside>
 
     );

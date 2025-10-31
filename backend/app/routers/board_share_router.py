@@ -96,7 +96,7 @@ def remove_share(
     return {"ok": True}
 
 # 공유한 보드 멤버 불러오기
-@router.get("/{board_id}/members", response_model=list[BoardShareUserInfo])
+@router.get("/members", response_model=list[BoardShareUserInfo])
 def list_board_members(
     board_id: int,
     db: Session = Depends(get_db),

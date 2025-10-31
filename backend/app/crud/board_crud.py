@@ -9,10 +9,11 @@ from sqlalchemy import or_
 from passlib.hash import argon2
 import re
 import backend.app.model as model
-from backend.app.crud import memo_crud
-from backend.app.model import Board, BoardShare
+from backend.app.crud import memo_crud, session_crud
+from backend.app.model import Board, BoardShare, RecordingSession, RecordingResult
 from backend.app.schemas import board_schema as schemas
 from sqlalchemy.orm import joinedload
+from backend.app.crud import audio_crud, memo_crud, summary_crud, final_summary_crud
 
 
 # -----------------------------
@@ -199,6 +200,115 @@ def get_shared_boards(db: Session, user_id: int, *, skip=0, limit=10):
         .offset(skip).limit(limit)
         .all()
     )
+def get_board_full(db: Session, current_user_id: int, board_id: int) -> dict | None:
+    board = get_board(db, current_user_id, board_id)
+    if not board:
+        return None
+
+    audio = audio_crud.get_audio_by_board(db, board_id)
+    memo = memo_crud.get_memo_by_board(db, board_id)
+    _, sessions = session_crud.get_sessions_by_board(db, board_id)
+    summaries = summary_crud.list_by_board(db, board_id, order="desc")
+    final_summaries = final_summary_crud.list_by_board(db, board_id, order="desc")
+    results = (
+        db.query(RecordingResult)
+        .join(RecordingSession, RecordingSession.id == RecordingResult.recording_session_id)
+        .filter(RecordingSession.board_id == board_id)
+        .order_by(RecordingResult.created_at.asc().nullslast())
+        .all()
+    )
+
+    # ✅ board는 “메타만” 담는 슬림 직렬화 (audios/memos 등 중첩 제거)
+    board_meta = {
+        "id": board.id,
+        "owner_id": board.owner_id,
+        "title": board.title,
+        "folder_id": board.folder_id,
+        "description": board.description or "",
+        "created_at": board.created_at,
+        "updated_at": board.updated_at,
+    }
+
+    def _audio_to_dict(a):
+        if not a: return None
+        return {
+            "id": a.id,
+            "file_path": a.file_path,
+            "duration": a.duration,
+            "language": a.language,
+            "created_at": a.created_at,
+            "recording_session_id": a.recording_session_id,
+        }
+
+    def _memo_to_dict(m):
+        if not m: return None
+        return {
+            "id": m.id,
+            "content": m.content,
+            "user_id": m.user_id,
+            "created_at": m.created_at,
+        }
+
+    def _session_to_dict(s):
+        return {
+            "id": s.id,
+            "status": s.status.value if hasattr(s.status, "value") else s.status,
+            "started_at": s.started_at,
+            "ended_at": s.ended_at,
+            "created_at": s.created_at,
+            "is_diarized": s.is_diarized,
+            "audio_id": getattr(s, "audio", None).id if getattr(s, "audio", None) else None,
+            "results_count": getattr(s, "results_count", 0),
+            "summaries_count": getattr(s, "summaries_count", 0),
+        }
+
+    def _summary_to_dict(x):
+        return {
+            "id": x.id,
+            "recording_session_id": x.recording_session_id,
+            "summary_type": x.summary_type,
+            "content": x.content,
+            "interval_start_at": x.interval_start_at,
+            "interval_end_at": x.interval_end_at,
+            "model": x.model,
+            "tokens_input": x.tokens_input,
+            "tokens_output": x.tokens_output,
+            "created_at": x.created_at,
+        }
+
+    def _final_summary_to_dict(x):
+        return {
+            "id": x.id,
+            "recording_session_id": x.recording_session_id,
+            "title": x.title,
+            "bullets": x.bullets,
+            "actions": x.actions,
+            "content": x.content,
+            "rating": x.rating,
+            "created_at": x.created_at,
+            "updated_at": x.updated_at,
+        }
+
+    def _result_to_dict(r):
+        return {
+            "id": r.id,
+            "recording_session_id": r.recording_session_id,
+            "speaker_label": r.speaker_label,
+            "raw_text": r.raw_text,
+            "started_at": r.started_at,
+            "ended_at": r.ended_at,
+            "created_at": r.created_at,
+        }
+
+    return {
+        "board": board_meta,                               # ✅ 슬림
+        "audio": _audio_to_dict(audio),                    # 단건 or null
+        "memo": _memo_to_dict(memo),                       # 단건 or null
+        "recording_sessions": [_session_to_dict(s) for s in sessions],
+        "summaries": [_summary_to_dict(su) for su in summaries],
+        "final_summaries": [_final_summary_to_dict(fs) for fs in final_summaries],
+        "recording_results": [_result_to_dict(r) for r in results],
+    }
 
 # -----------------------------
 # Update (owner 또는 editor 이상만)

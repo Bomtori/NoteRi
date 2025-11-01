@@ -44,7 +44,7 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
 
         (async () => {
             try {
-                const res = await apiClient.get(`/boards/${boardId}/shares`);
+                const res = await apiClient.get(`/boards/${boardId}/shares/members`);
 
                         const normalized = (res.data || []).map(u => ({
                         user_id: u.user_id,

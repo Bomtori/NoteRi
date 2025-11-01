@@ -62,7 +62,7 @@ export default function RecordDetailPage() {
                 setIsLocked(true);
             }
             // 공유멤버
-            const shareRes = await apiClient.get(`/boards/${id}/shares`);
+            const shareRes = await apiClient.get(`/boards/${id}/shares/members`);
             setSharedUsers(shareRes.data || []);
 
             // 공유멤버 조회 후 role 결정

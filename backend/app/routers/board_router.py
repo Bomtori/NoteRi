@@ -62,6 +62,17 @@ def create_board(
         return crud.create_board(db, current_user.id, board)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    
+#✅ 공유받은 회의 페이지 전용: 내가 공유받은 보드만
+@router.get("/shared-received", response_model=list[schemas.BoardResponse])
+def read_shared_received_boards(
+    skip: int = 0,
+    limit: Optional[int] = None, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    boards = crud.get_shared_boards(db, current_user.id, skip=skip, limit=limit)
+    return boards
 
 # Read all
 @router.get("/", response_model=list[schemas.BoardResponse],  response_model_exclude_unset=True)
@@ -161,14 +172,3 @@ def verify_board_password(board_id: int, body: BoardPasswordVerify, db: Session 
     if not ok:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid password")
     return {"ok": True}
-
-# ✅ 공유받은 회의 페이지 전용: 내가 공유받은 보드만
-@router.get("/shared-received", response_model=list[schemas.BoardResponse])
-def read_shared_received_boards(
-    skip: int = 0,
-    limit: int = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    boards = crud.get_shared_boards(db, current_user.id, skip=skip, limit=limit)
-    return boards

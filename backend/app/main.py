@@ -138,12 +138,12 @@ async def websocket_endpoint(websocket: WebSocket):
             # === 종료 시 순서 ===
             
             # A. 최종 요약 전송 (WS가 아직 연결 중일 때만)
-            #try:
-            #    if websocket.application_state == WebSocketState.CONNECTED:
-            #        await pipeline.flush_final_summary()
-            #        logger.info(f"✅ Final summary flushed: sid={session_id}")
-            #except Exception as e:
-            #    logger.warning(f"⚠️ flush_final_summary failed: {e}")
+            try:
+                if websocket.application_state == WebSocketState.CONNECTED:
+                    await pipeline.flush_final_summary()
+                    logger.info(f"✅ Final summary flushed: sid={session_id}")
+            except Exception as e:
+                logger.warning(f"⚠️ flush_final_summary failed: {e}")
             
             # B. 원본 오디오 저장
             try:
@@ -279,16 +279,6 @@ async def startup_event():
     finally:
         db.close()
     
-    # ✅ 임베딩 모델 미리 로딩 (추가!)
-    try:
-        from backend.ml.embeddings.embedding_model import get_embedder
-        logger.info("📥 Pre-loading embedding model...")
-        get_embedder()  # 싱글톤 인스턴스 생성
-        logger.info("✅ Embedding model pre-loaded")
-    except Exception as e:
-        logger.error(f"❌ Embedding model loading failed: {e}")
-        logger.warning("⚠️ Embedding will be loaded on first use")
-    
     # ✅ 스케줄러 시작
     try:
         start_scheduler()
@@ -312,6 +302,7 @@ async def startup_event():
     
     logger.info("🎉 Application startup completed")
 
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """애플리케이션 종료 이벤트"""
@@ -329,19 +320,6 @@ async def shutdown_event():
                 logger.error(f"❌ Failed to close session {sid}: {e}")
         
         active_sessions.clear()
-    
-    # ✅ 임베딩 모델 메모리 해제 (추가!)
-    try:
-        from backend.ml.embeddings.embedding_model import _embedder_instance
-        if _embedder_instance is not None:
-            logger.info("🗑️ Releasing embedding model...")
-            import torch
-            del _embedder_instance
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            logger.info("✅ Embedding model released")
-    except Exception as e:
-        logger.error(f"❌ Embedding model release failed: {e}")
     
     # ✅ Redis 연결 종료
     try:

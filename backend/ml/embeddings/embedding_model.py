@@ -119,3 +119,9 @@ def get_embedder() -> KoreanEmbedder:
     if _embedder_instance is None:
         _embedder_instance = KoreanEmbedder()
     return _embedder_instance
+
+def unload(self):
+    """SentenceTransformer 내부 PyTorch 모델을 안전하게 언로드"""
+    if hasattr(self.model, "cpu"):   # SentenceTransformer는 .cpu() 로 이동 후 del 가능
+        self.model = self.model.cpu()
+    # 내부 torch.nn.Module 은 자동으로 해제됩니다.

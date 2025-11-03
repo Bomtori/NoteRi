@@ -1,5 +1,5 @@
 from __future__ import annotations
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from fastapi import HTTPException
 from typing import List, Optional

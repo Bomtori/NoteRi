@@ -191,15 +191,17 @@ def get_owned_boards(db: Session, user_id: int, *, skip=0, limit=10):
         .all()
     )
 
-def get_shared_boards(db: Session, user_id: int, *, skip=0, limit=10):
+def get_shared_boards(db: Session, user_id: int, *, skip=0, limit=None):
     return (
         db.query(model.Board)
         .join(model.BoardShare, model.BoardShare.board_id == model.Board.id)
         .filter(model.BoardShare.user_id == user_id)
         .order_by(model.Board.updated_at.desc().nullslast())
-        .offset(skip).limit(limit)
+        .offset(skip)
+        .limit(limit)
         .all()
     )
+
 def get_board_full(db: Session, current_user_id: int, board_id: int) -> dict | None:
     board = get_board(db, current_user_id, board_id)
     if not board:

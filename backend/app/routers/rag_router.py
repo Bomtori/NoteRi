@@ -81,7 +81,7 @@ async def ask_question(
     # 2. 유사한 회의록 검색
     search_results = embedding_crud.search_similar_chunks(
         db=db,
-        user_id=current_user.id,
+        user_id=1,  #수정할 것
         query_embedding=query_embedding,
         top_k=request.top_k,
         similarity_threshold=0.5  # 50% 이상 유사도
@@ -100,22 +100,24 @@ async def ask_question(
     ])
     
     # 4. LLM 프롬프트 생성
-    prompt = f"""당신은 회의록 검색 어시스턴트입니다. 아래의 회의록 내용을 참고하여 사용자의 질문에 답변하세요.
+    prompt = f"""당신은 회의록 검색 어시스턴트입니다. 아래 회의록만 근거로 답변하세요.
 
-**회의록 내용:**
-{context}
+    [규칙]
+    - 참고 문서가 1개 이상이면 절대로 "찾을 수 없습니다"라고 답하지 마세요.
+    - 모호하면 "가장 관련된 내용"을 요약해 제시하고, 추가로 필요한 정보가 무엇인지 1문장으로 말하세요.
+    - 답변 마지막에 [근거]로 세션 제목/날짜를 1줄로 표기하세요.
 
-**사용자 질문:**
-{request.question}
+    [회의록]
+    {context}
 
-**답변 규칙:**
-1. 회의록 내용만 참고하여 답변
-2. 날짜와 시간을 명확히 언급
-3. 찾을 수 없으면 "회의록에서 관련 내용을 찾을 수 없습니다" 답변
-4. 간결하고 명확하게 답변
+    [질문]
+    {request.question}
 
-**답변:**"""
-    
+    [출력 형식]
+    답변 본문 2~4문장
+    [근거] {search_results[0]['title'] or '제목 없음'} / {search_results[0]['date'] or '날짜 미상'}
+    """
+
     # 5. Ollama로 답변 생성
     try:
         

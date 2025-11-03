@@ -22,6 +22,7 @@ from starlette.websockets import WebSocketState, WebSocketDisconnect
 # ============================================
 from backend.services.stt_pipeline import STTPipeline
 from backend.app.routers.sessions_router import router as sessions_router
+from backend.app.routers import rag_router
 
 # ============================================
 # 🗓 Scheduler & DB 초기화
@@ -86,6 +87,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # 라우터 등록
 app.include_router(sessions_router)
+app.include_router(rag_router.router)
 register_routers(app)
 
 # ============================================

@@ -5,13 +5,20 @@ import Calendar from "../components/calendar/Calendar";
 import { useCallback } from "react";
 import { FaRegCalendarAlt } from "react-icons/fa";
 import apiClient from "../api/apiClient";
+import {
+    fetchRecords,      // thunk
+    changeRecordFolder // action
+} from "../features/record/recordSlice.js";
 import { setRecords } from "../features/record/recordSlice.js";
 import { fetchFolders } from "../features/folder/folderSlice";
 
 export default function RecordListPage() {
     const dispatch = useDispatch();
-    const { records } = useSelector((state) => state.record);
+
+    // Redux 상태 구독
+    const { records, status: recordStatus } = useSelector((state) => state.record);
     const { folders, status: folderStatus } = useSelector((state) => state.folder);
+
     const [calendarOpen, setCalendarOpen] = useState(false);
     const [upcomingEvents, setUpcomingEvents] = useState([]);
 
@@ -22,14 +29,23 @@ export default function RecordListPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const recordsPerPage = 7;
 
-    // ✅ RAG 상태 추가
+    // RAG 상태 추가
     const [ragQuestion, setRagQuestion] = useState("");
     const [ragAnswer, setRagAnswer] = useState("");
     const [ragSources, setRagSources] = useState([]);
     const [ragLoading, setRagLoading] = useState(false);
     const [ragError, setRagError] = useState("");
 
-    // ✅ 전체 보드 + 폴더 불러오기
+    // 초기 데이터 로드 (캐싱 적용)
+    useEffect(() => {
+        dispatch(fetchRecords(false)); // forceRefresh = false
+
+        if (folderStatus === "idle") {
+            dispatch(fetchFolders());
+        }
+    }, [dispatch, folderStatus]);
+
+    // 전체 보드 + 폴더 불러오기
     useEffect(() => {
         apiClient
             .get("/boards")
@@ -45,29 +61,54 @@ export default function RecordListPage() {
         dispatch(fetchFolders());
     }, [dispatch]);
 
-    // ✅ 폴더 로딩 상태 로그
+    // 폴더 로딩 상태 로그
     useEffect(() => {
         if (folders?.length) console.log("📁 folders loaded:", folders);
     }, [folders]);
-
-    // ✅ 검색 + 정렬 + 폴더 필터링
+    // 검색 + 정렬 + 필터링
     const filteredRecords = useMemo(() => {
         let filtered = records;
+
         if (selectedFolder) {
             filtered = filtered.filter((rec) => rec.folder_id === selectedFolder.id);
         }
-        filtered = filtered.filter((rec) =>
-            rec.title.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-        return filtered.sort((a, b) => {
+
+        if (searchTerm) {
+            filtered = filtered.filter((rec) =>
+                rec.title.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+        }
+
+        // 새 배열을 만들어서 정렬
+        return [...filtered].sort((a, b) => {  // [...filtered]로 복사본 생성
             if (sortOption === "latest")
                 return new Date(b.created_at) - new Date(a.created_at);
             if (sortOption === "oldest")
                 return new Date(a.created_at) - new Date(b.created_at);
-            if (sortOption === "name") return a.title.localeCompare(b.title);
+            if (sortOption === "name")
+                return a.title.localeCompare(b.title);
             return 0;
         });
     }, [records, searchTerm, sortOption, selectedFolder]);
+
+    // // 검색 + 정렬 + 폴더 필터링
+    // const filteredRecords = useMemo(() => {
+    //     let filtered = records;
+    //     if (selectedFolder) {
+    //         filtered = filtered.filter((rec) => rec.folder_id === selectedFolder.id);
+    //     }
+    //     filtered = filtered.filter((rec) =>
+    //         rec.title.toLowerCase().includes(searchTerm.toLowerCase())
+    //     );
+    //     return filtered.sort((a, b) => {
+    //         if (sortOption === "latest")
+    //             return new Date(b.created_at) - new Date(a.created_at);
+    //         if (sortOption === "oldest")
+    //             return new Date(a.created_at) - new Date(b.created_at);
+    //         if (sortOption === "name") return a.title.localeCompare(b.title);
+    //         return 0;
+    //     });
+    // }, [records, searchTerm, sortOption, selectedFolder]);
 
     const fetchUpcoming = useCallback(async () => {
         try {
@@ -94,35 +135,44 @@ export default function RecordListPage() {
         }
     }, []);
 
+    // 폴더 변경 핸들러
+    const handleFolderChange = useCallback(async (recordId, folder) => {
+        try {
+            // 1. 즉시 UI 업데이트
+            dispatch(changeRecordFolder({
+                id: recordId,
+                folder: folder,
+                folderId: folder.id
+            }));
 
+            // 2. 백엔드 동기화
+            await apiClient.patch(`/boards/${recordId}/folder`, {
+                folder_id: folder.id
+            });
 
-    // ✅ 폴더 변경 핸들러
-    const handleFolderChange = (recordId, folder) => {
-        dispatch(
-            setRecords(
-                records.map((r) =>
-                    r.id === recordId ? { ...r, folder, folder_id: folder.id } : r
-                )
-            )
-        );
-    };
+            console.log("👍👍👍폴더 변경 완료");
+        } catch (err) {
+            console.error("❌❌폴더 변경 실패:", err);
+            // 실패 시 재조회
+            dispatch(fetchRecords(true));
+        }
+    }, [dispatch]);
 
-    // ✅ 페이지 계산
+    // 페이지네이션
     const totalPages = Math.ceil(filteredRecords.length / recordsPerPage);
     const currentRecords = useMemo(() => {
         const start = (currentPage - 1) * recordsPerPage;
-        const end = start + recordsPerPage;
-        return filteredRecords.slice(start, end);
+        return filteredRecords.slice(start, start + recordsPerPage);
     }, [filteredRecords, currentPage]);
 
-    // ✅ 페이지 이동
+    // 페이지 이동
     const handlePageChange = (page) => {
         if (page < 1 || page > totalPages) return;
         setCurrentPage(page);
         window.scrollTo({ top: 0, behavior: "smooth" });
     };
 
-    // ✅ RAG 질문 제출
+    // RAG 질문 제출
     const handleRagSubmit = async () => {
         if (!ragQuestion.trim()) {
             setRagError("질문을 입력해주세요.");
@@ -142,9 +192,9 @@ export default function RecordListPage() {
 
             setRagAnswer(response.data.answer);
             setRagSources(response.data.sources || []);
-            console.log("✅ RAG 답변:", response.data);
+            console.log("RAG 답변:", response.data);
         } catch (err) {
-            console.error("❌ RAG 에러:", err);
+            console.error("❌❌ RAG 에러:", err);
             setRagError(
                 err.response?.data?.detail || "답변 생성 중 오류가 발생했습니다."
             );
@@ -153,20 +203,18 @@ export default function RecordListPage() {
         }
     };
 
-    // ✅ Enter 키로 제출
+    // Enter 키로 제출
     const handleKeyPress = (e) => {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             handleRagSubmit();
         }
     };
-
-    // ✅ 로딩/실패 시 화면
-    if (folderStatus === "loading") {
+    // 로딩 상태
+    if (recordStatus === "loading" && !records.length) {
         return (
-            <div className="flex flex-col items-center justify-center h-screen text-gray-500">
-                <div className="w-10 h-10 border-4 border-gray-300 border-t-[#7E37F9] rounded-full animate-spin mb-4" />
-                <p>폴더 불러오는 중...</p>
+            <div className="flex items-center justify-center h-screen">
+                <div className="w-10 h-10 border-4 border-gray-300 border-t-[#7E37F9] rounded-full animate-spin" />
             </div>
         );
     }
@@ -275,7 +323,7 @@ export default function RecordListPage() {
 
             {/* ===== 오른쪽: GPT 분석 패널 ===== */}
             <aside className="w-[30%] bg-white rounded-2xl shadow-sm p-6 flex flex-col min-h-[700px]">
-                {/* ✅ 일정 미리보기 */}
+                {/* 일정 미리보기 */}
                 <div className="mb-6 border-b border-gray-200 pb-3">
                     <h3 className="font-semibold text-gray-800 mb-2">📅 다가오는 일정</h3>
 
@@ -285,18 +333,18 @@ export default function RecordListPage() {
                         <ul className="space-y-2">
                             {upcomingEvents.map(ev => (
                                 <li key={ev.id} className="flex items-center gap-2 text-sm">
-            <span
-                className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: ev.extended_props?.color || "#7E37F9" }}
-            ></span>
+                                    <span
+                                        className="w-2 h-2 rounded-full"
+                                        style={{ backgroundColor: ev.extended_props?.color || "#7E37F9" }}
+                                    ></span>
                                     <span className="text-gray-700 font-medium">{ev.title}</span>
                                     <span className="text-xs text-gray-400 ml-auto">
-              {new Date(ev.start).toLocaleDateString("ko-KR", {
-                  month: "numeric",
-                  day: "numeric",
-                  weekday: "short",
-              })}
-            </span>
+                                      {new Date(ev.start).toLocaleDateString("ko-KR", {
+                                          month: "numeric",
+                                          day: "numeric",
+                                          weekday: "short",
+                                      })}
+                                    </span>
                                 </li>
                             ))}
                         </ul>
@@ -348,7 +396,7 @@ export default function RecordListPage() {
                         {/* 에러 메시지 */}
                         {ragError && (
                             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
-                                ❌ {ragError}
+                                ❌❌{ragError}
                             </div>
                         )}
 
@@ -366,7 +414,7 @@ export default function RecordListPage() {
                                     {/* AI 답변 */}
                                     <div className="mb-4 p-4 bg-[#F5F3FF] border border-[#7E37F9]/20 rounded-lg">
                                         <p className="font-semibold text-[#7E37F9] mb-2 text-sm">
-                                            💬 AI 답변
+                                            노트리의 답변
                                         </p>
                                         <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
                                             {ragAnswer}
@@ -377,7 +425,7 @@ export default function RecordListPage() {
                                     {ragSources.length > 0 && (
                                         <div>
                                             <p className="font-semibold text-gray-700 mb-2 text-sm">
-                                                📄 참조 문서 ({ragSources.length}개)
+                                                참조 문서 ({ragSources.length}개)
                                             </p>
                                             <div className="space-y-2">
                                                 {ragSources.map((source, idx) => (
@@ -402,7 +450,7 @@ export default function RecordListPage() {
                                                         </p>
                                                         {source.metadata?.date && (
                                                             <p className="text-xs text-gray-400 mt-1">
-                                                                📅 {new Date(source.metadata.date).toLocaleDateString()}
+                                                                {new Date(source.metadata.date).toLocaleDateString()}
                                                             </p>
                                                         )}
                                                     </div>
@@ -416,7 +464,7 @@ export default function RecordListPage() {
                             {!ragLoading && !ragAnswer && (
                                 <div className="flex flex-col items-center justify-center h-full text-gray-400">
                                     <p className="text-sm text-center">
-                                        💡 모든 녹음 내용에서<br />원하는 정보를 검색해보세요!
+                                        모든 녹음 내용에서<br />원하는 정보를 검색해보세요!
                                     </p>
                                 </div>
                             )}
@@ -425,7 +473,7 @@ export default function RecordListPage() {
                 )}
             </aside>
 
-            {/* ✅ 캘린더 토글 floating 버튼 */}
+            {/* 캘린더 토글 floating 버튼 */}
             {!calendarOpen && (
                 <button
                     onClick={() => setCalendarOpen(true)}
@@ -436,31 +484,30 @@ export default function RecordListPage() {
             )}
 
 
-            {/* ✅ 캘린더 사이드 패널 */}
+            {/* 캘린더 사이드 패널 */}
             <div
                 className={`
-        fixed top-0 right-0 h-full w-[450px]
-        bg-white shadow-lg border-l
-        p-5 z-[150]
-        transition-transform duration-500
-        ${calendarOpen ? "translate-x-0" : "translate-x-full"}
-    `}
+                    fixed top-0 right-0 h-full w-[450px]
+                    bg-white shadow-lg border-l
+                    p-5 z-[150]
+                    transition-transform duration-500
+                    ${calendarOpen ? "translate-x-0" : "translate-x-full"}
+                `}
             >
                 {/* 닫기 버튼 */}
                 <button
                     onClick={() => setCalendarOpen(false)}
                     className="
-            absolute top-4 right-4
-            text-gray-500 hover:text-gray-700
-            text-xl font-bold
-        "
+                    absolute top-4 right-4
+                    text-gray-500 hover:text-gray-700
+                    text-xl font-bold"
                 >
                     ✕
                 </button>
 
                 <h3 className="font-semibold mb-4 text-lg">""</h3>
 
-                {/* ✅ 캘린더 컴포넌트 */}
+                {/* 캘린더 컴포넌트 */}
                 <Calendar />
             </div>
         </main>

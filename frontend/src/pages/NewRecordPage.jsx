@@ -106,7 +106,7 @@ export default function NewRecordPage() {
         setIsRecording(false);
         setRecordingStopped(true);
 
-        // ✅ 세션 ID 매핑 대기 (MeetingPage 방식)
+        // ✅ 세션 ID 매핑 대기
         if (sid) {
             const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
             let sessionId = null;
@@ -114,16 +114,17 @@ export default function NewRecordPage() {
 
             console.log("⏳ 세션 ID 매핑 대기 중... sid:", sid);
 
-            // 1단계: sid → session_id 매핑 대기
-            while (tries++ < 60) {
+            // 1단계: sid → session_id 매핑 대기 (최대 30초)
+            while (tries++ < 30) {
                 try {
                     const res = await apiClient.get(`/sessions/by-sid/${sid}`);
                     console.log(`[${tries}] by-sid 응답:`, res.status, res.data);
 
-                    if (res.status === 200 && res.data?.id) {
-                        sessionId = res.data.id;
+                    // ✅ 수정: 'session_id' 또는 'id' 둘 다 체크
+                    if (res.status === 200 && (res.data?.session_id || res.data?.id)) {
+                        sessionId = res.data.session_id || res.data.id;
                         console.log("✅ 세션 매핑 완료 sessionId:", sessionId);
-                        break;
+                        break; // ✅ 성공 시 즉시 루프 탈출
                     }
                 } catch (err) {
                     const status = err.response?.status;
@@ -133,7 +134,7 @@ export default function NewRecordPage() {
                         console.warn(`[${tries}] by-sid 오류:`, status);
                     }
                 }
-                await sleep(500);
+                await sleep(1000); // ✅ 500ms → 1000ms (서버 부하 감소)
             }
 
             if (!sessionId) {
@@ -142,10 +143,10 @@ export default function NewRecordPage() {
                 return;
             }
 
-            // 2단계: 전체 요약 생성 대기 (백엔드 자동 생성)
+            // 2단계: 전체 요약 생성 대기 (최대 30초)
             console.log("⏳ 전체 요약 생성 대기 중... sessionId:", sessionId);
             tries = 0;
-            while (tries++ < 60) {
+            while (tries++ < 30) {
                 try {
                     const res = await apiClient.get(`/sessions/final-summaries/by-session/${sessionId}`);
                     console.log(`[${tries}] final-summary 응답:`, res.status, res.data);
@@ -155,7 +156,7 @@ export default function NewRecordPage() {
                         console.log("✅ 전체 요약 로드 완료:", res.data);
                         setActiveTab("summary");
                         showToast("전체 요약이 생성되었습니다.");
-                        return;
+                        return; // ✅ 성공 시 즉시 함수 종료
                     }
                 } catch (err) {
                     const status = err.response?.status;
@@ -165,7 +166,7 @@ export default function NewRecordPage() {
                         console.warn(`[${tries}] final-summary 오류:`, status);
                     }
                 }
-                await sleep(500);
+                await sleep(1000); // ✅ 500ms → 1000ms
             }
 
             console.warn("⚠️ 전체 요약 생성 시간 초과");

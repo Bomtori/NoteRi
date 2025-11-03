@@ -19,7 +19,7 @@ from backend.app.deps.auth import get_current_user  # 이미 쓰고 있던 의�
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 
 # 내 구독 목록
-@router.get("/", response_model=List[SubscriptionResponse])
+@router.get("/", response_model=List[SubscriptionResponse], summary="내 구독 목록 조회")
 def list_subscriptions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -43,7 +43,7 @@ def list_subscriptions(
     ]
 
 # 내 최신(주요) 구독
-@router.get("/me", response_model=SubscriptionResponse)
+@router.get("/me", response_model=SubscriptionResponse, summary="내 구독 조회")
 def get_my_subscription(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -68,7 +68,7 @@ def get_my_subscription(
     )
 
 # 내 구독 수정 (플랜 변경 또는 활성/비활성)
-@router.patch("/me", response_model=SubscriptionResponse)
+@router.patch("/me", response_model=SubscriptionResponse, summary="내 구독 변경")
 def update_my_subscription(
     update: SubscriptionUpdate,
     db: Session = Depends(get_db),
@@ -116,7 +116,7 @@ def update_my_subscription(
     )
 
 # 내 구독 취소 (is_active=False 만 처리, end_date는 유지)
-@router.patch("/me/cancel", response_model=SubscriptionResponse)
+@router.patch("/me/cancel", response_model=SubscriptionResponse, summary="구독 취소")
 def cancel_my_subscription(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -149,7 +149,7 @@ def cancel_my_subscription(
     )
 
 # 플랜별 유저 수 집계 (프론트: PricingBreakdownCard 등에서 사용)
-@router.get("/count/plan", response_model=List[PlanUserCount])
+@router.get("/count/plan", response_model=List[PlanUserCount], summary="플랜별 유저 수 집계")
 def get_plan_user_counts(
     db: Session = Depends(get_db),
     as_of: Optional[date] = Query(None, description="이 날짜에 유효한 구독만 집계"),

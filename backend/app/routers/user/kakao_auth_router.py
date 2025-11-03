@@ -38,14 +38,14 @@ oauth.register(
 
 
 # ✅ 로그인 시작
-@router.get("/login")
+@router.get("/login", summary="카카오 로그인")
 async def login_kakao(request: Request):
     redirect_uri = request.url_for("kakao_callback")
     return await oauth.kakao.authorize_redirect(request, redirect_uri)
 
 
 # ✅ 콜백 (Kakao → 백엔드)
-@router.get("/callback", name="kakao_callback")
+@router.get("/callback", name="kakao_callback", summary="카카오 콜백")
 async def kakao_callback(request: Request, db: Session = Depends(get_db)):
     # 1) 토큰/유저 정보
     token = await oauth.kakao.authorize_access_token(request)
@@ -127,7 +127,7 @@ async def kakao_callback(request: Request, db: Session = Depends(get_db)):
     return resp
 
 # ✅ 재가입 처리 (비활성 유저 복구)
-@router.post("/rejoin")
+@router.post("/rejoin", summary="카카오 재가입")
 def kakao_rejoin(
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)

@@ -24,7 +24,7 @@ def _delete_cookie(resp: RedirectResponse, key: str):
     else:
         resp.delete_cookie(key, path="/")
 
-@router.post("/refresh")
+@router.post("/refresh", summary="refresh token 발급")
 def refresh_access_token(
     db: Session = Depends(get_db),
     cookie_rt: Optional[str] = Cookie(default=None, alias="refresh_token"),
@@ -59,7 +59,7 @@ def refresh_access_token(
     new_access = create_access_token({"sub": str(user.id), "email": user.email})
     return {"access_token": new_access, "token_type": "bearer"}
 
-@router.get("/logout")
+@router.get("/logout", summary="로그아웃")
 def logout(provider: str | None = Query(default=None)):
     # 1) provider별 리다이렉트 목적지 결정
 

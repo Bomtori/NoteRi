@@ -3,6 +3,7 @@ import os
 import json
 import time
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import Response
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from backend.app.deps.guest import get_principal
@@ -64,17 +65,17 @@ def create_board(
         raise HTTPException(status_code=400, detail=str(e))
 
 # Read all
-@router.get("/", response_model=list[schemas.BoardResponse],  response_model_exclude_unset=True)
+@router.get("/", response_model=list[schemas.BoardResponse],  response_model_exclude_unset=True, summary="모든 보드 가져오기")
 def read_boards(skip: int = 0, limit: Optional[int] = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return crud.get_boards(db, current_user.id, skip=skip, limit=limit)
 
 # Recent
-@router.get("/recent", response_model=list[schemas.BoardResponse])
+@router.get("/recent", response_model=list[schemas.BoardResponse], summary="최근 보드 가져오기(3개)")
 def read_board_recent(limit: int = 3, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return crud.get_recent_boards(db, current_user.id, limit=limit)
 
 # Read one
-@router.get("/{board_id}", response_model=schemas.BoardResponse)
+@router.get("/{board_id}", response_model=schemas.BoardResponse, description="보드 하나 읽기")
 def read_board(
     board_id: int,
     t: Optional[str] = Query(None, description="URL link token (Fernet)"),
@@ -107,7 +108,7 @@ def read_board(
     return board
 
 # read board and all
-@router.get("/{board_id}/full")
+@router.get("/{board_id}/full", description="모든 보드 가져오기 / 하위 항목 포함")
 def get_board_full(
     board_id: int,
     db: Session = Depends(get_db),
@@ -123,7 +124,7 @@ def get_board_full(
     return data
 
 # Update
-@router.patch("/{board_id}", response_model=schemas.BoardResponse)
+@router.patch("/{board_id}", response_model=schemas.BoardResponse, summary="보드 업데이트")
 def update_board(board_id: int, board_update: schemas.BoardUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         board = crud.update_board(db, board_id, current_user, board_update)
@@ -134,7 +135,7 @@ def update_board(board_id: int, board_update: schemas.BoardUpdate, db: Session =
         raise HTTPException(status_code=500, detail="Database error")
 
 # Move (owner)
-@router.patch("/{board_id}/move", response_model=schemas.BoardResponse)
+@router.patch("/{board_id}/move", response_model=schemas.BoardResponse, summary="폴더 이동")
 def move_board_endpoint(board_id: int, board_move: schemas.BoardMove, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     board = crud.move_board(db, board_id, current_user, board_move)
     if not board:
@@ -142,20 +143,22 @@ def move_board_endpoint(board_id: int, board_move: schemas.BoardMove, db: Sessio
     return board
 
 # Delete (owner)
-@router.delete("/{board_id}", response_model=schemas.BoardResponse)
-def delete_board(board_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    board = crud.delete_board(db, current_user, board_id)
-    if not board:
-        raise HTTPException(status_code=403, detail="No permission or board not found")
-    return board
+@router.delete("/{board_id}", status_code=status.HTTP_204_NO_CONTENT, summary="보드 삭제")
+def delete_board(board_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    board = db.query(Board).filter(Board.id == board_id).first()
+    if not board or board.owner_id != current_user.id:
+        # 404/403 적절히 처리
+        return Response(status_code=status.HTTP_404_NOT_FOUND)
 
+    db.delete(board)
+    db.commit()
 # Verify PIN (guest)
 Pin = Annotated[str, StringConstraints(pattern=r"^\d{4}$")]
 class BoardPasswordVerify(BaseModel):
     password: Pin
 
 # 비밀번호 설정
-@router.post("/{board_id}/verify-password")
+@router.post("/{board_id}/verify-password", description="패스워드 설정")
 def verify_board_password(board_id: int, body: BoardPasswordVerify, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     ok = crud.verify_board_password(db, board_id, body.password)
     if not ok:
@@ -163,7 +166,7 @@ def verify_board_password(board_id: int, body: BoardPasswordVerify, db: Session 
     return {"ok": True}
 
 # ✅ 공유받은 회의 페이지 전용: 내가 공유받은 보드만
-@router.get("/shared-received", response_model=list[schemas.BoardResponse])
+@router.get("/shared-received", response_model=list[schemas.BoardResponse], summary="공유받은 보드 목록")
 def read_shared_received_boards(
     skip: int = 0,
     limit: int = None,

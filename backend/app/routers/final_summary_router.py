@@ -36,7 +36,7 @@ def _assert_board_access(db: Session, board_id: int, user: User):
         raise HTTPException(status_code=403, detail="No permission for this board")
 
 # 평가 점수 가져오기
-@router.get("/ratings", response_model=RatingSummaryOut)
+@router.get("/ratings", response_model=RatingSummaryOut, summary="평가 점수 가져오기")
 def get_rating_summary(db: Session = Depends(get_db)):
     rows = db.execute(
         select(FinalSummary.rating, func.count(FinalSummary.id))
@@ -60,7 +60,7 @@ def get_rating_summary(db: Session = Depends(get_db)):
 # ------------------------------
 # 단건 조회
 # ------------------------------
-@router.get("/{final_summary_id}", response_model=FinalSummaryResponse)
+@router.get("/{final_summary_id}", response_model=FinalSummaryResponse, summary="최종 요약 가져오기")
 def get_final_summary(
     final_summary_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
@@ -75,7 +75,7 @@ def get_final_summary(
 # ------------------------------
 # 세션별 목록
 # ------------------------------
-@router.get("/sessions/{session_id}", response_model=FinalSummaryListResponse)
+@router.get("/sessions/{session_id}", response_model=FinalSummaryListResponse, summary="세션에 맞는 최종 요약 가져오기")
 def list_final_summaries_by_session(
     session_id: int = Path(..., ge=1),
     order: str = Query("desc", pattern="^(asc|desc)$"),
@@ -94,7 +94,7 @@ def list_final_summaries_by_session(
 # ------------------------------
 # 세션 최신 1건
 # ------------------------------
-@router.get("/sessions/{session_id}/latest", response_model=FinalSummaryResponse)
+@router.get("/sessions/{session_id}/latest", response_model=FinalSummaryResponse, summary="가장 최근 세션 최종 요약 가져오기")
 def latest_final_summary_by_session(
     session_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
@@ -129,7 +129,7 @@ def list_final_summaries_by_board(
 # ------------------------------
 # 수정(PATCH)
 # ------------------------------
-@router.patch("/{final_summary_id}", response_model=FinalSummaryResponse)
+@router.patch("/{final_summary_id}", response_model=FinalSummaryResponse, summary="최종 요약 수정")
 def update_final_summary(
     final_summary_id: int = Path(..., ge=1),
     payload: Dict[str, Any] = Body(...),  # ← 그대로 저장
@@ -147,7 +147,7 @@ def update_final_summary(
 # ------------------------------
 # 평점만 별도(PATCH)
 # ------------------------------
-@router.patch("/{final_summary_id}/rating", response_model=FinalSummaryResponse)
+@router.patch("/{final_summary_id}/rating", response_model=FinalSummaryResponse, summary="평점 매기기")
 def update_final_summary_rating(
     final_summary_id: int = Path(..., ge=1),
     payload: FinalSummaryRatingUpdate = Body(...),

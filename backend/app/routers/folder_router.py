@@ -12,7 +12,7 @@ router = APIRouter(prefix="/folders", tags=["folders"])
 
 
 # Create
-@router.post("/", response_model=schemas.FolderResponse)
+@router.post("/", response_model=schemas.FolderResponse, summary="폴더 생성")
 def create_folder(
     folder: schemas.FolderCreate,
     db: Session = Depends(get_db),
@@ -22,7 +22,7 @@ def create_folder(
 
 # Read all
 
-@router.get("/", response_model=schemas.FolderListResponse)
+@router.get("/", response_model=schemas.FolderListResponse, summary="폴더 가져오기")
 def read_folders(
     skip: int = 0,
     limit: Optional[int] = None,  # ✅ 올바른 문법
@@ -33,7 +33,7 @@ def read_folders(
     return {"folders": folders}
 
 # Read one
-@router.get("/{folder_id}", response_model=schemas.FolderResponse)
+@router.get("/{folder_id}", response_model=schemas.FolderResponse, summary="특정 폴더 가져오기")
 def read_folder(
     folder_id: int,
     db: Session = Depends(get_db),
@@ -45,7 +45,7 @@ def read_folder(
     return folder
 
 # 폴더별 보드 조회
-@router.get("/{folder_id}/boards", response_model=list[BoardResponse])
+@router.get("/{folder_id}/boards", response_model=list[BoardResponse], summary="폴더의 보드목록 가져오기")
 def read_boards_by_folder(
     folder_id: int,
     db: Session = Depends(get_db),
@@ -54,28 +54,8 @@ def read_boards_by_folder(
     boards = crud.get_boards_by_folder(db, folder_id)
     return boards
 
-# # Update
-# @router.patch("/{folder_id}")
-# def update_folder(folder_id: int, folder_update: schemas.FolderUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-#     folder = db.query(Folder).filter(Folder.id == folder_id, Folder.user_id == current_user.id).first()
-#     if not folder:
-#         raise HTTPException(status_code=404, detail="Folder not found")
-#     return folder
-
-# # Delete
-# @router.delete("/{folder_id}", response_model=schemas.FolderResponse)
-# def delete_folder(
-#     folder_id: int,
-#     db: Session = Depends(get_db),
-#     current_user: User = Depends(get_current_user)
-# ):
-#     folder = crud.delete_folder(db, folder_id, current_user.id)
-#     if not folder:
-#         raise HTTPException(status_code=404, detail="Folder not found or no permission")
-#     return folder
-
 # Update # 🍒 10.27 frontend 수정
-@router.patch("/{folder_id}", response_model=schemas.FolderResponse)
+@router.patch("/{folder_id}", response_model=schemas.FolderResponse, summary="폴더 업데이트")
 def update_folder(
     folder_id: int,
     folder_update: schemas.FolderUpdate,
@@ -100,7 +80,7 @@ def update_folder(
 
 
 # Delete # 🍒 10.27 frontend 수정
-@router.delete("/{folder_id}", response_model=schemas.FolderResponse)
+@router.delete("/{folder_id}", response_model=schemas.FolderResponse, summary="폴더 삭제")
 def delete_folder(
     folder_id: int,
     db: Session = Depends(get_db),
@@ -114,7 +94,7 @@ def delete_folder(
 
 
 # 트리 구조 조회
-@router.get("/tree", response_model=list[schemas.FolderTree])
+@router.get("/tree", response_model=list[schemas.FolderTree], summary="폴더 구조 조회")
 def read_folder_tree(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)

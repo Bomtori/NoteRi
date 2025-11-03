@@ -27,7 +27,7 @@ def notion_headers(token: str):
         "Content-Type": "application/json",
         "Notion-Version": NOTION_VERSION,
     }
-@router.get("/status")
+@router.get("/status", summary="노션 상태 가져오기")
 def notion_status(auth: Optional[NotionAuth] = Depends(crud.get_user_notion_auth)):
     """
     현재 로그인 사용자의 노션 연동 상태 조회
@@ -40,7 +40,7 @@ def notion_status(auth: Optional[NotionAuth] = Depends(crud.get_user_notion_auth
     }
 
 
-@router.get("/login")
+@router.get("/login", summary="노션 로그인")
 def notion_login(current_user: User = Depends(get_current_user)):
     """
     사용자를 Notion OAuth 동의화면으로 리다이렉트.
@@ -61,7 +61,7 @@ def notion_login(current_user: User = Depends(get_current_user)):
     logger.info(f"CLIENT_ID={CLIENT_ID}, REDIRECT_URI={REDIRECT_URI}")
     return {"url": url}
 
-@router.get("/callback", include_in_schema=False)
+@router.get("/callback", include_in_schema=False, summary="노션 콜백")
 def notion_callback(code: str, state: str, db: Session = Depends(get_db)):
     """
     Notion OAuth 콜백. code 교환 → 토큰 저장
@@ -96,19 +96,7 @@ def notion_callback(code: str, state: str, db: Session = Depends(get_db)):
     redirect_to = f"{frontend_url}/user?notion=connected"
     return RedirectResponse(url=redirect_to, status_code=302)
 
-@router.get("/status")
-def notion_status(auth: Optional[NotionAuth] = Depends(crud.get_user_notion_auth)):
-    """
-    현재 로그인 사용자의 노션 연동 상태 조회
-    - Authorization: Bearer <access_jwt> 필요
-    """
-    return {
-        "connected": bool(auth),
-        "workspace_id": getattr(auth, "workspace_id", None),
-        "workspace_name": getattr(auth, "workspace_name", None),
-    }
-
-@router.post("/upload")
+@router.post("/upload", summary="노션 공유")
 def upload_to_notion(
     title: str = Body(..., embed=True),
     content: str = Body(..., embed=True),
@@ -157,7 +145,7 @@ def upload_to_notion(
     return {"id": page["id"], "url": page["url"]}
 
 
-@router.delete("/disconnect", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/disconnect", status_code=status.HTTP_204_NO_CONTENT, summary="노션 연동 해제")
 def disconnect_notion(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),

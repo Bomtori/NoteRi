@@ -30,13 +30,13 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 SECURE_COOKIE = os.getenv("SECURE_COOKIE", "false").lower() == "true"
 REFRESH_MAX_AGE = 60 * 60 * 24 * 14  # 14일
 
-@router.get("/login")
+@router.get("/login", summary="구글 로그인")
 async def login_google(request: Request):
     redirect_uri = request.url_for("google_callback")
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 
-@router.get("/callback", name="google_callback")
+@router.get("/callback", name="google_callback", summary="구글 콜백")
 async def google_callback(request: Request, db: Session = Depends(get_db)):
     # 0) 토큰/유저정보 수집
     token = await oauth.google.authorize_access_token(request)
@@ -117,7 +117,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
 
     return resp
 
-@router.post("/rejoin")
+@router.post("/rejoin", summary="구글 재가입")
 def google_rejoin(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
      # 토큰 인증된 유저
     if not current_user:

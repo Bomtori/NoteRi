@@ -24,7 +24,7 @@ def _row_to_dict(n: Notification) -> dict:
     "created_at": n.created_at,
     }
 
-@router.get("/", response_model=list[dict])
+@router.get("/", response_model=list[dict], summary="알림 가져오기")
 def list_notifications(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -41,7 +41,7 @@ def list_notifications(
     rows = q.order_by(Notification.created_at.desc()).limit(limit).all()
     return [_row_to_dict(n) for n in rows]
 
-@router.get("/unread", response_model=list[dict])
+@router.get("/unread", response_model=list[dict], summary="읽지 않은 알림 가져오기")
 def list_unread(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
@@ -54,7 +54,7 @@ def list_unread(
     )
     return [_row_to_dict(n) for n in rows]
 
-@router.post("/{noti_id}/read", response_model=dict)
+@router.post("/{noti_id}/read", response_model=dict, summary="알림 읽기")
 def mark_read(
 noti_id: int,
 db: Session = Depends(get_db),
@@ -71,7 +71,7 @@ current_user=Depends(get_current_user),
     db.commit()
     return {"ok": True}
 
-@router.post("/read-all", response_model=dict)
+@router.post("/read-all", response_model=dict, summary="모든 알람 읽기")
 def mark_all_read(
 db: Session = Depends(get_db),
 current_user=Depends(get_current_user),
@@ -84,13 +84,13 @@ current_user=Depends(get_current_user),
     db.commit()
     return {"ok": True}
 
-@router.post("/trigger-morning")
+@router.post("/trigger-morning", summary="테스트 용")
 def trigger_morning(current_user=Depends(get_current_user)):
     # if not current_user.is_admin: raise HTTPException(403, "forbidden")
     send_morning_calendar_notifications()   # 바로 실행
     return {"ok": True}
 
-@router.delete("/{notification_id}", status_code=204)
+@router.delete("/{notification_id}", status_code=204, summary="알람 삭제")
 def delete_one_notification(
     notification_id: int,
     db: Session = Depends(get_db),
@@ -103,7 +103,7 @@ def delete_one_notification(
         raise HTTPException(status_code=404, detail="NOTIFICATION_NOT_FOUND")
     return  # 204
 
-@router.delete("", status_code=200)
+@router.delete("", status_code=200, summary="알람 다중 삭제")
 def delete_many_notifications(
     payload: NotificationsDeleteRequest,
     db: Session = Depends(get_db),
@@ -127,7 +127,7 @@ def delete_many_notifications(
         )
     return {"deleted": deleted}
 
-@router.delete("/all", status_code=200)
+@router.delete("/all", status_code=200, summary="모든 알람 삭제")
 def clear_all_notifications(
     older_than: Optional[datetime] = Query(None, description="이 시각보다 이전 알림만 삭제"),
     db: Session = Depends(get_db),

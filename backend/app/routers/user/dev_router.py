@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 
 router = APIRouter(prefix="/auth/dev", tags=["AuthDev"])
 
-@router.get("/issue")
+@router.get("/issue", summary="테스트")
 def issue_cookie():
     # 가짜 refresh 토큰 내려서 쿠키 저장 테스트
     fake_rt = "debug-refresh-token"

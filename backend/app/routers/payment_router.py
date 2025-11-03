@@ -71,7 +71,7 @@ def _parse_statuses(status: Optional[str]) -> Optional[List[str]]:
     return arr or None
 
 # ✅ 1️⃣ 결제 요청 API (프론트 → 토스 결제창으로 이동하기 전에 호출)
-@router.post("/request")
+@router.post("/request", summary="결제 요청")
 def request_payment(
     req: PaymentRequest,
     db: Session = Depends(get_db),
@@ -96,7 +96,7 @@ def request_payment(
 
 
 # ✅ 2️⃣ 결제 승인 API (토스 결제 완료 후 호출)
-@router.post("/confirm")
+@router.post("/confirm", summary="결제 승인")
 async def confirm_payment(
     req: PaymentConfirmRequest,
     db: Session = Depends(get_db),
@@ -228,7 +228,7 @@ async def confirm_payment(
 # 추이 그래프
 logger = logging.getLogger(__name__)
 
-@router.get("/today")
+@router.get("/today", summary="오늘 결제")
 def get_payments_today(db: Session = Depends(get_db)):
     try:
         start = _today_local()            # 오늘 00:00 (로컬)
@@ -250,7 +250,7 @@ def _collapse_rows_to_xy(rows):
         series.append({"x": str(x), "y": int(y) if y is not None else 0})
     return series
 
-@router.get("/last-7-days")
+@router.get("/last-7-days", summary="지난 일주일 매출")
 def last_7_days(db: Session = Depends(get_db)):
     try:
         items = get_payment_last_7_days_by_plan(db)
@@ -259,7 +259,7 @@ def last_7_days(db: Session = Depends(get_db)):
         logger.exception("GET /payments/last-7-days failed")
         raise HTTPException(status_code=500, detail="PAYMENTS_LAST_7_DAYS_FAILED")
 
-@router.get("/last-5-weeks")
+@router.get("/last-5-weeks", summary="지난 5주간 매출")
 def last_5_weeks(db: Session = Depends(get_db)):
     try:
         items = get_payment_last_5_weeks_by_plan(db)
@@ -268,7 +268,7 @@ def last_5_weeks(db: Session = Depends(get_db)):
         logger.exception("GET /payments/last-5-weeks failed")
         raise HTTPException(status_code=500, detail="PAYMENTS_LAST_5_WEEKS_FAILED")
 
-@router.get("/last-6-months")
+@router.get("/last-6-months", summary="지난 6개월간 매출")
 def last_6_months(db: Session = Depends(get_db)):
     try:
         items = get_payment_last_6_months_by_plan(db)
@@ -277,7 +277,7 @@ def last_6_months(db: Session = Depends(get_db)):
         logger.exception("GET /payments/last-6-months failed")
         raise HTTPException(status_code=500, detail="PAYMENTS_LAST_6_MONTHS_FAILED")
 
-@router.get("/last-5-years")
+@router.get("/last-5-years", summary="지난 5년간 매출")
 def last_5_years(db: Session = Depends(get_db)):
     try:
         items = get_payment_last_5_years_by_plan(db)
@@ -286,7 +286,7 @@ def last_5_years(db: Session = Depends(get_db)):
         logger.exception("GET /payments/last-5-years failed")
         raise HTTPException(status_code=500, detail="PAYMENTS_LAST_5_YEARS_FAILED")
 
-@router.get("/me", response_model=list[PaymentItem])
+@router.get("/me", response_model=list[PaymentItem], summary="내 결제 목록")
 def list_my_payments_simple(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -310,7 +310,7 @@ def list_my_payments_simple(
 
     return [PaymentItem.model_validate(p, from_attributes=True) for p in payments]
 
-@router.get("/me/{payment_id}", response_model=PaymentItem)
+@router.get("/me/{payment_id}", response_model=PaymentItem, summary="특정 결제 목록 자세히 보기")
 def get_my_payment(
     payment_id: int,
     db: Session = Depends(get_db),
@@ -322,29 +322,24 @@ def get_my_payment(
     return PaymentItem.model_validate(p)
 
 # 플랜 별 총 매출
-@router.get("/revenue/plan")
+@router.get("/revenue/plan", summary="플랜 별 총 매출")
 def read_revenue_by_plan(db: Session = Depends(get_db)):
     return get_total_revenue_by_plan(db)
 
 # 총 매출
-@router.get("/total/amount")
+@router.get("/total/amount", summary="플랜별 총합")
 def read_total_payment(db: Session = Depends(get_db)):
-    """
-    전체 기간 총 매출 (SUCCESS만).
-    """
+
     return {"total": get_total_payment_amount(db)}
 
-@router.get("/total/week")
+@router.get("/total/week", summary="이번주 총 매출")
 def read_total_week(db: Session = Depends(get_db)):
-    """이번 주 총매출 (월~오늘, 내일 0시 미만)"""
     return {"total": get_this_week_total_revenue(db)}
 
-@router.get("/total/month")
+@router.get("/total/month", summary="이번 달 총 매출")
 def read_total_month(db: Session = Depends(get_db)):
-    """이번 달 총매출 (1일~오늘, 내일 0시 미만)"""
     return {"total": get_this_month_total_revenue(db)}
 
-@router.get("/total/year")
+@router.get("/total/year", summary="이번년도 총 매출")
 def read_total_year(db: Session = Depends(get_db)):
-    """이번 년도 총매출 (YTD: 1/1~오늘, 내일 0시 미만)"""
     return {"total": get_this_year_total_revenue(db)}

@@ -10,7 +10,7 @@ from backend.app.crud import recording_usage_crud
 
 router = APIRouter(prefix="/recordings/usage", tags=["recordings"])
 
-@router.post("/use/{audio_id}", response_model=RecordingUseResponse)
+@router.post("/use/{audio_id}", response_model=RecordingUseResponse, summary="사용량 소모")
 def use_by_audio_owner(
     audio_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
@@ -38,7 +38,7 @@ def use_by_audio_owner(
         period_end=usage.period_end,
     )
 
-@router.get("/", response_model=RecordingUseResponse)
+@router.get("/", response_model=RecordingUseResponse, summary="사용량 조회")
 def get_current_usage(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -69,32 +69,32 @@ def get_current_usage(
         period_end=usage.period_end,
     )
 
-@router.get("/total")
+@router.get("/total", summary="모든 사용량 조회")
 def get_total_usage(db: Session = Depends(get_db)):
     total = recording_usage_crud.get_total_usage_all_users(db)
     return {"total_seconds": int(total)}
 
-@router.get("/total/today")
+@router.get("/total/today", summary="오늘 사용량 조회")
 def read_total_usage_today(db: Session = Depends(get_db)):
     return recording_usage_crud.get_total_usage_today(db)
 
-@router.get("/total/7d")
+@router.get("/total/7d", summary="7일간 사용량 조회")
 def read_total_usage_7d(db: Session = Depends(get_db)):
     return recording_usage_crud.get_total_usage_last_7_days(db)
 
-@router.get("/total/month")
+@router.get("/total/month", summary="한 달간 사용량 조회")
 def read_total_usage_month(db: Session = Depends(get_db)):
     return recording_usage_crud.get_total_usage_month(db)
 
-@router.get("/total/year")
+@router.get("/total/year", summary="1년간 사용량 조회")
 def read_total_usage_year(db: Session = Depends(get_db)):
     return recording_usage_crud.get_total_usage_year(db)
 
-@router.get("/compare")
+@router.get("/compare", summary="사용량 비교")
 def read_usage_comparisons(db: Session = Depends(get_db)):
     return recording_usage_crud.get_usage_comparisons(db)
 
-@router.get("/avg")
+@router.get("/avg", summary="플랜별 사용량 평균")
 def read_avg_usage_by_plan(db: Session = Depends(get_db)):
     data = recording_usage_crud.get_avg_usage_by_plan(db)
     return {"plans": data}

@@ -23,7 +23,7 @@ FERNET_KEY = os.getenv("AUDIO_PATH_KEY")  # .env 에 보관
 fernet = Fernet(FERNET_KEY) if FERNET_KEY else None
 
 # ✅ 특정 오디오 조회
-@router.get("/{audio_id}", response_model=schemas.AudioResponse)
+@router.get("/{audio_id}", response_model=schemas.AudioResponse, summary="특정 오디오 조회")
 def get_audio(audio_id: int, db: Session = Depends(get_db)):
     audio = crud.get_audio(db, audio_id)
     if not audio:
@@ -31,13 +31,13 @@ def get_audio(audio_id: int, db: Session = Depends(get_db)):
     return audio
 
 # ✅ 특정 보드의 오디오 조회
-@router.get("/board/{board_id}", response_model=schemas.AudioEnvelope)
+@router.get("/board/{board_id}", response_model=schemas.AudioEnvelope, summary="특정 보드의 오디오 조회")
 def get_board_audio(board_id: int, db: Session = Depends(get_db)) -> schemas.AudioEnvelope:
 
     audio = crud.get_audio_by_board(db, board_id)
     return schemas.AudioEnvelope(audio=audio)
 
-@router.get("/board/{board_id}/download")
+@router.get("/board/{board_id}/download", summary="특정 오디오 다운로드")
 def download_board_audio(board_id: int, db: Session = Depends(get_db)):
     audio = get_audio_by_board(db, board_id)
     if not audio:

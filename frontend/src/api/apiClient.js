@@ -1,15 +1,14 @@
 import axios from "axios";
 import { API_BASE_URL } from "../config";
-
 console.log("🌐 VITE_API_URL =", import.meta.env.VITE_API_URL);
-
 // 🔹 Axios 인스턴스 (쿠키 포함)
 const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-  withCredentials: true, // refresh_token 쿠키 자동 포함
-  headers: {
-    "Content-Type": "application/json",
-  },
+    baseURL: API_BASE_URL,
+    withCredentials: true, // refresh_token 쿠키 자동 포함
+    headers: {
+        "Content-Type": "application/json", // headers 포함하기
+        'ngrok-skip-browser-warning': '1', // ngrok 사용시 추가할것?
+    },
 });
 
 // 🔹 메모리/LocalStorage에서 access_token 관리
@@ -17,18 +16,18 @@ let accessToken = localStorage.getItem("access_token") || null;
 
 // 🔹 요청 시 Authorization 자동 주입
 apiClient.interceptors.request.use(
-  (config) => {
-    if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
-    return config;
-  },
-  (error) => Promise.reject(error)
+    (config) => {
+        if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
+        return config;
+    },
+    (error) => Promise.reject(error)
 );
 
-// 🔹 응답 시 401 → /auth/refresh 자동 재발급
+// 🔹 응답 시 401 → /auth/refresh 로 자동 재발급
 apiClient.interceptors.response.use(
-  (res) => res,
-  async (error) => {
-    const originalRequest = error.config;
+    (res) => res,
+    async (error) => {
+        const originalRequest = error.config;
 
     // AccessToken 만료로 인한 401일 때
     if (error.response?.status === 401 && !originalRequest._retry) {

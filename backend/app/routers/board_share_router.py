@@ -1,13 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from backend.app.crud.board_share_crud import get_board_members
 from backend.app.db import get_db
 from backend.app.deps.auth import get_current_user
+from backend.app.deps.guest import get_principal
 from backend.app.model import User
 from backend.app.schemas.board_share_schema import (
-    ShareCreateByEmail, ShareUpdateRole, ShareResponse
+    ShareCreateByEmail, ShareUpdateRole, ShareResponse, BoardShareUserInfo
 )
 from backend.app.crud import board_share_crud as crud
+from backend.app.util.access import can_read_board
 
 router = APIRouter(prefix="/boards/{board_id}/shares", tags=["boards:share"])
 
@@ -91,3 +94,21 @@ def remove_share(
     if not ok:
         raise HTTPException(status_code=404, detail="Board or share not found")
     return {"ok": True}
+
+# 공유한 보드 멤버 불러오기
+@router.get("/members", response_model=list[BoardShareUserInfo])
+def list_board_members(
+    board_id: int,
+    db: Session = Depends(get_db),
+    principal = Depends(get_principal),
+):
+    # 권한 체크: 이 보드를 볼 수 있는 사람만
+    if not can_read_board(db, board_id, principal):
+        # 존재 여부 노출 최소화 위해 404로 통일
+        raise HTTPException(status_code=404, detail="Board not found")
+
+    members = get_board_members(db, board_id)
+    if members is None:
+        raise HTTPException(status_code=404, detail="Board not found")
+
+    return members

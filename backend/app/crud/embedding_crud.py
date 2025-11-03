@@ -47,7 +47,6 @@ def save_embeddings(
         db.add(embedding_obj)
         saved_embeddings.append(embedding_obj)
     
-    db.commit()
     return saved_embeddings
 
 
@@ -136,7 +135,6 @@ def delete_embeddings_by_session(db: Session, session_id: int) -> int:
     deleted = db.query(m.RecordingEmbedding).filter(
         m.RecordingEmbedding.recording_session_id == session_id
     ).delete()
-    db.commit()
     return deleted
 
 

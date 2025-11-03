@@ -1,8 +1,10 @@
 from __future__ import annotations
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from fastapi import HTTPException
 from typing import List, Optional
 from datetime import datetime, UTC
+from backend.app.model import User, BoardShare, Board, Notification
 
 import backend.app.model as model
 
@@ -33,58 +35,71 @@ def list_shares(db: Session, board_id: int, owner_id: int) -> List[model.BoardSh
         .all()
     )
 
-def add_or_update_share_by_email(db: Session, board_id: int, owner_id: int, email: str, role: str) -> Optional[model.BoardShare]:
-    if role not in _ALLOWED_ROLES:
-        raise ValueError("Invalid role")
-    board = _get_board_owned(db, board_id, owner_id)
-    if not board:
-        return None
-
-    target = _find_user_by_email(db, email)
-    if not target or not target.is_active:
-        raise LookupError("Target user not found or inactive")
-
-    if target.id == owner_id:
-        raise ValueError("Owner cannot be shared to themselves")
-    # 보드 오너에게 또 공유 설정은 무의미하므로 차단
-
-    share = (
-        db.query(model.BoardShare)
-        .filter(
-            model.BoardShare.board_id == board_id,
-            model.BoardShare.user_id == target.id,
-        )
-        .first()
-    )
-
+def add_or_update_share_by_email(db: Session, board_id: int, owner_id: int, email: str, role: str):
+    """
+    이메일로 보드 공유 생성 or 업데이트
+    - 예외 발생 시 rollback 보장
+    - 기존 공유 시 role 업데이트
+    - 새 공유 시 알림(Notification) 생성
+    """
     try:
-        if share:
-            share.role = role
-            # updated_at이 없다면 board.updated_at만 갱신
-        else:
-            share = model.BoardShare(board_id=board_id, user_id=target.id, role=role)
-            db.add(share)
+        # 1️⃣ 대상 사용자 찾기
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            raise LookupError("해당 이메일의 사용자가 존재하지 않습니다.")
+        if user.id == owner_id:
+            raise ValueError("자기 자신에게는 공유할 수 없습니다.")
 
-        board.updated_at = _now()
-        db.commit()
-        db.refresh(share)
-        return share
-    except IntegrityError:
-        db.rollback()
-        # unique 제약 충돌 방지용 안전망
+        # 2️⃣ 기존 공유가 있으면 역할만 변경
         share = (
-            db.query(model.BoardShare)
-            .filter(
-                model.BoardShare.board_id == board_id,
-                model.BoardShare.user_id == target.id,
-            )
+            db.query(BoardShare)
+            .filter(BoardShare.board_id == board_id, BoardShare.user_id == user.id)
             .first()
         )
-        return share
-    except SQLAlchemyError:
-        db.rollback()
-        raise
 
+        if share:
+            share.role = role
+            db.commit()
+            db.refresh(share)
+        else:
+            # 3️⃣ 새 공유 추가
+            share = BoardShare(board_id=board_id, user_id=user.id, role=role)
+            db.add(share)
+            db.commit()
+            db.refresh(share)
+
+        # 4️⃣ 알림 등록 (선택)
+        board = db.query(Board).filter(Board.id == board_id).first()
+        owner = db.query(User).filter(User.id == owner_id).first()
+        if board and owner:
+            notif = Notification(
+                user_id=user.id,
+                # title="새로운 회의가 공유되었습니다",
+                content=f"{owner.name or '누군가'}님이 '{board.title}'을(를) 공유했습니다.",
+                created_at=datetime.now(UTC),
+            )
+            db.add(notif)
+            db.commit()
+
+        return share
+
+    # ✅ 예외 처리 (rollback 포함)
+    except LookupError as e:
+        db.rollback()
+        raise HTTPException(status_code=404, detail=str(e))
+
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+    except IntegrityError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"DB 제약 조건 위반: {str(e)}")
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+    
 def update_share_role(db: Session, board_id: int, owner_id: int, target_user_id: int, role: str) -> Optional[model.BoardShare]:
     if role not in _ALLOWED_ROLES:
         raise ValueError("Invalid role")
@@ -134,3 +149,52 @@ def remove_share(db: Session, board_id: int, owner_id: int, target_user_id: int)
     except SQLAlchemyError:
         db.rollback()
         raise
+
+def get_board_members(db: Session, board_id: int):
+    """
+    이 보드에 참여 중인 모든 사용자(owner + 공유자들)를 반환.
+    owner는 role='owner'로 붙여서 맨 앞에 넣어줌.
+    """
+    # 1) 보드와 owner 정보
+    board = (
+        db.query(model.Board)
+        .options(joinedload(model.Board.owner))
+        .filter(model.Board.id == board_id)
+        .first()
+    )
+    if not board:
+        return None
+
+    owner_user = board.owner  # relationship("User", backref="boards_owned") 가 있다고 가정
+    members = []
+
+    if owner_user:
+        members.append({
+            "user_id": owner_user.id,
+            "email": owner_user.email,
+            "nickname": owner_user.nickname,
+            "picture": owner_user.picture,
+            "role": "owner",
+            "shared_at": board.created_at,  # owner는 생성 시점부터
+        })
+
+    # 2) 공유받은 사용자들 (board_shares)
+    shares = (
+        db.query(model.BoardShare)
+        .join(model.User, model.BoardShare.user_id == model.User.id)
+        .add_entity(model.User)
+        .filter(model.BoardShare.board_id == board_id)
+        .all()
+    )
+
+    for share, user in shares:
+        members.append({
+            "user_id": user.id,
+            "email": user.email,
+            "nickname": user.nickname,
+            "picture": user.picture,
+            "role": share.role,  # e.g. "viewer" / "editor"
+            "shared_at": share.created_at if hasattr(share, "created_at") else None,
+        })
+
+    return members

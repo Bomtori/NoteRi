@@ -19,10 +19,13 @@ def create_default_memo(db: Session, board_id: int, user_id: int):
     return new_memo
 
 
-# ✅ 특정 보드의 메모 목록
-def get_memos(db: Session, board_id: int):
-    return db.query(model.Memo).filter(model.Memo.board_id == board_id).all()
-
+# ✅ 특정 보드의 메모 조회
+def get_memo_by_board(db: Session, board_id: int):
+    return (
+        db.query(model.Memo)
+        .filter(model.Memo.board_id == board_id)
+        .first()
+    )
 
 # ✅ 단일 메모 조회
 def get_memo(db: Session, memo_id: int):

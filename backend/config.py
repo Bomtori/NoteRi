@@ -38,7 +38,7 @@ if not DATABASE_URL:
     user = os.getenv("POSTGRES_USER", "postgres")
     pwd  = os.getenv("POSTGRES_PASSWORD", "1234")
     host = os.getenv("POSTGRES_HOST", "localhost")
-    port = os.getenv("POSTGRES_PORT", "5432")
+    port = os.getenv("POSTGRES_PORT", "5433")
     db   = os.getenv("POSTGRES_DB", "mydb")
     DATABASE_URL = f"postgresql://{user}:{pwd}@{host}:{port}/{db}"
 

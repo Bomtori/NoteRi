@@ -1,7 +1,11 @@
+# backend/app/main.py
+
 # ============================================
 # 🌐 기본 라이브러리 & 환경 설정
 # ============================================
 import os
+import logging
+from typing import Dict
 from dotenv import load_dotenv
 
 # ============================================
@@ -19,31 +23,49 @@ from starlette.websockets import WebSocketState, WebSocketDisconnect
 from backend.services.stt_pipeline import STTPipeline
 from backend.app.routers.sessions_router import router as sessions_router
 
-
 # ============================================
 # 🗓 Scheduler & DB 초기화
 # ============================================
-from backend.app.tasks.scheduler import start_scheduler, unban_expired_users, run_renew_once, send_morning_calendar_notifications
+from backend.app.tasks.scheduler import (
+    start_scheduler,
+    unban_expired_users,
+    run_renew_once,
+    send_morning_calendar_notifications
+)
 from backend.app.db import get_db, SessionLocal
 from backend.app.seed.plan_seed import seed_plans
 from backend.app.routers import register_routers
-load_dotenv()
-
-app = FastAPI()
-
-# 세션 (OAuth redirect 시 필요할 수 있음)
-app.add_middleware(SessionMiddleware, secret_key=os.getenv("APP_SECRET_KEY"))
-app.include_router(sessions_router)
 
 # ============================================
 # 💾 Redis 관련
 # ============================================
-from .routers.redis_test_router import router as redis_test_router
-from .util.redis_client import get_redis, close_redis
+from backend.app.routers.redis_test_router import router as redis_test_router
+from backend.app.util.redis_client import get_redis, close_redis
 
-# static 디렉토리 생성 후 mount
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# ============================================
+# 환경변수 로드
+# ============================================
+load_dotenv()
 
+# ============================================
+# 로깅 설정
+# ============================================
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger("MainApp")
+
+# ============================================
+# FastAPI 앱 생성
+# ============================================
+app = FastAPI()
+
+# 세션 미들웨어 (OAuth redirect 시 필요할 수 있음)
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("APP_SECRET_KEY"))
+
+# CORS 설정
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -59,109 +81,273 @@ app.add_middleware(
     allow_headers=["*"],  # 모든 헤더 허용
 )
 
+# static 디렉토리 마운트
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 # 라우터 등록
+app.include_router(sessions_router)
 register_routers(app)
 
-pipeline = STTPipeline()
+# ============================================
+# 🎯 동시 세션 관리
+# ============================================
+# 세션별 파이프라인 인스턴스 관리
+active_sessions: Dict[str, STTPipeline] = {}
+
 
 @app.websocket("/ws/stt")
 async def websocket_endpoint(websocket: WebSocket):
+    """
+    실시간 STT WebSocket 엔드포인트
+    
+    동시 세션 지원:
+    - 각 WebSocket 연결마다 독립된 STTPipeline 인스턴스 생성
+    - 세션 종료 시 자동 정리
+    """
     await websocket.accept()
-    print("✅ connection open")
-
-    await pipeline.begin_session(websocket)
-
+    
+    # 세션별 파이프라인 생성
+    pipeline = STTPipeline()
+    session_id = None
+    
     try:
+        # 세션 시작
+        await pipeline.begin_session(websocket)
+        session_id = pipeline.sid
+        
+        # 활성 세션에 등록
+        if session_id:
+            active_sessions[session_id] = pipeline
+            logger.info(f"✅ Session registered: {session_id} (total: {len(active_sessions)})")
+        
+        logger.info(f"✅ WebSocket connection opened: sid={session_id}")
+        
+        # 오디오 데이터 수신 루프
         while True:
             data = await websocket.receive_bytes()
-            await pipeline.feed(data, websocket)
-
+            await pipeline.feed(data)
+    
     except WebSocketDisconnect:
-        print("🔌 client disconnected")
-
+        logger.info(f"🔌 Client disconnected: sid={session_id}")
+    
     except Exception as e:
-        print(f"❌ 오류 발생: {e}")
-
+        logger.error(f"❌ WebSocket error (sid={session_id}): {e}")
+    
     finally:
         try:
-            # --- 종료 시 순서 ---
-            # A. 요약 전송 (WS가 아직 연결 중일 때만)
-            if websocket.application_state == WebSocketState.CONNECTED:
-                await pipeline.flush_final_summary()
-        except Exception as e:
-            print(f"⚠️ flush_final_summary 실패: {e}")
-
-        try:
+            # === 종료 시 순서 ===
+            
+            # A. 최종 요약 전송 (WS가 아직 연결 중일 때만)
+            #try:
+            #    if websocket.application_state == WebSocketState.CONNECTED:
+            #        await pipeline.flush_final_summary()
+            #        logger.info(f"✅ Final summary flushed: sid={session_id}")
+            #except Exception as e:
+            #    logger.warning(f"⚠️ flush_final_summary failed: {e}")
+            
             # B. 원본 오디오 저장
-            result = pipeline.save_raw_audio()
-            if result:
-                filepath = result["filepath"]
-                duration = result["duration"]
-                print(f"🎵 Audio saved at: {filepath} ({duration:.2f}s)")
-            else:
-                print("⚠️ 저장할 오디오 데이터 없음")
+            try:
+                result = await pipeline.save_raw_audio_async()
+                if result:
+                    filepath = result["filepath"]
+                    duration = result["duration"]
+                    logger.info(f"🎵 Audio saved: {filepath} ({duration:.2f}s)")
+                else:
+                    logger.warning("⚠️ No audio data to save")
+            except Exception as e:
+                logger.warning(f"⚠️ save_raw_audio failed: {e}")
+            
+            # C. 세션 종료
+            try:
+                # WebSocket이 이미 끊긴 경우 ws를 None으로 설정
+                if websocket.application_state != WebSocketState.CONNECTED:
+                    pipeline.ws = None
+                
+                # 세션 종료 (diarization은 별도 실행하지 않음)
+                await pipeline.end_session(run_diarization=False)
+                logger.info(f"✅ Session ended: sid={session_id}")
+            except Exception as e:
+                logger.warning(f"⚠️ end_session failed: {e}")
+            
+            # D. 활성 세션에서 제거
+            if session_id and session_id in active_sessions:
+                del active_sessions[session_id]
+                logger.info(f"✅ Session unregistered: {session_id} (remaining: {len(active_sessions)})")
+            
+            # E. WebSocket 닫기
+            try:
+                if websocket.application_state == WebSocketState.CONNECTED:
+                    await websocket.close()
+            except Exception:
+                pass
+            
+            logger.info(f"🔌 WebSocket connection closed: sid={session_id}")
+        
         except Exception as e:
-            print(f"⚠️ save_raw_audio 실패: {e}")
+            logger.error(f"❌ Cleanup error: {e}")
 
-        try:
-            # C. 세션 종료 → flush, diarization 자동 실행 ❌
-            if websocket.application_state != WebSocketState.CONNECTED:
-                pipeline.ws = None
-            await pipeline.end_session(run_diarization=False)
-        except Exception as e:
-            print(f"⚠️ end_session 실패: {e}")
-
-        try:
-            # D. WS 닫기
-            if websocket.application_state == WebSocketState.CONNECTED:
-                await websocket.close()
-        except Exception:
-            pass
-
-        print("🔌 connection closed")
 
 # === 수동 저장 API (옵션) ===
-@app.post("/save-audio")
-def save_audio():
-    result = pipeline.save_raw_audio()
+@app.post("/save-audio/{session_id}")
+async def save_audio(session_id: str):
+    """
+    특정 세션의 오디오를 수동으로 저장
+    
+    Args:
+        session_id: 세션 ID
+        
+    Returns:
+        Dict: 저장 결과
+    """
+    if session_id not in active_sessions:
+        return {"status": "error", "message": f"Session not found: {session_id}"}
+    
+    pipeline = active_sessions[session_id]
+    result = await pipeline.save_raw_audio_async()
+    
     if result:
         return {"status": "ok", **result}
     return {"status": "error", "message": "No audio data"}
 
 
-# === 최신 저장 파일 확인 API ===
-@app.get("/diarize/latest")
-def diarize_latest(num_speakers: int | None = Query(default=None, ge=1, le=10)):
-    if not pipeline.last_saved_file:
-        return {"error": "No file saved yet"}
-    filepath = pipeline.last_saved_file
-    diarization_result = diarizer.diarize(filepath, num_speakers=num_speakers)
-    return {"file": filepath, "diarization": diarization_result}
+# === 활성 세션 목록 API ===
+@app.get("/sessions/active")
+async def get_active_sessions():
+    """
+    현재 활성화된 세션 목록 조회
+    
+    Returns:
+        Dict: 활성 세션 정보
+    """
+    sessions_info = []
+    
+    for sid, pipeline in active_sessions.items():
+        sessions_info.append({
+            "sid": sid,
+            "active": pipeline.session_active,
+            "start_time": pipeline.session_start_ts,
+            "audio_buffer_size": len(pipeline.raw_audio_buffer),
+            "paragraph_count": len(pipeline.paragraph_buffer),
+        })
+    
+    return {
+        "total": len(active_sessions),
+        "sessions": sessions_info
+    }
 
+
+# === 헬스 체크 API ===
 @app.get("/")
 async def root():
-    return {"message": "Hello, FastAPI is running"}
+    """루트 엔드포인트"""
+    return {"message": "FastAPI STT Server is running"}
+
+
+@app.get("/health")
+async def health_check():
+    """헬스 체크 엔드포인트"""
+    return {
+        "status": "ok",
+        "active_sessions": len(active_sessions),
+        "redis": "connected" if await get_redis() else "disconnected",
+    }
+
+
+# ============================================
+# 🚀 애플리케이션 라이프사이클
+# ============================================
 
 @app.on_event("startup")
 async def startup_event():
+    """애플리케이션 시작 이벤트"""
+    logger.info("🚀 Starting application...")
+    
     # ✅ Redis 연결 (비동기)
-    await get_redis()
-
+    try:
+        await get_redis()
+        logger.info("✅ Redis connected")
+    except Exception as e:
+        logger.error(f"❌ Redis connection failed: {e}")
+    
     # ✅ 초기 데이터 시드
     db = SessionLocal()
     try:
         seed_plans(db)
+        logger.info("✅ Database seeded")
+    except Exception as e:
+        logger.error(f"❌ Database seed failed: {e}")
     finally:
         db.close()
-
+    
+    # ✅ 임베딩 모델 미리 로딩 (추가!)
+    try:
+        from backend.ml.embeddings.embedding_model import get_embedder
+        logger.info("📥 Pre-loading embedding model...")
+        get_embedder()  # 싱글톤 인스턴스 생성
+        logger.info("✅ Embedding model pre-loaded")
+    except Exception as e:
+        logger.error(f"❌ Embedding model loading failed: {e}")
+        logger.warning("⚠️ Embedding will be loaded on first use")
+    
     # ✅ 스케줄러 시작
-    start_scheduler()
-
+    try:
+        start_scheduler()
+        logger.info("✅ Scheduler started")
+    except Exception as e:
+        logger.error(f"❌ Scheduler start failed: {e}")
+    
     # (선택) 서버 기동 직후 1회 갱신 실행
-    await run_renew_once()
-
-    unban_expired_users()
+    try:
+        await run_renew_once()
+        logger.info("✅ Initial renewal completed")
+    except Exception as e:
+        logger.warning(f"⚠️ Initial renewal failed: {e}")
+    
+    # 만료된 사용자 차단 해제
+    try:
+        unban_expired_users()
+        logger.info("✅ Expired users unbanned")
+    except Exception as e:
+        logger.warning(f"⚠️ Unban failed: {e}")
+    
+    logger.info("🎉 Application startup completed")
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    await close_redis()
+    """애플리케이션 종료 이벤트"""
+    logger.info("🛑 Shutting down application...")
+    
+    # ✅ 모든 활성 세션 종료
+    if active_sessions:
+        logger.info(f"⚠️ Closing {len(active_sessions)} active sessions...")
+        
+        for sid, pipeline in list(active_sessions.items()):
+            try:
+                await pipeline.end_session(run_diarization=False)
+                logger.info(f"✅ Session closed: {sid}")
+            except Exception as e:
+                logger.error(f"❌ Failed to close session {sid}: {e}")
+        
+        active_sessions.clear()
+    
+    # ✅ 임베딩 모델 메모리 해제 (추가!)
+    try:
+        from backend.ml.embeddings.embedding_model import _embedder_instance
+        if _embedder_instance is not None:
+            logger.info("🗑️ Releasing embedding model...")
+            import torch
+            del _embedder_instance
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            logger.info("✅ Embedding model released")
+    except Exception as e:
+        logger.error(f"❌ Embedding model release failed: {e}")
+    
+    # ✅ Redis 연결 종료
+    try:
+        await close_redis()
+        logger.info("✅ Redis connection closed")
+    except Exception as e:
+        logger.error(f"❌ Redis close failed: {e}")
+    
+    logger.info("👋 Application shutdown completed")

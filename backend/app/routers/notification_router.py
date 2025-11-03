@@ -103,7 +103,7 @@ def delete_one_notification(
         raise HTTPException(status_code=404, detail="NOTIFICATION_NOT_FOUND")
     return  # 204
 
-@router.delete("", status_code=200)
+@router.delete("/", status_code=200)
 def delete_many_notifications(
     payload: NotificationsDeleteRequest,
     db: Session = Depends(get_db),

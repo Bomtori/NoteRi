@@ -49,7 +49,7 @@ async def login_kakao(request: Request):
 async def kakao_callback(request: Request, db: Session = Depends(get_db)):
     # 1) 토큰/유저 정보
     token = await oauth.kakao.authorize_access_token(request)
-    resp = await oauth.kakao.get("users/me", token=token)
+    resp = await oauth.kakao.get("user/me", token=token)
     user_info = resp.json() or {}
 
     kakao_id = str(user_info.get("id") or "")

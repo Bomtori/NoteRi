@@ -101,44 +101,91 @@ active_sessions: Dict[str, STTPipeline] = {}
 async def websocket_endpoint(websocket: WebSocket):
     """
     실시간 STT WebSocket 엔드포인트
-    
+
     동시 세션 지원:
     - 각 WebSocket 연결마다 독립된 STTPipeline 인스턴스 생성
     - 세션 종료 시 자동 정리
     """
+    # 1) 반드시 수락
     await websocket.accept()
-    
-    # 세션별 파이프라인 생성
+
+    # 2) 세션별 파이프라인 생성
     pipeline = STTPipeline()
     session_id = None
-    
+
+    # 3) 쿼리 파라미터/상태에서 board_id, user_id, sid 추출
     try:
-        # 세션 시작
+        qp = websocket.query_params or {}
+        raw_board_id = qp.get("board_id")
+        board_id = int(raw_board_id) if raw_board_id and str(raw_board_id).isdigit() else None
+    except Exception:
+        board_id = None
+
+    # user_id: 인증 미들웨어가 세팅했다면 우선 사용, 없으면 쿼리에서 시도
+    state_user_id = getattr(getattr(websocket, "state", None), "user_id", None)
+    try:
+        raw_user_id = (qp.get("user_id") if qp else None)
+        user_id = (
+            int(state_user_id)
+            if state_user_id is not None
+            else (int(raw_user_id) if raw_user_id and str(raw_user_id).isdigit() else None)
+        )
+    except Exception:
+        user_id = state_user_id if state_user_id is not None else None
+
+    sid = (qp.get("sid") if qp else None)  # 선택값: 없으면 파이프라인에서 생성
+
+    if board_id is None:
+        # 프론트가 board_id 없이 붙으면 나중에 PG 적재/요약에서 FK 문제가 나므로 경고
+        logger.error("❌ board_id is required but missing")
+        # 정책상 연결을 유지하려면 그대로 두고, 필수면 아래 두 줄 주석 해제
+        # await websocket.close(code=4400, reason="board_id required")
+        # return
+    else:
+        logger.info(f"📋 WS connected with board_id={board_id}, user_id={user_id}, sid={sid}")
+
+    # begin_session 시그니처를 아직 바꾸지 않았다면, 파이프라인에 먼저 실어둔다.
+    # (다음 단계에서 begin_session에서 이 값들을 사용하도록 변경 예정)
+    pipeline.pre_board_id = board_id
+    pipeline.pre_user_id = user_id
+    pipeline.pre_sid = sid
+    pipeline.pre_source = "manual"
+
+    try:
+        # 4) 세션 시작 (현재 시그니처 유지: begin_session(websocket))
         await pipeline.begin_session(websocket)
         session_id = pipeline.sid
-        
+
         # 활성 세션에 등록
         if session_id:
             active_sessions[session_id] = pipeline
             logger.info(f"✅ Session registered: {session_id} (total: {len(active_sessions)})")
-        
+
         logger.info(f"✅ WebSocket connection opened: sid={session_id}")
-        
-        # 오디오 데이터 수신 루프
+
+        # 5) 오디오 수신 루프 (텍스트/핑 프레임도 안전 처리)
         while True:
-            data = await websocket.receive_bytes()
-            await pipeline.feed(data)
-    
+            msg = await websocket.receive()
+            mtype = msg.get("type")
+            if mtype == "websocket.receive":
+                if msg.get("bytes"):
+                    await pipeline.feed(msg["bytes"])
+                # 선택: 텍스트 제어 프레임을 사용할 계획이면 여기서 처리 가능
+                # elif msg.get("text") == "__END__":
+                #     break
+            elif mtype == "websocket.disconnect":
+                break
+
     except WebSocketDisconnect:
         logger.info(f"🔌 Client disconnected: sid={session_id}")
-    
+
     except Exception as e:
-        logger.error(f"❌ WebSocket error (sid={session_id}): {e}")
-    
+        logger.error(f"WebSocket error: {e}", exc_info=True)
+
     finally:
         try:
             # === 종료 시 순서 ===
-            
+
             # A. 최종 요약 전송 (WS가 아직 연결 중일 때만)
             try:
                 if websocket.application_state == WebSocketState.CONNECTED:
@@ -146,7 +193,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     logger.info(f"✅ Final summary flushed: sid={session_id}")
             except Exception as e:
                 logger.warning(f"⚠️ flush_final_summary failed: {e}")
-            
+
             # B. 원본 오디오 저장
             try:
                 result = await pipeline.save_raw_audio_async()
@@ -158,35 +205,36 @@ async def websocket_endpoint(websocket: WebSocket):
                     logger.warning("⚠️ No audio data to save")
             except Exception as e:
                 logger.warning(f"⚠️ save_raw_audio failed: {e}")
-            
+
             # C. 세션 종료
             try:
                 # WebSocket이 이미 끊긴 경우 ws를 None으로 설정
                 if websocket.application_state != WebSocketState.CONNECTED:
                     pipeline.ws = None
-                
+
                 # 세션 종료 (diarization은 별도 실행하지 않음)
                 await pipeline.end_session(run_diarization=False)
                 logger.info(f"✅ Session ended: sid={session_id}")
             except Exception as e:
                 logger.warning(f"⚠️ end_session failed: {e}")
-            
+
             # D. 활성 세션에서 제거
             if session_id and session_id in active_sessions:
                 del active_sessions[session_id]
                 logger.info(f"✅ Session unregistered: {session_id} (remaining: {len(active_sessions)})")
-            
+
             # E. WebSocket 닫기
             try:
                 if websocket.application_state == WebSocketState.CONNECTED:
                     await websocket.close()
             except Exception:
                 pass
-            
+
             logger.info(f"🔌 WebSocket connection closed: sid={session_id}")
-        
+
         except Exception as e:
             logger.error(f"❌ Cleanup error: {e}")
+
 
 
 # === 수동 저장 API (옵션) ===

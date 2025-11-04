@@ -129,7 +129,7 @@ def _serialize_board(b: Board) -> dict:
         # 필요 시 transcripts/summaries도 동일 패턴으로 추가
     }
 
-def get_boards(db: Session, user_id: int, skip: int = 0, limit: int | None = None):
+def get_boards(db: Session, user_id: int, skip: int = 0, limit: int = 7):
     """
     내 보드 + 내가 공유받은 보드
     - updated_at DESC 정렬

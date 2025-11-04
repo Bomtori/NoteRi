@@ -72,3 +72,24 @@ def resolve_user_id(meta: dict | None) -> int:
             except Exception:
                 pass
     return DEFAULT_USER_ID
+
+import os
+from urllib.parse import quote_plus
+
+# Ollama 기본 설정
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b-instruct-q4_K_M")
+
+# 안정성 옵션
+OLLAMA_MAX_LOADED_MODELS = os.getenv("OLLAMA_MAX_LOADED_MODELS", "1")
+OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "5m")
+OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "300"))
+OLLAMA_STREAM = os.getenv("OLLAMA_STREAM", "false").lower() == "true"
+
+# 요청 시 사용할 옵션
+OLLAMA_DEFAULT_OPTIONS = {
+    "num_ctx": int(os.getenv("OLLAMA_OPTIONS_NUM_CTX", "8192")),
+    "temperature": float(os.getenv("OLLAMA_OPTIONS_TEMPERATURE", "0.7")),
+    "top_p": float(os.getenv("OLLAMA_OPTIONS_TOP_P", "0.9")),
+    "keep_alive": OLLAMA_KEEP_ALIVE,
+}

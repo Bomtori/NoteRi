@@ -134,7 +134,7 @@ export default function NewRecordPage() {
                         console.warn(`[${tries}] by-sid 오류:`, status);
                     }
                 }
-                await sleep(1000); // ✅ 500ms → 1000ms (서버 부하 감소)
+                await sleep(3000);
             }
 
             if (!sessionId) {
@@ -176,13 +176,12 @@ export default function NewRecordPage() {
 
     // 🔹 페이지 이탈 시 확인
     const handleNavigateAway = () => {
-        if (!isRecording) {
-            setShowLeaveModal(true);
-            return;
-        }
-
-        if (window.history.length <= 2) navigate("/");
-        else navigate(-1);
+    if (isRecording) {           // 🔁 녹음 중이면 모달
+        setShowLeaveModal(true);
+        return;
+    }
+    if (window.history.length <= 2) navigate("/");
+    else navigate(-1);
     };
 
     // 폴더선택 동작

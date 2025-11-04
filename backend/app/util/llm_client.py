@@ -3,7 +3,7 @@
 import os, json, httpx
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b-instruct-q4_K_M")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b-instruct-q4_K_M")
 
 # ✅ 최종 요약용 프롬프트 (한국어 강제)
 FINAL_SUMMARY_PROMPT = """You are a Korean meeting assistant. You MUST respond ONLY in Korean language.

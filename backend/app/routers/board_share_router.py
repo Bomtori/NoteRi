@@ -5,7 +5,7 @@ from backend.app.crud.board_share_crud import get_board_members
 from backend.app.db import get_db
 from backend.app.deps.auth import get_current_user
 from backend.app.deps.guest import get_principal
-from backend.app.model import User
+from backend.app.model import User, Board, BoardShare
 from backend.app.schemas.board_share_schema import (
     ShareCreateByEmail, ShareUpdateRole, ShareResponse, BoardShareUserInfo
 )
@@ -25,6 +25,39 @@ def _to_resp(s, include_user=False) -> ShareResponse:
         user_email=(s.user.email if include_user and s.user else None),
         user_name=(s.user.name if include_user and s.user else None),
     )
+
+
+# 공유한 보드 멤버 불러오기
+@router.get("/members", response_model=list[BoardShareUserInfo])
+def list_board_members(
+    board_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),  # ✅ 로그인 유저만
+):
+    # 1️⃣ 오너인지 확인
+    board = db.query(Board).filter(Board.id == board_id).first()
+    if not board:
+        raise HTTPException(status_code=404, detail="Board not found")
+
+    if board.owner_id != current_user.id:
+        # 2️⃣ 공유받은 멤버인지 확인
+        shared = (
+            db.query(BoardShare)
+            .filter(
+                BoardShare.board_id == board_id,
+                BoardShare.user_id == current_user.id,
+            )
+            .first()
+        )
+        if not shared:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+    # 3️⃣ 멤버 목록 조회
+    members = get_board_members(db, board_id)
+    if members is None:
+        raise HTTPException(status_code=404, detail="Board not found")
+
+    return members
 
 # 목록 (오너만 조회 가능)
 @router.get("/", response_model=list[ShareResponse])
@@ -95,20 +128,3 @@ def remove_share(
         raise HTTPException(status_code=404, detail="Board or share not found")
     return {"ok": True}
 
-# 공유한 보드 멤버 불러오기
-@router.get("/members", response_model=list[BoardShareUserInfo])
-def list_board_members(
-    board_id: int,
-    db: Session = Depends(get_db),
-    principal = Depends(get_principal),
-):
-    # 권한 체크: 이 보드를 볼 수 있는 사람만
-    if not can_read_board(db, board_id, principal):
-        # 존재 여부 노출 최소화 위해 404로 통일
-        raise HTTPException(status_code=404, detail="Board not found")
-
-    members = get_board_members(db, board_id)
-    if members is None:
-        raise HTTPException(status_code=404, detail="Board not found")
-
-    return members

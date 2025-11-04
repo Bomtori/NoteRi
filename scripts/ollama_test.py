@@ -7,7 +7,7 @@ async def main():
     다음 주까지 테스트를 마무리하겠습니다.
     """
     payload = {
-        "model": "qwen2.5:7b-instruct-q4_K_M",
+        "model": "qwen2.5:3b-instruct-q4_K_M",
         "prompt": f"다음 내용을 간단히 요약해줘:\n{text}",
         "stream": False
     }

@@ -21,6 +21,7 @@ async def create_embeddings_for_session(session_id: int):
     Args:
         session_id: RecordingSession ID
     """
+    
     try:
         logger.info(f"🔄 Starting auto-embedding for session {session_id}")
         

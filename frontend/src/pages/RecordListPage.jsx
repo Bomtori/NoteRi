@@ -32,7 +32,7 @@ export default function RecordListPage() {
     const [ragLoading, setRagLoading] = useState(false);
     const [ragError, setRagError] = useState("");
 
-    // ✅ 다가오는 일정 불러오기
+    // 다가오는 일정 불러오기
     const fetchUpcoming = useCallback(async () => {
         try {
             const now = new Date();
@@ -58,7 +58,7 @@ export default function RecordListPage() {
         }
     }, []);
 
-    // ✅ 페이지 기반 보드 불러오기 (단일 데이터 소스)
+    // 페이지 기반 보드 불러오기 (단일 데이터 소스)
     const fetchBoards = useCallback(async (page = 1) => {
         const skip = (page - 1) * recordsPerPage;
         const limit = recordsPerPage;
@@ -67,7 +67,7 @@ export default function RecordListPage() {
         try {
             const res = await apiClient.get("/boards", { params: { skip, limit } });
 
-            console.log("✅ API 응답:", res.data);
+            console.log("API 응답:", res.data);
 
             const { total = 0, items = [] } = res.data;
 
@@ -85,7 +85,7 @@ export default function RecordListPage() {
         }
     }, [dispatch]);
 
-    // ✅ 초기 로드 - 한 번만 실행
+    // 초기 로드 - 한 번만 실행
     useEffect(() => {
         console.log("🚀 초기 데이터 로드");
         fetchBoards(1);
@@ -96,14 +96,14 @@ export default function RecordListPage() {
         }
     }, []); // ❌ 의존성 배열 비움 - 마운트 시 1회만 실행
 
-    // ✅ 폴더 목록 디버깅
+    // 폴더 목록 디버깅
     useEffect(() => {
         if (folders?.length) {
             console.log("📁 folders loaded:", folders);
         }
     }, [folders]);
 
-    // ✅ 검색 + 정렬 + 필터링 (클라이언트 사이드)
+    // 검색 + 정렬 + 필터링 (클라이언트 사이드)
     const filteredRecords = useMemo(() => {
         let filtered = Array.isArray(records) ? records : [];
 
@@ -128,14 +128,14 @@ export default function RecordListPage() {
         });
     }, [records, searchTerm, sortOption, selectedFolder]);
 
-    // ✅ 폴더 변경 핸들러
+    // 폴더 변경 핸들러
     const handleFolderChange = useCallback(async (recordId, folder) => {
         try {
             await apiClient.patch(`/boards/${recordId}/folder`, {
                 folder_id: folder.id
             });
 
-            // ✅ 로컬 상태 업데이트
+            // 로컬 상태 업데이트
             const updatedRecords = records.map(rec =>
                 rec.id === recordId
                     ? { ...rec, folder, folder_id: folder.id }
@@ -143,7 +143,7 @@ export default function RecordListPage() {
             );
             dispatch(setRecords(updatedRecords));
 
-            console.log("✅ 폴더 변경 완료");
+            console.log("폴더 변경 완료");
         } catch (err) {
             console.error("❌ 폴더 변경 실패:", err);
             // 실패 시 다시 불러오기
@@ -151,7 +151,7 @@ export default function RecordListPage() {
         }
     }, [dispatch, records, currentPage, fetchBoards]);
 
-    // ✅ 페이지 변경
+    // 페이지 변경
     const handlePageChange = (page) => {
         if (page < 1 || page > totalPages) return;
         setCurrentPage(page);
@@ -159,7 +159,7 @@ export default function RecordListPage() {
         window.scrollTo({ top: 0, behavior: "smooth" });
     };
 
-    // ✅ RAG 질문 제출
+    // RAG 질문 제출
     const handleRagSubmit = async () => {
         if (!ragQuestion.trim()) {
             setRagError("질문을 입력해주세요.");
@@ -197,7 +197,7 @@ export default function RecordListPage() {
         }
     };
 
-    // ✅ 로딩 상태
+    // 로딩 상태
     if (isLoading && records.length === 0) {
         return (
             <div className="flex items-center justify-center h-screen">
@@ -299,7 +299,7 @@ export default function RecordListPage() {
 
             {/* 오른쪽: GPT 분석 패널 */}
             <aside className="w-[30%] bg-white rounded-2xl shadow-sm p-6 flex flex-col min-h-[700px]">
-                {/* ✅ 일정 미리보기 */}
+                {/* 일정 미리보기 */}
                 <div className="mb-6 border-b border-gray-200 pb-3">
                     <div className="flex justify-between items-center mb-2">
                         <h3 className="font-semibold text-gray-800">📅 다가오는 일정</h3>
@@ -483,7 +483,7 @@ export default function RecordListPage() {
                 <button
                     onClick={() => {
                         setCalendarOpen(false);
-                        // ✅ 캘린더 닫을 때 일정 새로고침
+                        // 캘린더 닫을 때 일정 새로고침
                         fetchUpcoming();
                     }}
                     className="

@@ -235,6 +235,17 @@ export default function UserPage() {
                 const endDate = subscription?.end_date || null;
                 const usedMinutes = Math.floor((usage.used_seconds ?? 0) / 60);
 
+                // 구독 만료 체크 (핵심 수정)
+                const isExpired = endDate && new Date(endDate) < new Date();
+                const effectivePlanName = isExpired ? "free" : (data.plan_name || "free");
+
+                console.log("🔍 구독 상태:", {
+                    planName: data.plan_name,
+                    endDate,
+                    isExpired,
+                    effectivePlanName
+                });
+
                 // 플랜 정보 설정
                 const plan: Plan =
                     data.plan_name === "pro"
@@ -339,6 +350,24 @@ export default function UserPage() {
             showToast(err.message || "결제를 시작할 수 없습니다. 잠시 후 다시 시도해주세요.");
         } finally {
             setShowModal(false);
+        }
+    };
+
+    // 구독 해지 핸들러 추가
+    const handleCancelSubscription = async () => {
+        if (!confirm("구독을 정말 해지하시겠습니까?\n다음 결제일까지는 서비스를 이용할 수 있습니다.")) {
+            return;
+        }
+
+        try {
+            await apiClient.patch(`${API_BASE_URL}/subscriptions/me/cancel`);
+            showToast("구독이 해지되었습니다. 다음 결제일까지 서비스를 이용할 수 있습니다.");
+
+            // 사용자 정보 다시 불러오기
+            window.location.reload();
+        } catch (err) {
+            console.error("구독 해지 실패:", err);
+            showToast("구독 해지에 실패했습니다. 다시 시도해주세요.");
         }
     };
 
@@ -475,6 +504,15 @@ export default function UserPage() {
                             >
                                 플랜 변경
                             </button>
+                            {/* ✅ 구독 해지 버튼 추가 */}
+                            {user.plan.name !== "free" && (
+                                <button
+                                    onClick={handleCancelSubscription}
+                                    className="px-4 py-1.5 text-sm rounded-md border border-red-400 text-red-500 hover:bg-red-50 transition"
+                                >
+                                    구독 해지
+                                </button>
+                            )}
                             {showModal && (
                                 <PlanChangeModal
                                     currentPlan={user.plan.name}

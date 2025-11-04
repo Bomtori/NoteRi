@@ -3,7 +3,7 @@ from typing import List, Optional
 from datetime import date, timedelta, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 
 from backend.app.db import get_db
@@ -48,16 +48,24 @@ def get_my_subscription(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+
+    today = date.today()
     print("✅ current_user.id =", current_user.id)
 
     sub = (
         db.query(Subscription)
-          .filter(Subscription.user_id == current_user.id)
+          .options(joinedload(Subscription.plan))
+          .filter(
+              Subscription.user_id == current_user.id,
+              Subscription.is_active == True,
+              Subscription.end_date >= today
+          )
           .order_by(Subscription.start_date.desc().nullslast())
           .first()
     )
+
     if not sub:
-        raise HTTPException(status_code=404, detail="Subscription not found")
+        raise HTTPException(status_code=404, detail="Active subscription not found")
 
     return SubscriptionResponse(
         id=sub.id,
@@ -68,7 +76,6 @@ def get_my_subscription(
         updated_at=sub.updated_at,
         is_active=sub.is_active,
     )
-
 # 내 구독 수정 (플랜 변경 또는 활성/비활성)
 @router.patch("/me", response_model=SubscriptionResponse)
 def update_my_subscription(

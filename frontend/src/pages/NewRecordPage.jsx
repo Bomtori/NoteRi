@@ -20,7 +20,7 @@ export default function NewRecordPage() {
     // const dispatch = useDispatch();
     const { folders } = useSelector((state) => state.folder);
 
-    // 🔹 상태
+    // 상태
     const [boardId, setBoardId] = useState(null);
     const [title, setTitle] = useState(localStorage.getItem("draftTitle") || formatDefaultTitle());
     const [activeTab, setActiveTab] = useState("record");
@@ -32,58 +32,57 @@ export default function NewRecordPage() {
     const { toast, showToast, clearToast } = useToast();
     const [showDropdown, setShowDropdown] = useState(false);
 
-    // 🔹 STT 관련 상태
+    // STT 관련 상태
     const [liveText, setLiveText] = useState("");
     const [liveLines, setLiveLines] = useState([]);
     const [summaries, setSummaries] = useState([]);
-    const [allHistory, setAllHistory] = useState([]); // ✅ 전체 누적 히스토리
-    const [finalSummary, setFinalSummary] = useState(null); // ✅ 전체 요약
-    const [recordingStopped, setRecordingStopped] = useState(false); // ✅ 녹음 종료 플래그
+    const [allHistory, setAllHistory] = useState([]); // 전체 누적 히스토리
+    const [finalSummary, setFinalSummary] = useState(null); // 전체 요약
+    const [recordingStopped, setRecordingStopped] = useState(false); // 녹음 종료 플래그
 
     function toWsUrl(httpBase) {
-    try {
-        const u = new URL(httpBase);
-        u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
-        u.pathname = "/ws/stt";
-        u.search = "";
-        u.hash = "";
-        return u.toString();
-    } catch {
-        // fallback
-        return "ws://localhost:8000/ws/stt";
-    }
+        try {
+            const u = new URL(httpBase);
+            u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
+            u.pathname = "/ws/stt";
+            u.search = "";
+            u.hash = "";
+            return u.toString();
+        } catch {
+            // fallback
+            return "ws://localhost:8000/ws/stt";
+        }
     }
 
     // .env에서 주입되면 그걸 우선 사용
     const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
-    const WS_URL =
-    import.meta.env.VITE_WS_URL || toWsUrl(API_BASE);
+    const WS_URL = import.meta.env.VITE_WS_URL || toWsUrl(API_BASE);
 
-    // ✅ useRecording hook
+    // useRecording hook
     const { recordingState, startRecording, stopRecording } = useRecording({
-    WS_URL,
-    boardId, // ← 반드시 전달!
-    onData: (msg) => {
-        if (msg.realtime) setLiveText(msg.realtime);
+        WS_URL,
+        boardId, // 반드시 전달!
+        onData: (msg) => {
+            if (msg.realtime) setLiveText(msg.realtime);
 
-        if (msg.append) {
-        const cleanText = msg.append.replace(/^•\s*/, "");
-        setLiveLines((prev) => [...prev, cleanText]);
-        setAllHistory((prev) => [...prev, cleanText]);
-        }
+            if (msg.append) {
+                const cleanText = msg.append.replace(/^•\s*/, "");
+                setLiveLines((prev) => [...prev, cleanText]);
+                setAllHistory((prev) => [...prev, cleanText]);
+            }
 
-        if (msg.summary) {
-        setSummaries((prev) => [
-            ...prev,
-            { id: Date.now(), summary: msg.summary },
-        ]);
-        setLiveLines([]);
-        }
-    },
-    onStartError: (err) => console.error("녹음 시작 실패:", err),
+            if (msg.summary) {
+                setSummaries((prev) => [
+                    ...prev,
+                    { id: Date.now(), summary: msg.summary },
+                ]);
+                setLiveLines([]);
+            }
+        },
+        onStartError: (err) => console.error("녹음 시작 실패:", err),
     });
 
-    // 🔹 날짜 문자열
+    // 날짜 문자열
     const dateStr = new Date().toLocaleString("ko-KR", {
         month: "2-digit",
         day: "2-digit",
@@ -92,147 +91,150 @@ export default function NewRecordPage() {
         minute: "2-digit",
     });
 
+    // 녹음 시작
     const handleStartRecording = async () => {
-    try {
-        let id = boardId;
+        try {
+            let id = boardId;
 
-        if (!id) {
-        const res = await apiClient.post("/boards", { title, description: "" });
-        console.log("🧪 /boards 응답:", res.status, res.data);
+            if (!id) {
+                const res = await apiClient.post("/boards", { title, description: "" });
+                console.log(" /boards 응답:", res.status, res.data);
 
-        // ✅ 응답 모양에 따라 안전하게 id 추출
-        id =
-            res?.data?.id ??
-            res?.data?.board?.id ??
-            res?.data?.data?.id ??
-            null;
+                // 응답 모양에 따라 안전하게 id 추출
+                id =
+                    res?.data?.id ??
+                    res?.data?.board?.id ??
+                    res?.data?.data?.id ??
+                    null;
 
-        if (!id) {
-            throw new Error(
-            `Board created but no id in response: ${JSON.stringify(res?.data)}`
-            );
+                if (!id) {
+                    throw new Error(
+                        `Board created but no id in response: ${JSON.stringify(res?.data)}`
+                    );
+                }
+
+                setBoardId(id);
+
+                // 다음 틱까지 양보해서 훅 내부 ref도 최신값으로 맞출 여지 주기
+                await new Promise((r) => setTimeout(r, 0));
+            }
+
+            // 반드시 id를 넘겨서 호출 (훅이 최신값을 확실히 사용)
+            await startRecording(id);
+
+            setIsRecording(true);
+            setRecordingStopped(false);
+        } catch (err) {
+            console.error("녹음 시작 실패:", err);
+            showToast(err?.message || "녹음을 시작할 수 없습니다.");
         }
-
-        setBoardId(id);
-
-        // ✅ 다음 틱까지 양보해서 훅 내부 ref도 최신값으로 맞출 여지 주기
-        await new Promise((r) => setTimeout(r, 0));
-        }
-
-        // ✅ 반드시 id를 넘겨서 호출 (훅이 최신값을 확실히 사용)
-        await startRecording(id);
-
-        setIsRecording(true);
-        setRecordingStopped(false);
-    } catch (err) {
-        console.error("녹음 시작 실패:", err);
-        showToast(err?.message || "녹음을 시작할 수 없습니다.");
-    }
     };
 
-
-    // 🔹 녹음 종료 → 전체 요약 대기
+    // 녹음 종료
     const handleStopRecording = async () => {
         const sid = await stopRecording();
         setIsRecording(false);
         setRecordingStopped(true);
 
-        // ✅ 세션 ID 매핑 대기
-        if (sid) {
-            const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-            let sessionId = null;
-            let tries = 0;
+        if (!sid) {
+            showToast("녹음이 중단되었습니다.");
+            return;
+        }
 
-            console.log("⏳ 세션 ID 매핑 대기 중... sid:", sid);
+        const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+        let sessionId = null;
+        let tries = 0;
 
-            // 1단계: sid → session_id 매핑 대기 (최대 30초)
-            while (tries++ < 30) {
-                try {
-                    const res = await apiClient.get(`/sessions/by-sid/${sid}`);
-                    console.log(`[${tries}] by-sid 응답:`, res.status, res.data);
+        console.log("세션 ID 매핑 대기 중... sid:", sid);
 
-                    // ✅ 수정: 'session_id' 또는 'id' 둘 다 체크
-                    if (res.status === 200 && (res.data?.session_id || res.data?.id)) {
-                        sessionId = res.data.session_id || res.data.id;
-                        console.log("✅ 세션 매핑 완료 sessionId:", sessionId);
-                        break; // ✅ 성공 시 즉시 루프 탈출
-                    }
-                } catch (err) {
-                    const status = err.response?.status;
-                    if (status === 202) {
-                        console.log(`[${tries}] pending, 재시도...`);
-                    } else {
-                        console.warn(`[${tries}] by-sid 오류:`, status);
-                    }
-                }
-                await sleep(3000);
-            }
-
-            if (!sessionId) {
-                console.error("❌ 세션 ID 매핑 실패");
-                showToast("세션 정보를 가져올 수 없습니다.");
-                return;
-            }
-            // ✅ 녹음 사용량 차감 (audio_id 대신 session 정보 활용)
+        // 1단계: 세션 ID 매핑 대기 (최대 15초, 5회 × 3초)
+        while (tries++ < 5) {
             try {
-                // session에서 audio_id 가져오기
-                const sessionRes = await apiClient.get(`/sessions/${sessionId}`);
-                const audioId = sessionRes.data?.audio_id;
+                const res = await apiClient.get(`/sessions/by-sid/${sid}`);
+                console.log(`[${tries}] by-sid 응답:`, res.status, res.data);
 
-                if (audioId) {
-                    console.log("🎙️ 사용량 차감 API 호출 - audio_id:", audioId);
-                    const usageRes = await apiClient.post(`/recordings/usage/use/${audioId}`);
-                    console.log("✅ 사용량 차감 완료:", usageRes.data);
-                    showToast(`사용량 차감: ${Math.floor(usageRes.data.used_seconds / 60)}분 사용`);
-                } else {
-                    console.warn("⚠️ audio_id를 찾을 수 없어 사용량 차감 불가");
+                if (res.status === 200 && (res.data?.session_id || res.data?.id)) {
+                    sessionId = res.data.session_id || res.data.id;
+                    console.log("세션 매핑 완료 sessionId:", sessionId);
+                    break;
                 }
             } catch (err) {
-                console.error("❌ 사용량 차감 실패:", err);
-                if (err.response?.status === 400) {
-                    showToast("⚠️ " + (err.response?.data?.detail || "사용량이 부족합니다."));
+                const status = err.response?.status;
+                if (status === 202) {
+                    console.log(`[${tries}] pending, 재시도...`);
+                } else {
+                    console.warn(`[${tries}] by-sid 오류:`, status);
                 }
             }
-
-            // 2단계: 전체 요약 생성 대기 (최대 30초)
-            console.log("⏳ 전체 요약 생성 대기 중... sessionId:", sessionId);
-            tries = 0;
-            while (tries++ < 30) {
-                try {
-                    const res = await apiClient.get(`/sessions/final-summaries/by-session/${sessionId}`);
-                    console.log(`[${tries}] final-summary 응답:`, res.status, res.data);
-
-                    if (res.status === 200 && res.data) {
-                        setFinalSummary(res.data);
-                        console.log("✅ 전체 요약 로드 완료:", res.data);
-                        setActiveTab("summary");
-                        showToast("전체 요약이 생성되었습니다.");
-                        return; // ✅ 성공 시 즉시 함수 종료
-                    }
-                } catch (err) {
-                    const status = err.response?.status;
-                    if (status === 404) {
-                        console.log(`[${tries}] 아직 생성 중... 재시도`);
-                    } else {
-                        console.warn(`[${tries}] final-summary 오류:`, status);
-                    }
-                }
-                await sleep(1000); // ✅ 500ms → 1000ms
-            }
-
-            console.warn("⚠️ 전체 요약 생성 시간 초과");
-            showToast("전체 요약 생성에 시간이 걸리고 있습니다.");
+            await sleep(3000);
         }
+
+        // 세션 매핑 실패 → 사용량 차감 & 요약 생성 스킵
+        if (!sessionId) {
+            console.warn("세션 매핑 실패 → 요약 생성 불가");
+            showToast("녹음은 저장되었으나, 요약 생성에 실패했습니다.");
+            return;
+        }
+
+        // 사용량 차감 (audio_id 기반)
+        try {
+            const sessionRes = await apiClient.get(`/sessions/${sessionId}`);
+            const audioId = sessionRes.data?.audio_id;
+
+            if (audioId) {
+                console.log("사용량 차감 API 호출 - audio_id:", audioId);
+                const usageRes = await apiClient.post(`/recordings/usage/use/${audioId}`);
+                console.log("사용량 차감 완료:", usageRes.data);
+                showToast(`사용량 차감: ${Math.floor(usageRes.data.used_seconds / 60)}분 사용`);
+            } else {
+                console.warn("audio_id 없음 → 사용량 차감 스킵");
+            }
+        } catch (err) {
+            console.error("사용량 차감 실패:", err);
+            if (err.response?.status === 400) {
+                showToast("사용량이 부족합니다.");
+            }
+        }
+
+        // 2단계: 전체 요약 생성 대기 (최대 30초, 30회 × 1초)
+        console.log("전체 요약 생성 대기 중... sessionId:", sessionId);
+        tries = 0;
+        while (tries++ < 30) {
+            try {
+                const res = await apiClient.get(`/sessions/final-summaries/by-session/${sessionId}`);
+                console.log(`[${tries}] final-summary 응답:`, res.status, res.data);
+
+                if (res.status === 200 && res.data) {
+                    setFinalSummary(res.data);
+                    console.log("전체 요약 로드 완료:", res.data);
+                    setActiveTab("summary");
+                    showToast("전체 요약이 생성되었습니다.");
+                    return;
+                }
+            } catch (err) {
+                const status = err.response?.status;
+                if (status === 404) {
+                    console.log(`[${tries}] 아직 생성 중... 재시도`);
+                } else {
+                    console.warn(`[${tries}] final-summary 오류:`, status);
+                }
+            }
+            await sleep(1000);
+        }
+
+        console.warn("전체 요약 생성 시간 초과");
+        showToast("전체 요약 생성에 시간이 걸리고 있습니다.");
     };
 
-    // 🔹 페이지 이탈 시 확인
+    // 페이지 이탈 시 확인
     const handleNavigateAway = () => {
-    if (isRecording) {           // 🔁 녹음 중이면 모달
-        setShowLeaveModal(true);
-        return;
-    }
-    if (window.history.length <= 2) navigate("/");
-    else navigate(-1);
+        if (isRecording) {
+            // 녹음 중이면 모달
+            setShowLeaveModal(true);
+            return;
+        }
+        if (window.history.length <= 2) navigate("/");
+        else navigate(-1);
     };
 
     // 폴더선택 동작
@@ -241,24 +243,24 @@ export default function NewRecordPage() {
         try {
             await apiClient.patch(`/boards/${boardId}/folder`, { folder_id: folder.id });
             setShowDropdown(false);
-            showToast(`📂 "${folder.name}" 폴더로 이동했습니다.`);
+            showToast(`"${folder.name}" 폴더로 이동했습니다.`);
         } catch (err) {
             console.error("폴더 이동 실패:", err);
             showToast("폴더 이동 중 오류가 발생했습니다.");
         }
     };
 
-    // 🔹 녹음 종료 후 탭 설정
+    // 녹음 종료 후 탭 설정
     const tabs = recordingStopped
         ? [
-            { id: "record", label: "회의기록" },
-            { id: "script", label: "스크립트" },
-            { id: "summary", label: "전체 요약" }, // ✅ 녹음 종료 후에만 표시
-        ]
+              { id: "record", label: "회의기록" },
+              { id: "script", label: "스크립트" },
+              { id: "summary", label: "전체 요약" }, // 녹음 종료 후에만 표시
+          ]
         : [
-            { id: "record", label: "회의기록" },
-            { id: "script", label: "스크립트" },
-        ];
+              { id: "record", label: "회의기록" },
+              { id: "script", label: "스크립트" },
+          ];
 
     return (
         <motion.div
@@ -276,7 +278,7 @@ export default function NewRecordPage() {
                 </button>
 
                 <div className="grid grid-cols-[1fr_360px] gap-6">
-                    {/* 🔹 메인 영역 */}
+                    {/* 메인 영역 */}
                     <main className="bg-white rounded-2xl p-6 shadow-sm flex flex-col h-[calc(100vh-140px)]">
                         <RecordHeader
                             title={title}
@@ -305,7 +307,7 @@ export default function NewRecordPage() {
                             finalSummary={finalSummary}
                         />
 
-                        {/* 🔹 하단 컨트롤 */}
+                        {/* 하단 컨트롤 */}
                         <div className="sticky bottom-4 relative">
                             <RecordBar
                                 boardId={boardId}
@@ -323,7 +325,7 @@ export default function NewRecordPage() {
                         </div>
                     </main>
 
-                    {/* 🔹 오른쪽 패널 */}
+                    {/* 오른쪽 패널 */}
                     <AnimatePresence>
                         {isPanelVisible && (
                             <motion.aside
@@ -346,7 +348,7 @@ export default function NewRecordPage() {
                 </div>
             </div>
 
-            {/* 🔹 이탈 경고 모달 */}
+            {/* 이탈 경고 모달 */}
             {showLeaveModal && (
                 <div className="fixed inset-0 flex items-center justify-center bg-black/40 z-[1000]">
                     <div className="bg-white rounded-2xl shadow-xl p-6 w-[320px] text-center">
@@ -371,7 +373,7 @@ export default function NewRecordPage() {
                 </div>
             )}
 
-            {/* 🔹 Toast */}
+            {/* Toast */}
             <AnimatePresence>
                 {toast.visible && (
                     <motion.div
@@ -389,7 +391,7 @@ export default function NewRecordPage() {
     );
 }
 
-// 🔹 기본 회의 제목
+// 기본 회의 제목
 function formatDefaultTitle() {
     const now = new Date();
     const month = String(now.getMonth() + 1).padStart(2, "0");

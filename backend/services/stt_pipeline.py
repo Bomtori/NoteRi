@@ -49,6 +49,17 @@ from backend.services.diarization import run_diarization_for_session
 from dotenv import load_dotenv
 load_dotenv()
 
+# === Key Builder (standardized Redis key patterns) ===
+def build_keys(prefix: str, sid: str) -> dict:
+    """
+    Generate consistent Redis key names for meta, segments, and summaries
+    following the convention: prefix:<suffix>:sid
+    """
+    return {
+        "meta":      f"{prefix}:meta:{sid}",       # hash
+        "segments":  f"{prefix}:segments:{sid}",   # stream
+        "summaries": f"{prefix}:summaries:{sid}",  # stream
+    }
 
 # === 설정 클래스 ===
 class PipelineConfig:
@@ -341,7 +352,7 @@ class STTPipeline:
 
         # ✅ 4) board_id 필수 검사
         if board_id is None:
-            self.logger.error("❌ board_id is required but missing")
+            logger.error("❌ board_id is required but missing")
             raise ValueError("board_id is required")
 
         # ✅ 5) 실제 세션 시작
@@ -353,98 +364,58 @@ class STTPipeline:
             sid=sid,
         )
 
-    async def end_session(self, run_diarization: bool = True):
+    async def end_session(self, *, run_diarization: bool = False) -> None:
         """
-        세션 종료 - 안전한 정리 보장
-        
-        모든 단계를 독립적으로 실행하여 부분 실패 시에도 정리 완료
-        
-        Args:
-            run_diarization: 화자 분리 실행 여부
-            
-        Note:
-            - 각 정리 단계가 실패해도 다음 단계는 계속 실행
-            - 최종 데이터는 비동기로 후처리
+        세션 종료 공통 루틴
+        - 백그라운드 태스크 중단
+        - 메타 종료
+        - (권장) 마지막 요약/오디오 저장 flush
+        - Redis→PG 적재
+        - 최종요약/임베딩 생성
+        - (옵션) diarization
+        - 파이프라인 리셋
         """
-        if not self.session_active:
-            logger.warning("Session not active, ignoring end request")
+        if not self.sid:
+            logger.warning("end_session() called without sid; skipping.")
+            await self._cancel_background_tasks()
+            await self._reset_pipeline()
             return
-        
-        errors = []
-        
-        # 1. 최종 데이터 수집 (가장 먼저 실행)
-        all_lines_for_final: List[str] = []
+
         try:
-            for ts, text in self.paragraph_buffer:
-                if text and text.strip():
-                    all_lines_for_final.append(text.strip())
-            
-            if self.segmenter and self.segmenter.buffer:
-                buffer_text = self.segmenter.buffer.strip()
-                if buffer_text:
-                    all_lines_for_final.append(buffer_text)
-                    
-            logger.info(f"📝 Collected {len(all_lines_for_final)} lines for final summary")
-        except Exception as e:
-            errors.append(f"데이터 수집 실패: {e}")
-            logger.error(f"Failed to collect final data: {e}")
-        
-        # 2. Redis 메타 종료
-        if self.sid:
+            # 1) 백그라운드 루프 중지
+            await self._cancel_background_tasks()
+
+            # 2) (권장) 마지막 요약/오디오 flush
+            with contextlib.suppress(Exception):
+                await self.flush_final_summary()
+            with contextlib.suppress(Exception):
+                await self.save_raw_audio_async()
+
+            # 3) Redis 메타 종료
             try:
-                await end_session_meta(self.sid, prefix=self.redis_prefix)
-                logger.info(f"✅ Redis meta ended for sid={self.sid}")
+                await end_session_meta(prefix=self.redis_prefix, sid=self.sid)  # ✅ 상단에서 redis_publisher로 임포트한 함수 사용
+                logger.info("✅ Redis meta ended for sid=%s", self.sid)
             except Exception as e:
-                errors.append(f"Redis 메타 종료 실패: {e}")
-                logger.warning(f"end_session_meta failed: {e}")
-        
-        # 3. 백그라운드 태스크 중단
-        tasks_to_cancel = [
-            ("summary", self.summary_task),
-            ("timeout", self.timeout_task),
-            ("audio_save", self.audio_save_task),
-        ]
-        
-        for task_name, task in tasks_to_cancel:
-            if task and not task.done():
-                try:
-                    task.cancel()
-                    try:
-                        await task
-                    except asyncio.CancelledError:
-                        pass
-                    logger.info(f"✅ {task_name} task cancelled")
-                except Exception as e:
-                    errors.append(f"{task_name} 태스크 중단 실패: {e}")
-                    logger.warning(f"Failed to cancel {task_name} task: {e}")
-        
-        self.summary_task = None
-        self.timeout_task = None
-        self.audio_save_task = None
-        
-        # 4. 세션 상태 정리 (반드시 실행)
-        try:
-            self.session_active = False
-            self.ws = None
-            logger.info("🔴 Session ended", extra={
-                "event": "session_ended",
-                "sid": self.sid,
-                "duration": time.time() - self.session_start_ts if self.session_start_ts else 0
-            })
-            self.reset_all()
-        except Exception as e:
-            errors.append(f"세션 정리 실패: {e}")
-            logger.error(f"Failed to reset session: {e}")
-        
-        # 5. 에러 로깅
-        if errors:
-            logger.warning(f"⚠️ Session end errors: {', '.join(errors)}")
-        
-        # 6. 후속 작업 (비동기로 실행하여 블로킹 방지)
-        if self.sid:
-            asyncio.create_task(
-                self._finalize_session(all_lines_for_final, run_diarization)
-            )
+                logger.warning("⚠️ Redis meta end failed: %s", e)
+
+            # 4) Redis → PG 적재
+            try:
+                logger.info("🔄 Starting session finalization for sid=%s", self.sid)
+                from backend.app.tasks.redis_to_pg import ingest_session_to_db
+                await ingest_session_to_db(sid=self.sid, prefix=self.redis_prefix)
+                logger.info("✅ Redis→PG ingestion completed for sid=%s", self.sid)
+            except Exception as e:
+                logger.error("❌ Redis→PG ingestion failed: %s", e)
+                return  # ✅ 이후 단계 스킵
+
+            # 5) 최종 요약/임베딩 실행 (메모리 버퍼 기반)
+            lines = [txt for (_, txt) in self.paragraph_buffer if txt and txt.strip()]
+            await self._finalize_session(lines, run_diarization)
+
+        finally:
+            # 6) 내부 상태 완전 초기화
+            await self._reset_pipeline()
+            logger.info("🧹 STT Pipeline fully reset")
 
     async def _finalize_session(self, lines: List[str], run_diarization: bool):
         """
@@ -958,7 +929,35 @@ class STTPipeline:
     # -------------------------------------------------------------------------
     # 상태 초기화 및 저장
     # -------------------------------------------------------------------------
-    
+    async def _cancel_background_tasks(self):
+        tasks = [self.summary_task, self.timeout_task, self.audio_save_task]
+        for t in tasks:
+            if t and not t.done():
+                t.cancel()
+        # 취소 완료 대기
+        for t in tasks:
+            if t:
+                with contextlib.suppress(asyncio.CancelledError):
+                    await t
+
+    async def _reset_pipeline(self):
+        # 완전 초기화(기존 reset_all과 역할 동일하게 유지)
+        self.raw_audio_buffer.clear()
+        if self.segmenter:
+            self.segmenter.buffer = ""
+            self.segmenter.silence_time = 0.0
+        if self.deduper:
+            self.deduper.reset()
+        self.paragraph_buffer.clear()
+        self._utt_min_start = None
+        self._utt_max_end = None
+
+        self.session_active = False
+        self.session_start_ts = None
+        self.last_cut_ts = None
+        self.last_activity_ts = None
+        self.ws = None
+
     def reset(self):
         """
         오디오/세그먼트 버퍼만 비움 (세션 유지)
@@ -1036,25 +1035,17 @@ class STTPipeline:
             try:
                 from backend.app.util.redis_client import get_redis
                 r = await get_redis()
-
-                if not self.redis_prefix:
-                    logger.warning("⚠️ redis_prefix missing when saving audio meta")
-
-                # ✅ 키: {prefix}:meta:{sid}
-                meta_key = f"{self.redis_prefix}:meta:{self.sid}"
-
                 await r.hset(
-                    meta_key,
+                    f"{self.redis_prefix}:meta:{self.sid}",  # ✅ prefix:meta:sid 로 통일
                     mapping={
                         "audio_path": result["filepath"],
-                        "duration_sec": result["duration"],     # ✅ ingest용 필드명
+                        "duration_ms": int(result["duration"] * 1000),
                         "language": getattr(self, "lang", "ko"),
                     },
                 )
                 logger.info(f"🔖 Saved audio metadata to Redis for sid={self.sid}")
             except Exception as e:
                 logger.warning(f"⚠️ Failed to write audio metadata to Redis: {e}")
-
         return result
 
 

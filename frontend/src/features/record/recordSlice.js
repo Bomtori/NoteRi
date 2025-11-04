@@ -133,7 +133,9 @@ const recordSlice = createSlice({
     reducers: {
         // ⭐ 전체 세팅 (기존 유지)
         setRecords: (state, action) => {
-            state.records = action.payload;
+            state.records = Array.isArray(action.payload)
+                ? action.payload
+                : [];
         },
 
         // ⭐ 하나 업데이트 (기존 유지)

@@ -1,5 +1,5 @@
 // hooks/useRecording.js
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 
 function floatTo16BitPCM(float32Array) {
   const buffer = new ArrayBuffer(float32Array.length * 2);
@@ -13,12 +13,6 @@ function floatTo16BitPCM(float32Array) {
   return buffer;
 }
 
-// 9자리 숫자 sid 생성 (예: 223126628)
-function genNumericSid() {
-  const n = Math.floor(Math.random() * 1e9);
-  return String(n).padStart(9, "0");
-}
-
 export default function useRecording({ WS_URL, boardId, onData, onStartError }) {
   const [recordingState, setRecordingState] = useState("idle");
 
@@ -30,65 +24,53 @@ export default function useRecording({ WS_URL, boardId, onData, onStartError }) 
   const sourceRef = useRef(null);
   const pausedRef = useRef(false);
 
-  const startRecording = async () => {
+  // ✅ 항상 최신 boardId를 참조하도록 ref로 보관
+  const boardIdRef = useRef(boardId);
+  useEffect(() => {
+    boardIdRef.current = boardId;
+  }, [boardId]);
+
+  const startRecording = async (overrideBoardId) => {
     if (recordingState !== "idle") return;
 
-    // 0) boardId 필수
-    if (!boardId && boardId !== 0) {
-      const err = new Error("boardId is required to start recording");
-      onStartError?.(err);
-      return;
-    }
-
     try {
-      setRecordingState("connecting");
+      setRecordingState("recording");
       pausedRef.current = false;
 
-      // 1) sid 생성 + WS URL 구성
-      sidRef.current = genNumericSid();
-      const wsUrl = `${WS_URL}?board_id=${encodeURIComponent(boardId)}&sid=${encodeURIComponent(
-        sidRef.current
-      )}`;
+      // ✅ 호출 시점의 최신 boardId 확보
+      const id = overrideBoardId ?? boardIdRef.current;
+      console.log("useRecording.startRecording() id =", id, "override =", overrideBoardId, "ref =", boardIdRef.current);
+      if (!id) throw new Error("boardId is required to start recording");
 
-      console.log("🔌 WebSocket 연결 시도:", wsUrl);
+      // 1) WebSocket 연결 (board_id를 쿼리 파라미터로 전달)
+      const wsUrl = `${WS_URL}?board_id=${id}`;
+      console.log("🔌 WS connect:", wsUrl);
       wsRef.current = new WebSocket(wsUrl);
       wsRef.current.binaryType = "arraybuffer";
 
-      // 2) WS open 대기 (open 되기 전엔 오디오 시작/전송 금지)
-      await new Promise((resolve, reject) => {
-        let resolved = false;
+      wsRef.current.onopen = () => {
+        console.log("✅ WS connected:", wsUrl);
+      };
 
-        wsRef.current.onopen = () => {
-          console.log("✅ WS connected:", wsUrl);
-          resolved = true;
-          resolve();
-        };
-        wsRef.current.onerror = (e) => {
-          if (!resolved) reject(e);
-          console.error("❌ WS error:", e);
-        };
-        wsRef.current.onclose = (e) => {
-          console.log("🔌 WS closed before start:", e.code, e.reason || "");
-          if (!resolved) reject(new Error(`WS closed (${e.code}) ${e.reason || ""}`));
-        };
-        wsRef.current.onmessage = (event) => {
-          try {
-            const msg = JSON.parse(event.data);
-            // 서버가 session_started + sid를 보내줄 수도 있지만
-            // 우리는 이미 sidRef.current를 URL로 넘겼으므로 참고만 함
-            if (msg.event === "session_started" && msg.sid) {
-              console.log("🎙️ server confirmed sid:", msg.sid);
-            }
-            onData?.(msg);
-          } catch {
-            // 서버가 바이너리/텍스트 섞어 보낼 수 있으니 조용히 패스
+      wsRef.current.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+
+          if (msg.event === "session_started" && msg.sid) {
+            sidRef.current = msg.sid;
+            console.log("🎙️ sid assigned:", msg.sid);
           }
-        };
-      });
 
-      // 3) 오디오 캡처 & PCM 전송 (WS open 이후에만)
-      setRecordingState("recording");
+          onData?.(msg);
+        } catch (err) {
+          console.error("❌ JSON parse error:", err);
+        }
+      };
 
+      wsRef.current.onerror = (e) => console.error("❌ WS error:", e);
+      wsRef.current.onclose = (e) => console.log("🔌 WS closed:", e.code, e.reason);
+
+      // 2) 오디오 캡처 & PCM 전송
       streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({
         sampleRate: 16000,
@@ -100,26 +82,20 @@ export default function useRecording({ WS_URL, boardId, onData, onStartError }) 
       processorRef.current = audioContextRef.current.createScriptProcessor(16384, 1, 1);
       processorRef.current.onaudioprocess = (e) => {
         if (pausedRef.current) return;
-        const ws = wsRef.current;
-        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
         const input = e.inputBuffer.getChannelData(0);
         const pcm = floatTo16BitPCM(input);
-        ws.send(pcm);
+        wsRef.current.send(pcm);
       };
 
       source.connect(processorRef.current);
-      // 일부 브라우저는 destination 연결이 필요함
       processorRef.current.connect(audioContextRef.current.destination);
     } catch (err) {
       console.error("❌ Recording start failed:", err);
       setRecordingState("idle");
       onStartError?.(err);
-      // WS가 열리다 실패하면 안전 정리
-      try {
-        wsRef.current?.close();
-      } catch {}
-      wsRef.current = null;
+      throw err;
     }
   };
 
@@ -128,7 +104,7 @@ export default function useRecording({ WS_URL, boardId, onData, onStartError }) 
     pausedRef.current = true;
     setRecordingState("paused");
 
-    if (audioContextRef.current && audioContextRef.current.state === "running") {
+    if (audioContextRef.current?.state === "running") {
       try {
         await audioContextRef.current.suspend();
         console.log("⏸️ audio context suspended");
@@ -142,7 +118,7 @@ export default function useRecording({ WS_URL, boardId, onData, onStartError }) 
     if (recordingState !== "paused") return;
     pausedRef.current = false;
 
-    if (audioContextRef.current && audioContextRef.current.state === "suspended") {
+    if (audioContextRef.current?.state === "suspended") {
       try {
         await audioContextRef.current.resume();
         console.log("▶️ audio context resumed");
@@ -158,51 +134,39 @@ export default function useRecording({ WS_URL, boardId, onData, onStartError }) 
     setRecordingState("idle");
     pausedRef.current = false;
 
-    // 오디오 리소스 정리
     try {
       if (processorRef.current) {
-        try {
-          processorRef.current.disconnect();
-        } catch {}
+        processorRef.current.disconnect();
         processorRef.current.onaudioprocess = null;
         processorRef.current = null;
       }
       if (sourceRef.current) {
-        try {
-          sourceRef.current.disconnect();
-        } catch {}
+        sourceRef.current.disconnect();
         sourceRef.current = null;
       }
       if (audioContextRef.current && audioContextRef.current.state !== "closed") {
-        try {
-          await audioContextRef.current.close();
-        } catch {}
+        await audioContextRef.current.close();
         audioContextRef.current = null;
       }
       if (streamRef.current) {
-        try {
-          streamRef.current.getTracks().forEach((t) => t.stop());
-        } catch {}
+        streamRef.current.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
       }
     } catch (e) {
       console.warn("⚠️ cleanup warning:", e);
     }
 
-    // WebSocket 정리 (열려 있으면 정상 종료 코드로)
-    try {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.close(1000, "Normal Closure");
-      }
-    } catch {}
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.close(1000, "Normal Closure");
+    }
     wsRef.current = null;
 
-    return sidRef.current; // 세션 ID 반환 (후속 API 콜 등에 사용)
+    return sidRef.current;
   };
 
   return {
     recordingState,
-    startRecording,
+    startRecording,   // ← 이제 (id) 넘길 수 있음
     pauseRecording,
     resumeRecording,
     stopRecording,

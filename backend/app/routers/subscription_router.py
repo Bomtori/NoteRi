@@ -48,6 +48,8 @@ def get_my_subscription(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    print("✅ current_user.id =", current_user.id)
+
     sub = (
         db.query(Subscription)
           .filter(Subscription.user_id == current_user.id)

@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session,joinedload 
 from datetime import datetime, UTC
-from sqlalchemy.orm import joinedload # 🍒 10.22 front 추가
-
+from sqlalchemy import desc, Enum
+from datetime import date
 from backend.app.deps.auth import get_current_user
 from backend.app.model import User, Subscription, Plan
 from backend.app.db import get_db
@@ -17,27 +17,32 @@ router = APIRouter()
 @router.get("/users/me", response_model=user_schema.UserResponse)
 async def get_user_me(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),   # ✅ 이렇게 파라미터로 받아야 함
+    db: Session = Depends(get_db),
 ):
-    # 활성 구독 중 최신(시작일 기준) 1건 조회
-    from sqlalchemy import desc
-    active_sub = (
+    # 1) 최신 구독 1건(활성 여부로 미리 거르지 않음: 가장 최신 상태 판단이 중요)
+    latest_sub: Subscription | None = (
         db.query(Subscription)
-        .options(joinedload(Subscription.plan))  # 🍒 10.22 front 추가
-        .filter(
-            Subscription.user_id == current_user.id,
-            Subscription.is_active == True,
-        )
-        .order_by(desc(Subscription.start_date))   # 필요 시 기준 변경 가능
+        .options(joinedload(Subscription.plan))
+        .filter(Subscription.user_id == current_user.id)
+        .order_by(desc(Subscription.start_date).nullslast())
         .first()
     )
 
-    # Plan.name 이 Enum(PlanType)이면 .value 로 문자열 뽑기
-    plan_name = (
-        active_sub.plan.name
-        if active_sub and active_sub.plan
-        else "free" # 🍒 10.22 front None -> "free" 로변경 [만약 플랜이없으면 free로가라]
-    )
+    # 2) 기본값 = free
+    effective_plan_name = "free"
+
+    if latest_sub:
+        # 만료/비활성 판단
+        expired = bool(latest_sub.end_date and latest_sub.end_date < date.today())
+        inactive = not latest_sub.is_active
+
+        if not expired and not inactive and latest_sub.plan:
+            # Plan.name 이 Enum일 수도 있으니 안전하게 문자열로
+            raw_name = latest_sub.plan.name
+            if isinstance(raw_name, Enum):  # e.g. PlanType.PRO
+                effective_plan_name = raw_name.value.lower()
+            else:
+                effective_plan_name = str(raw_name).lower()
 
     return {
         "id": current_user.id,
@@ -47,10 +52,11 @@ async def get_user_me(
         "picture": current_user.picture,
         "oauth_provider": current_user.oauth_provider,
         "is_active": current_user.is_active,
-        "role" : current_user.role,
+        "role": current_user.role,
         "created_at": current_user.created_at,
         "updated_at": current_user.updated_at,
-        "plan_name": plan_name,
+        # ✅ 만료/비활성 시 자동으로 "free"
+        "plan_name": effective_plan_name,
     }
 
 

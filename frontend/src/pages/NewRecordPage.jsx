@@ -40,39 +40,47 @@ export default function NewRecordPage() {
     const [finalSummary, setFinalSummary] = useState(null); // ✅ 전체 요약
     const [recordingStopped, setRecordingStopped] = useState(false); // ✅ 녹음 종료 플래그
 
-    const WS_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8000/ws/stt";
+    function toWsUrl(httpBase) {
+    try {
+        const u = new URL(httpBase);
+        u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
+        u.pathname = "/ws/stt";
+        u.search = "";
+        u.hash = "";
+        return u.toString();
+    } catch {
+        // fallback
+        return "ws://localhost:8000/ws/stt";
+    }
+    }
+
+    // .env에서 주입되면 그걸 우선 사용
     const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
+    const WS_URL =
+    import.meta.env.VITE_WS_URL || toWsUrl(API_BASE);
 
     // ✅ useRecording hook
     const { recordingState, startRecording, stopRecording } = useRecording({
-        WS_URL,
-        boardId,
-        onData: (msg) => {
-            // 🎙️ 실시간 STT
-            if (msg.realtime) {
-                setLiveText(msg.realtime);
-            }
+    WS_URL,
+    boardId, // ← 반드시 전달!
+    onData: (msg) => {
+        if (msg.realtime) setLiveText(msg.realtime);
 
-            // 📝 후처리 완료 문장 (현재 1분 구간 + 전체 히스토리에 추가)
-            if (msg.append) {
-                const cleanText = msg.append.replace(/^•\s*/, "");
-                setLiveLines((prev) => [...prev, cleanText]); // 1분 구간
-                setAllHistory((prev) => [...prev, cleanText]); // 전체 누적
-            }
+        if (msg.append) {
+        const cleanText = msg.append.replace(/^•\s*/, "");
+        setLiveLines((prev) => [...prev, cleanText]);
+        setAllHistory((prev) => [...prev, cleanText]);
+        }
 
-            // ⏱️ 1분 요약 도착 (현재 1분 구간 초기화)
-            if (msg.summary) {
-                setSummaries((prev) => [
-                    ...prev,
-                    {
-                        id: Date.now(),
-                        summary: msg.summary,
-                    },
-                ]);
-                setLiveLines([]); // 현재 1분 구간만 초기화
-            }
-        },
-        onStartError: (err) => console.error("녹음 시작 실패:", err),
+        if (msg.summary) {
+        setSummaries((prev) => [
+            ...prev,
+            { id: Date.now(), summary: msg.summary },
+        ]);
+        setLiveLines([]);
+        }
+    },
+    onStartError: (err) => console.error("녹음 시작 실패:", err),
     });
 
     // 🔹 날짜 문자열
@@ -85,23 +93,43 @@ export default function NewRecordPage() {
     });
 
     const handleStartRecording = async () => {
-        try {
+    try {
         let id = boardId;
+
         if (!id) {
-            const res = await apiClient.post("/boards", { title, description: "" });
-            id = res.data.id;
-            setBoardId(id);
-            // ✅ 리렌더(다음 틱)까지 한 번 양보해 훅이 최신 boardId를 쓰게 함
-            await new Promise((r) => setTimeout(r, 0));
+        const res = await apiClient.post("/boards", { title, description: "" });
+        console.log("🧪 /boards 응답:", res.status, res.data);
+
+        // ✅ 응답 모양에 따라 안전하게 id 추출
+        id =
+            res?.data?.id ??
+            res?.data?.board?.id ??
+            res?.data?.data?.id ??
+            null;
+
+        if (!id) {
+            throw new Error(
+            `Board created but no id in response: ${JSON.stringify(res?.data)}`
+            );
         }
-        await startRecording();
+
+        setBoardId(id);
+
+        // ✅ 다음 틱까지 양보해서 훅 내부 ref도 최신값으로 맞출 여지 주기
+        await new Promise((r) => setTimeout(r, 0));
+        }
+
+        // ✅ 반드시 id를 넘겨서 호출 (훅이 최신값을 확실히 사용)
+        await startRecording(id);
+
         setIsRecording(true);
         setRecordingStopped(false);
-        } catch (err) {
+    } catch (err) {
         console.error("녹음 시작 실패:", err);
-        showToast("녹음을 시작할 수 없습니다.");
-        }
+        showToast(err?.message || "녹음을 시작할 수 없습니다.");
+    }
     };
+
 
     // 🔹 녹음 종료 → 전체 요약 대기
     const handleStopRecording = async () => {

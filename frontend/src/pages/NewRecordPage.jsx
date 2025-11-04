@@ -173,6 +173,26 @@ export default function NewRecordPage() {
                 showToast("세션 정보를 가져올 수 없습니다.");
                 return;
             }
+            // ✅ 녹음 사용량 차감 (audio_id 대신 session 정보 활용)
+            try {
+                // session에서 audio_id 가져오기
+                const sessionRes = await apiClient.get(`/sessions/${sessionId}`);
+                const audioId = sessionRes.data?.audio_id;
+
+                if (audioId) {
+                    console.log("🎙️ 사용량 차감 API 호출 - audio_id:", audioId);
+                    const usageRes = await apiClient.post(`/recordings/usage/use/${audioId}`);
+                    console.log("✅ 사용량 차감 완료:", usageRes.data);
+                    showToast(`사용량 차감: ${Math.floor(usageRes.data.used_seconds / 60)}분 사용`);
+                } else {
+                    console.warn("⚠️ audio_id를 찾을 수 없어 사용량 차감 불가");
+                }
+            } catch (err) {
+                console.error("❌ 사용량 차감 실패:", err);
+                if (err.response?.status === 400) {
+                    showToast("⚠️ " + (err.response?.data?.detail || "사용량이 부족합니다."));
+                }
+            }
 
             // 2단계: 전체 요약 생성 대기 (최대 30초)
             console.log("⏳ 전체 요약 생성 대기 중... sessionId:", sessionId);

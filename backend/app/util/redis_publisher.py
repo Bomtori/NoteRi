@@ -40,36 +40,50 @@ async def init_session_meta(
 ) -> None:
     """
     세션 시작 시 메타 저장.
-    - 필수 시간축: started_at_ms
-    - 선택: sample_rate, vad_threshold, source, board_id, user_id
-    - extra_fields: 필요 시 임의의 키/값 추가 (원 타입 유지)
-
-    NOTE: stt_model 같은 필드는 요구로 제거함.
+    - 필수: prefix, sid, board_id
+    - 시간축: started_at_ms
+    - 선택: sample_rate, vad_threshold, source, user_id, extra_fields
     """
+    # --- 0) 필수 검증 ---
+    if not prefix or not isinstance(prefix, str):
+        raise ValueError("prefix is required (e.g., 'stt:YYYY-MM-DD')")
+    if not sid or not str(sid).isdigit():
+        raise ValueError("sid is required and must be numeric string")
+    if board_id is None:
+        raise ValueError("board_id is required")
+
     r = await get_redis()
-    fields: Dict[str, Any] = {
-        "started_at_ms": now_ms(),
-    }
+
+    # --- 1) 메타 필드 구성 ---
+    fields: Dict[str, Any] = {"started_at_ms": now_ms()}
     if sample_rate is not None:
-        fields["sample_rate"] = sample_rate
+        fields["sample_rate"] = int(sample_rate)
     if vad_threshold is not None:
-        fields["vad_threshold"] = vad_threshold
+        fields["vad_threshold"] = float(vad_threshold)
     if source is not None:
-        fields["source"] = source
+        fields["source"] = str(source)
     if board_id is not None:
-        fields["board_id"] = board_id
+        fields["board_id"] = int(board_id)
     if user_id is not None:
-        fields["user_id"] = user_id
+        fields["user_id"] = int(user_id)
     if extra_fields:
-        # 문자열 강제 변환은 하지 않고 원 타입 유지
         fields.update(extra_fields)
 
-    # 메타 저장
-    await r.hset(_k(prefix, META_SUFFIX, sid), mapping=fields)
+    # --- 2) 키 네이밍 (일관) ---
+    meta_key = f"{prefix}:meta:{sid}"
+    sids_key = f"{prefix}:sids"
+    zstart_key = f"{prefix}:sid_starts"
 
-    # 인덱스: 그날의 sid 집합/정렬셋 등록
-    await r.sadd(f"{prefix}:sids", sid)
-    await r.zadd(f"{prefix}:sid_starts", {sid: fields["started_at_ms"]})
+    # --- 3) 저장 + 인덱싱 ---
+    await r.hset(meta_key, mapping=fields)
+    await r.sadd(sids_key, sid)
+    await r.zadd(zstart_key, {sid: fields["started_at_ms"]})
+
+    # --- 4) (옵션) TTL 부여로 누적 방지 ---
+    # ttl_sec = 24 * 3600
+    # await r.expire(meta_key, ttl_sec)
+    # await r.expire(sids_key, ttl_sec)
+    # await r.expire(zstart_key, ttl_sec
 
 
 async def end_session_meta(sid: str, *, prefix: str) -> None:

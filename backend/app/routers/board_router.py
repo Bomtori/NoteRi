@@ -1,8 +1,9 @@
 # backend/app/routers/board_router.py
+from sqlalchemy import or_
 import os
 import json
 import time
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Response
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from backend.app.deps.guest import get_principal
@@ -14,12 +15,18 @@ from backend.app.deps.auth import get_current_user
 from backend.app.model import User, Board
 from pydantic import BaseModel, StringConstraints
 from typing import Annotated, Optional
+from backend.app.model import User, Board, BoardShare
+
+import traceback
+import logging
+
+
 
 router = APIRouter(prefix="/boards", tags=["boards"])
 APP_PUBLIC_ORIGIN = os.getenv("APP_PUBLIC_ORIGIN", "http://localhost:8000")
 DEFAULT_TTL = int(os.getenv("LINK_TOKEN_TTL_SECONDS", "0"))
 FERNET_KEY = os.getenv("FERNET_KEY")
-
+logger = logging.getLogger(__name__)
 try:
     from cryptography.fernet import Fernet, InvalidToken  # type: ignore
 except Exception as _e:  # pragma: no cover
@@ -75,10 +82,37 @@ def read_shared_received_boards(
     return boards
 
 # Read all
-@router.get("/", response_model=list[schemas.BoardResponse],  response_model_exclude_unset=True)
-def read_boards(skip: int = 0, limit: Optional[int] = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return crud.get_boards(db, current_user.id, skip=skip, limit=limit)
+@router.get("/", response_model=schemas.BoardListResponse, response_model_exclude_unset=True)
+def read_boards(
+    skip: int = 0,
+    limit: Optional[int] = 7,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        # 총개수 계산
+        total = (
+            db.query(Board)
+            .outerjoin(BoardShare, BoardShare.board_id == Board.id)
+            .filter(
+                or_(
+                    Board.owner_id == current_user.id,
+                    BoardShare.user_id == current_user.id,
+                )
+            )
+            .distinct()
+            .count()
+        )
 
+        # 실제 목록
+        items = crud.get_boards(db, current_user.id, skip=skip, limit=limit)
+        
+        return {"total": total, "items": items}
+        
+    except SQLAlchemyError as e:
+        logger.error(f"read_boards failed: {e}")
+        raise HTTPException(status_code=500, detail="보드 목록 조회 실패")
+    
 # Recent
 @router.get("/recent", response_model=list[schemas.BoardResponse])
 def read_board_recent(limit: int = 3, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

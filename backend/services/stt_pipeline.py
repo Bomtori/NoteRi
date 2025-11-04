@@ -22,6 +22,7 @@ from backend.ml.postprocess.silence_segmenter import SilenceSegmenter
 from backend.ml.postprocess.text_cleaner import TextCleaner, normalize_transcript_lines
 from backend.ml.postprocess.timestamp_deduplicator import TimestampDeduplicator
 from backend.ml.preprocessing.realtime_cleaner import RealtimeCleaner
+from backend.app.util.redis_publisher import publish_summary
 
 # === 내부 모듈 - 애플리케이션 ===
 from backend.app.tasks.embedding_task import create_embeddings_for_session
@@ -30,7 +31,6 @@ from backend.app.tasks.final_summary import (
     fetch_lines_from_db,
     persist_final_summary,
 )
-from backend.app.tasks.redis_to_pg import ingest_one_session
 from backend.app.util.llm_client import ollama_summarize_interval
 from backend.app.util.redis_publisher import (
     end_session_meta,
@@ -180,91 +180,128 @@ class STTPipeline:
     # 세션 수명주기 관리
     # -------------------------------------------------------------------------
     
-    async def _start_session(self, websocket, *, source: str):
+    async def _start_session(
+        self,
+        websocket,
+        *,
+        source: str,
+        board_id: int | None = None,
+        user_id: int | None = None,
+        sid: str | None = None,
+    ):
         """
         세션 시작 공통 로직
-        
-        Args:
-            websocket: WebSocket 연결 객체
-            source: 세션 시작 방식 ("manual" 또는 "auto")
-            
-        Note:
-            - query parameter에서 sid, board_id 추출
-            - Redis 메타 초기화
-            - 요약 루프, 타임아웃 체크, 주기적 저장 시작
+
+        우선순위:
+        - begin_session(...)에서 전달된 board_id/user_id/sid
+        - 없으면 WebSocket query_params에서 추출
+        - board_id는 필수 (없으면 에러 리턴)
+
+        또한, redis_prefix, 요약루프, 타임아웃, 주기저장 태스크를 안전하게 시작한다.
         """
-        if self.session_active:
-            logger.warning("Session already active, ignoring start request")
-            return
-        
-        self.ws = websocket
-        
-        # WebSocket query parameters 추출
-        query_sid = websocket.query_params.get("sid") if hasattr(websocket, "query_params") else None
-        query_board_id = websocket.query_params.get("board_id") if hasattr(websocket, "query_params") else None
-        
-        # sid 생성 또는 추출 (숫자 문자열)
-        if query_sid and query_sid.isdigit():
-            self.sid = query_sid
-        else:
-            self.sid = _short_sid()
-        
-        # board_id 파싱
-        board_id = None
-        if query_board_id:
-            try:
-                board_id = int(query_board_id)
-                logger.info(f"📋 WebSocket connected with board_id={board_id}", extra={
-                    "event": "session_start",
-                    "sid": self.sid,
-                    "board_id": board_id
-                })
-            except ValueError:
-                logger.warning(f"⚠️ Invalid board_id: {query_board_id}")
-        
-        # 날짜 prefix 고정
-        self.redis_prefix = datetime.now().strftime("stt:%Y-%m-%d")
-        
-        self.session_active = True
-        now = time.time()
-        self.session_start_ts = now
-        self.last_cut_ts = now
-        self.last_activity_ts = now
-        
-        # 요약 루프 시작
-        if self.summary_task is None or self.summary_task.done():
-            self.summary_task = asyncio.create_task(self._summary_loop())
-        
-        # 타임아웃 체크 시작
-        if self.timeout_task is None or self.timeout_task.done():
-            self.timeout_task = asyncio.create_task(self._timeout_check_loop())
-        
-        # 주기적 오디오 저장 시작
-        if self.audio_save_task is None or self.audio_save_task.done():
-            self.audio_save_task = asyncio.create_task(self._periodic_audio_save())
-        
-        # Redis 메타 초기화
         try:
-            await init_session_meta(
-                sid=self.sid,
-                prefix=self.redis_prefix,
-                sample_rate=VAD_SAMPLE_RATE,
-                vad_threshold=VAD_THRESHOLD,
-                source=source,
-                board_id=board_id,
+            if self.session_active:
+                logger.warning("Session already active, ignoring start request")
+                return
+
+            self.ws = websocket
+
+            # --- 1) WS 쿼리 파라미터 파싱 (fallback 용) ---
+            query_sid = None
+            query_board_id = None
+            query_user_id = None
+
+            try:
+                if hasattr(websocket, "query_params") and websocket.query_params:
+                    qp = websocket.query_params
+                    query_sid = qp.get("sid")
+                    raw_board_id = qp.get("board_id")
+                    if raw_board_id and str(raw_board_id).isdigit():
+                        query_board_id = int(raw_board_id)
+                    raw_user_id = qp.get("user_id")
+                    if raw_user_id and str(raw_user_id).isdigit():
+                        query_user_id = int(raw_user_id)
+            except Exception:
+                pass
+
+            # --- 2) state.user_id 도 fallback 로 사용 ---
+            state_user_id = getattr(getattr(websocket, "state", None), "user_id", None)
+
+            # --- 3) 최종 확정값 결정(외부 인자 우선) ---
+            final_board_id = board_id if board_id is not None else query_board_id
+            final_user_id = (
+                user_id
+                if user_id is not None
+                else (query_user_id if query_user_id is not None else state_user_id)
             )
+            final_sid = sid if (sid and str(sid).isdigit()) else (query_sid if (query_sid and str(query_sid).isdigit()) else None)
+
+            # --- 4) board_id 필수 검사 ---
+            if final_board_id is None:
+                logger.error("❌ board_id is required but missing")
+                await self._safe_send_json({"event": "error", "message": "board_id is required"})
+                return
+
+            # --- 5) sid 확정(없으면 새로 발급) ---
+            if final_sid:
+                self.sid = final_sid
+            else:
+                self.sid = _short_sid()
+
+            # --- 6) redis prefix 확정 (필수) ---
+            self.redis_prefix = datetime.now().strftime("stt:%Y-%m-%d")
+
+            # --- 7) 세션 상태 셋업 ---
+            self.session_active = True
+            now = time.time()
+            self.session_start_ts = now
+            self.last_cut_ts = now
+            self.last_activity_ts = now
+
+            # --- 8) 백그라운드 태스크 시작 ---
+            if self.summary_task is None or self.summary_task.done():
+                self.summary_task = asyncio.create_task(self._summary_loop())
+            if self.timeout_task is None or self.timeout_task.done():
+                self.timeout_task = asyncio.create_task(self._timeout_check_loop())
+            if self.audio_save_task is None or self.audio_save_task.done():
+                self.audio_save_task = asyncio.create_task(self._periodic_audio_save())
+
+            # --- 9) Redis 메타 초기화 ---
+            try:
+                await init_session_meta(
+                    sid=self.sid,
+                    prefix=self.redis_prefix,
+                    sample_rate=VAD_SAMPLE_RATE,
+                    vad_threshold=VAD_THRESHOLD,
+                    source=source,
+                    board_id=final_board_id,
+                    user_id=final_user_id,
+                )
+                logger.info(
+                    f"✅ Redis meta initialized: sid={self.sid}, board_id={final_board_id}, user_id={final_user_id}"
+                )
+            except Exception as e:
+                logger.error(f"❌ init_session_meta failed: {e}")
+                await self._safe_send_json({"event": "error", "message": "Failed to initialize session"})
+                # 초기화 실패 시 세션 정리
+                self.session_active = False
+                self.sid = None
+                return
+
+            # --- 10) 프론트로 세션 시작 알림 ---
+            await self._safe_send_json({"event": "session_started", "sid": self.sid})
+
+            logger.info(
+                f"🟢 Session started: sid={self.sid}, source={source}, board_id={final_board_id}, user_id={final_user_id}",
+                extra={"event": "session_started", "sid": self.sid, "source": source, "board_id": final_board_id},
+            )
+
         except Exception as e:
-            logger.warning(f"init_session_meta({source}) failed: {e}")
-        
-        # 프론트엔드에 세션 ID 알림
-        await self._safe_send_json({"event": "session_started", "sid": self.sid})
-        
-        logger.info(f"🟢 Session started: sid={self.sid}, source={source}", extra={
-            "event": "session_started",
-            "sid": self.sid,
-            "source": source,
-            "board_id": board_id
-        })
+            logger.error(f"❌ _start_session failed: {e}", exc_info=True)
+            await self._safe_send_json({"event": "error", "message": "Internal server error"})
+            # 세션 정리
+            self.session_active = False
+            self.sid = None
 
     async def begin_session(self, websocket):
         """
@@ -273,7 +310,48 @@ class STTPipeline:
         Args:
             websocket: WebSocket 연결 객체
         """
-        await self._start_session(websocket, source="manual")
+        # ✅ WebSocket 객체 저장
+        self.ws = websocket
+
+        # ✅ 1) WebSocket에서 직접 파라미터 파싱 (fallback)
+        query_board_id = None
+        query_user_id = None
+        query_sid = None
+        try:
+            if hasattr(websocket, "query_params"):
+                qp = websocket.query_params or {}
+                raw_board_id = qp.get("board_id")
+                if raw_board_id and str(raw_board_id).isdigit():
+                    query_board_id = int(raw_board_id)
+                raw_user_id = qp.get("user_id")
+                if raw_user_id and str(raw_user_id).isdigit():
+                    query_user_id = int(raw_user_id)
+                query_sid = qp.get("sid")
+        except Exception:
+            pass
+
+        # ✅ 2) WebSocket state에서도 user_id 확인
+        state_user_id = getattr(getattr(websocket, "state", None), "user_id", None)
+
+        # ✅ 3) 우선순위: pre_ → query → state
+        board_id = getattr(self, "pre_board_id", None) or query_board_id
+        user_id = getattr(self, "pre_user_id", None) or query_user_id or state_user_id
+        sid = getattr(self, "pre_sid", None) or query_sid
+        source = getattr(self, "pre_source", "manual")
+
+        # ✅ 4) board_id 필수 검사
+        if board_id is None:
+            self.logger.error("❌ board_id is required but missing")
+            raise ValueError("board_id is required")
+
+        # ✅ 5) 실제 세션 시작
+        await self._start_session(
+            websocket,
+            source=source,
+            board_id=board_id,
+            user_id=user_id,
+            sid=sid,
+        )
 
     async def end_session(self, run_diarization: bool = True):
         """
@@ -385,42 +463,36 @@ class STTPipeline:
         try:
             logger.info(f"🔄 Starting session finalization for sid={self.sid}")
             
-            # Redis → PostgreSQL 적재
+            # ✅ Redis → PostgreSQL 적재 (가장 먼저!)
             try:
-                await asyncio.to_thread(ingest_one_session, self.sid, self.redis_prefix)
+                from backend.app.tasks.redis_to_pg import ingest_session_to_db
+                
+                await ingest_session_to_db(
+                    sid=self.sid,
+                    prefix=self.redis_prefix
+                )
                 logger.info(f"✅ Redis→PG ingestion completed for sid={self.sid}")
             except Exception as e:
                 logger.error(f"❌ Redis→PG ingestion failed: {e}")
+                # ✅ 적재 실패 시 최종 요약/Diarization 건너뛰기
+                return
             
             # 최종 요약 생성
             if lines:
                 try:
-                    # build_final_summary_from_lines는 async 함수
                     final_summary = await build_final_summary_from_lines(lines)
                     raw_text = "\n".join([ln for ln in lines if ln and ln.strip()])
                     
                     if final_summary:
-                        # persist_final_summary는 동기 함수, recording_session_id 필요
                         await asyncio.to_thread(
                             persist_final_summary,
-                            recording_session_id=int(self.sid),  # DB의 recording_sessions.id (integer)
+                            recording_session_id=int(self.sid),
                             summary_json=final_summary,
                             raw_text=raw_text
                         )
                         logger.info(f"✅ Final summary persisted for sid={self.sid}")
                 except Exception as e:
-                    logger.error(f"❌ Failed to generate final summary: {e}")
-            
-            # Diarization 실행
-            if run_diarization:
-                try:
-                    await asyncio.to_thread(
-                        run_diarization_for_session,
-                        self.sid
-                    )
-                    logger.info(f"✅ Diarization completed for sid={self.sid}")
-                except Exception as e:
-                    logger.error(f"❌ Diarization failed: {e}")
+                    logger.error(f"❌ Failed to generate final summary: {e}") 
             
             # Embedding 생성
             try:
@@ -552,53 +624,68 @@ class STTPipeline:
         """
         if not self.last_cut_ts:
             return
-        
+
+        # ✅ 세션 prefix/sid 확인
+        if not getattr(self, "redis_prefix", None) or not getattr(self, "sid", None):
+            logger.error("❌ Cannot make summary: redis_prefix or sid missing")
+            return
+
         # 확정 문장 수집
         confirmed = []
         for ts, text in self.paragraph_buffer:
             if self.last_cut_ts <= ts < now:
                 confirmed.append(text)
-        
+
         # 실시간 버퍼 추가
         live_buf = self.segmenter.buffer.strip() if self.segmenter else ""
         all_text = " ".join(confirmed + ([live_buf] if live_buf else []))
-        
+
         if len(all_text) < PipelineConfig.MIN_CHARS_FOR_SUMMARY:
-            logger.debug(f"📊 Text too short for summary: {len(all_text)} chars (min: {PipelineConfig.MIN_CHARS_FOR_SUMMARY})")
+            logger.debug(
+                f"📊 Text too short for summary: {len(all_text)} chars (min: {PipelineConfig.MIN_CHARS_FOR_SUMMARY})"
+            )
             return
-        
+
         try:
             logger.info(f"📊 Generating summary for {len(confirmed)} sentences ({len(all_text)} chars)")
-            
-            # 요약 생성 (이미 async 함수)
+
+            # ✅ 요약 생성 (비동기)
             summary_text = await ollama_summarize_interval(all_text)
-            
+
             if summary_text:
-                # Redis 발행
-                if self.sid:
-                    await self._publish_with_retry(
-                        publish_summary,
+                # ✅ Redis 발행
+                try:
+                    await publish_summary(
                         sid=self.sid,
-                        prefix=self.redis_prefix,
-                        summary_text=summary_text,
                         interval_start_ms=int(self.last_cut_ts * 1000),
-                        interval_end_ms=int(now * 1000)
+                        interval_end_ms=int(now * 1000),
+                        summary_text=summary_text,
+                        model="qwen2.5",
+                        prefix=self.redis_prefix,  # ✅ 필수
                     )
-                
-                # WebSocket 전송
-                await self._safe_send_json({
-                    "summary": summary_text,
-                    "start_ts": self.last_cut_ts,
-                    "end_ts": now
-                })
-                
-                logger.info(f"✅ Summary generated: {summary_text[:50]}...", extra={
-                    "event": "summary_generated",
-                    "sid": self.sid,
-                    "length": len(summary_text),
-                    "time_range": f"{self.last_cut_ts}-{now}"
-                })
-                
+                    logger.info(f"✅ Published summary for sid={self.sid}")
+                except Exception as pub_e:
+                    logger.warning(f"⚠️ Failed to publish summary: {pub_e}")
+
+                # ✅ WebSocket 전송
+                await self._safe_send_json(
+                    {
+                        "summary": summary_text,
+                        "start_ts": self.last_cut_ts,
+                        "end_ts": now,
+                    }
+                )
+
+                logger.info(
+                    f"✅ Summary generated: {summary_text[:50]}...",
+                    extra={
+                        "event": "summary_generated",
+                        "sid": self.sid,
+                        "length": len(summary_text),
+                        "time_range": f"{self.last_cut_ts}-{now}",
+                    },
+                )
+
         except Exception as e:
             logger.error(f"❌ Failed to generate summary: {e}\n{traceback.format_exc()}")
         finally:
@@ -933,35 +1020,43 @@ class STTPipeline:
         if not self.raw_audio_buffer:
             logger.warning("⚠️ No audio data to save")
             return None
-        
+
         # 파일 저장 (블로킹 작업은 스레드에서)
         result = await asyncio.to_thread(
             self._save_audio_file,
             folder,
             filename
         )
-        
+
         if not result:
             return None
-        
-        # Redis 메타데이터 저장
+
+        # ✅ Redis 메타데이터 저장
         if self.sid:
             try:
                 from backend.app.util.redis_client import get_redis
                 r = await get_redis()
+
+                if not self.redis_prefix:
+                    logger.warning("⚠️ redis_prefix missing when saving audio meta")
+
+                # ✅ 키: {prefix}:meta:{sid}
+                meta_key = f"{self.redis_prefix}:meta:{self.sid}"
+
                 await r.hset(
-                    f"{self.redis_prefix}:{self.sid}:meta",
+                    meta_key,
                     mapping={
                         "audio_path": result["filepath"],
-                        "duration_ms": int(result["duration"] * 1000),
-                        "language": getattr(self, "lang", "ko")
-                    }
+                        "duration_sec": result["duration"],     # ✅ ingest용 필드명
+                        "language": getattr(self, "lang", "ko"),
+                    },
                 )
                 logger.info(f"🔖 Saved audio metadata to Redis for sid={self.sid}")
             except Exception as e:
                 logger.warning(f"⚠️ Failed to write audio metadata to Redis: {e}")
-        
+
         return result
+
 
     def _save_audio_file(self, folder: Optional[str], filename: Optional[str]) -> Optional[Dict]:
         """

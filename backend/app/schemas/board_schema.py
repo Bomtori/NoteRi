@@ -103,8 +103,8 @@ class BoardMove(BaseModel):
     folder_id: int
 
 class BoardListResponse(BaseModel):
-    boards: List[BoardResponse]
-    model_config = ConfigDict(from_attributes=True)
+    total: int
+    items: list[BoardResponse]
 
 class BoardMove(BaseModel):
     folder_id: int

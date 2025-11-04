@@ -46,6 +46,7 @@ export default function NewRecordPage() {
     // ✅ useRecording hook
     const { recordingState, startRecording, stopRecording } = useRecording({
         WS_URL,
+        boardId,
         onData: (msg) => {
             // 🎙️ 실시간 STT
             if (msg.realtime) {
@@ -83,20 +84,22 @@ export default function NewRecordPage() {
         minute: "2-digit",
     });
 
-    // 🔹 녹음 시작 → board 생성 + STT 연결
     const handleStartRecording = async () => {
         try {
-            if (!boardId) {
-                const res = await apiClient.post("/boards", { title, description: "" });
-                setBoardId(res.data.id);
-                console.log("🎙️ 새 보드 생성:", res.data.id);
-            }
-            await startRecording();
-            setIsRecording(true);
-            setRecordingStopped(false);
+        let id = boardId;
+        if (!id) {
+            const res = await apiClient.post("/boards", { title, description: "" });
+            id = res.data.id;
+            setBoardId(id);
+            // ✅ 리렌더(다음 틱)까지 한 번 양보해 훅이 최신 boardId를 쓰게 함
+            await new Promise((r) => setTimeout(r, 0));
+        }
+        await startRecording();
+        setIsRecording(true);
+        setRecordingStopped(false);
         } catch (err) {
-            console.error("녹음 시작 실패:", err);
-            showToast("녹음을 시작할 수 없습니다.");
+        console.error("녹음 시작 실패:", err);
+        showToast("녹음을 시작할 수 없습니다.");
         }
     };
 

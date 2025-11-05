@@ -6,6 +6,8 @@ import { FaRegCalendarAlt } from "react-icons/fa";
 import apiClient from "../api/apiClient";
 import { setRecords } from "../features/record/recordSlice.js";
 import { fetchFolders } from "../features/folder/folderSlice";
+import { BsChatDots } from "react-icons/bs";
+import { openChat, showMessenger, track } from "../lib/channelTalk";
 
 export default function RecordListPage() {
     const dispatch = useDispatch();
@@ -495,7 +497,27 @@ export default function RecordListPage() {
                 <h3 className="font-semibold mb-4 text-lg">일정 관리</h3>
 
                 <Calendar />
+
             </div>
+            <button
+                onClick={() => {
+                    showMessenger();
+                }}
+                className="fixed bottom-24 right-6 z-[200]
+             w-[64px] h-[64px] flex items-center justify-center
+             bg-white rounded-2xl shadow-[0_4px_18px_rgba(0,0,0,0.15)]
+             border border-gray-200 hover:bg-gray-50 transition"
+                title="문의하기"
+            >
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    className="w-7 h-7 text-[#7E37F9]"
+                >
+                    <path d="M2 3h20v14H6l-4 4V3z" />
+                </svg>
+            </button>
         </main>
     );
 }

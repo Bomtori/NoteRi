@@ -122,7 +122,7 @@ export default function RecordBar({
                                 <button
                                     onClick={onTogglePanel}
                                     className="p-2 text-gray-600 hover:text-[#7E37F9] transition-all"
-                                    title="메모 / GPT 열기"
+                                    title="메모 / Gemini 열기"
                                 >
                                     <FaBars />
                                 </button>
@@ -187,7 +187,7 @@ export default function RecordBar({
                                 <button
                                     onClick={onTogglePanel}
                                     className="p-2 text-gray-600 hover:text-[#7E37F9] transition-all"
-                                    title="메모 / GPT 열기"
+                                    title="메모 / Gemini 열기"
                                 >
                                     <FaBars />
                                 </button>

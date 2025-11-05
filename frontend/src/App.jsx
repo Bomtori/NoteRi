@@ -26,6 +26,8 @@ import ChannelTalk from "./pages/ChannelTalk.js";
 export default function App() {
     return (
         // <ToastProvider>
+        <>
+            <ChannelTalk />
             <Router>
                 <Routes>
                     {/* 🔹 공개 라우트 (로그인 필요 없음) */}
@@ -81,9 +83,10 @@ export default function App() {
                         <Route path="users" element={<AdminUserPage />} />
                         <Route path="settings" element={<AdminSettingsPage />} />
                     </Route>
-                    <Route path="/channeltalk" element={<ChannelTalk/>}/>
                 </Routes>
             </Router>
+            </>
         // </ToastProvider>
+
     );
 }

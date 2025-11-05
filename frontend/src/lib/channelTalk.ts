@@ -70,27 +70,39 @@ type BootMember = BootCommon & {
 };
 
 export async function bootAnonymous(opt: BootAnonymous = {}) {
-  if (!hasWindow()) return;
-  if (booted || booting) return;
-  booting = true;
+    if (!hasWindow()) return;
+    if (booted || booting) return;
+    booting = true;
 
-  const pluginKey =
-    opt.pluginKey ?? (import.meta as any).env?.VITE_CHANNELIO_PLUGIN_KEY;
-  await _boot({ pluginKey, ...opt });
+    const pluginKey =
+        opt.pluginKey ?? (import.meta as any).env?.VITE_CHANNELIO_PLUGIN_KEY;
 
-  booting = false;
+    // ✅ 기본 위젯 숨기기 옵션 추가
+    await _boot({
+        pluginKey,
+        hideDefaultLauncher: true,  // ← 이 줄 추가
+        ...opt,
+    });
+
+    booting = false;
 }
 
 export async function bootMember(opt: BootMember) {
-  if (!hasWindow()) return;
-  if (booted || booting) return;
-  booting = true;
+    if (!hasWindow()) return;
+    if (booted || booting) return;
+    booting = true;
 
-  const pluginKey =
-    opt.pluginKey ?? (import.meta as any).env?.VITE_CHANNELIO_PLUGIN_KEY;
-  await _boot({ pluginKey, ...opt });
+    const pluginKey =
+        opt.pluginKey ?? (import.meta as any).env?.VITE_CHANNELIO_PLUGIN_KEY;
 
-  booting = false;
+    // ✅ 동일하게 숨김 옵션 추가
+    await _boot({
+        pluginKey,
+        hideDefaultLauncher: true,  // ← 이 줄 추가
+        ...opt,
+    });
+
+    booting = false;
 }
 
 /** ---------- 세션/표시 제어 ---------- */

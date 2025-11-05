@@ -3,6 +3,7 @@ from urllib.parse import quote
 from sqlalchemy.orm import Session
 from authlib.integrations.starlette_client import OAuth
 import os
+import traceback
 from fastapi.responses import RedirectResponse
 from datetime import datetime, UTC
 from starlette.responses import JSONResponse
@@ -22,21 +23,21 @@ oauth.register(
     client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
     server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
     client_kwargs={"scope": "openid email profile"},
+    redirect_uri=os.getenv("GOOGLE_REDIRECT_URI")
 )
-
 COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN", None)
 ACCESS_TOKEN_MAX_AGE = 3600  # 초
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 SECURE_COOKIE = os.getenv("SECURE_COOKIE", "false").lower() == "true"
 REFRESH_MAX_AGE = 60 * 60 * 24 * 14  # 14일
 
-@router.get("/login")
+@router.get("/login", summary="구글 로그인")
 async def login_google(request: Request):
     redirect_uri = request.url_for("google_callback")
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 
-@router.get("/callback", name="google_callback")
+@router.get("/callback", name="google_callback", summary="구글 콜백")
 async def google_callback(request: Request, db: Session = Depends(get_db)):
     # 0) 토큰/유저정보 수집
     token = await oauth.google.authorize_access_token(request)
@@ -84,12 +85,10 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
             f"&email={quote(email)}&try_provider={provider}",
             status_code=302,
         )
-    except Exception:
-        # 기타 예외는 일반 오류로 리다이렉트
-        return RedirectResponse(
-            f"{FRONTEND_URL}/auth/callback?error=internal_error",
-            status_code=302,
-        )
+    except Exception as e:
+        traceback.print_exc()
+        print("🔥 GOOGLE OAUTH ERROR:", e)
+        return RedirectResponse(f"{FRONTEND_URL}/auth/callback?error=internal_error", status_code=302)
 
     # 3) 비활성(탈퇴) 계정 처리
     if db_user and not db_user.is_active:
@@ -117,7 +116,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
 
     return resp
 
-@router.post("/rejoin")
+@router.post("/rejoin", summary="구글 재가입")
 def google_rejoin(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
      # 토큰 인증된 유저
     if not current_user:

@@ -123,8 +123,8 @@ def _grant_free_subscription_and_usage(db: Session, user_id: int) -> None:
             subscription_id=sub.id if hasattr(RecordingUsage, "subscription_id") else None,
             allocated_seconds=alloc_secs,
             used_seconds=0,
-            start_date=start,
-            end_date=end,  # 기간형 요금제면 end, 무기한이면 None
+            period_start=start,
+            period_end=end,  # 기간형 요금제면 end, 무기한이면 None
             created_at=datetime.now(UTC),
         )
         db.add(usage)
@@ -161,10 +161,9 @@ def get_or_create_user(
     existing = db.query(User).filter(User.email == email).first()
     if existing:
         if existing.oauth_provider and existing.oauth_provider != provider:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"이미 {existing.oauth_provider}로 가입된 이메일입니다."
-            )
+            raise OAuthProviderConflict({
+        "registered_provider": existing.oauth_provider
+    })
         existing.oauth_provider = provider
         existing.oauth_sub = sub
         if not existing.name: existing.name = name

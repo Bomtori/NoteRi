@@ -1,304 +1,275 @@
 # backend/app/tasks/redis_to_pg.py
+from __future__ import annotations
 
-import sys
-import os
-from datetime import datetime
-from typing import Optional
+import asyncio
 import json
-from dotenv import load_dotenv
+import logging
+from datetime import datetime, timezone, timedelta
+from typing import Any, Dict, List, Optional, Tuple
 
-# SQLAlchemy async 임포트
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import select
+from backend.app.db import SessionLocal
+from backend.app import model as models
+from backend.app.util.redis_client import get_redis
+# ⬇️ stt_pipeline.py 최상단에 추가해 둔 함수 재사용 (키 네이밍 완전 일치)
+from backend.services.stt_pipeline import build_keys
 
-# ✅ Redis async 임포트 수정!
-import redis.asyncio as aioredis
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
-# 환경변수 로드
-load_dotenv()
+# ──────────────────────────────────────────────────────────────────────────────
+# 유틸
+# ──────────────────────────────────────────────────────────────────────────────
 
-# 필요한 경우 config에서 가져오기
-try:
-    from backend.config import REDIS_URL, DATABASE_URL
-except ImportError:
-    REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-    DATABASE_URL = os.getenv("DATABASE_URL")
-
-from backend.app.util.crypto_path import encrypt_path
-
-# ✅ Models 임포트
-from backend.app.model import (
-    RecordingSession, 
-    RecordingResult, 
-    AudioData,
-    FinalSummary,
-    Board
-)
-
-# ✅ Async 엔진 및 세션 팩토리 생성
-engine = create_async_engine(
-    DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
-    echo=False
-)
-AsyncSessionLocal = sessionmaker(
-    engine, class_=AsyncSession, expire_on_commit=False
-)
-
-
-async def get_redis_client():
-    """Redis 클라이언트 생성"""
-    return await aioredis.from_url(REDIS_URL, decode_responses=True)
-
-
-def resolve_board_id(meta):
-    """메타에서 board_id 추출"""
-    val = meta.get("board_id")
-    if val is None:
-        raise RuntimeError("board_id missing in meta")
-    return int(val)
-
-
-async def resolve_user_id(meta, db: AsyncSession, board_id: int):
-    """메타에서 user_id 추출 또는 board owner_id 사용"""
-    val = meta.get("user_id")
-    if val is not None:
-        return int(val)
-    
-    # ✅ board.owner_id 사용
-    result = await db.execute(
-        select(Board.owner_id).where(Board.id == board_id)
-    )
-    owner_id = result.scalar_one_or_none()
-    
-    if not owner_id:
-        raise RuntimeError("user_id missing and board owner not found")
-    return int(owner_id)
-
-
-def _keys(prefix: str, sid: str):
-    """Redis 키 생성"""
-    return {
-        "meta": f"{prefix}:meta:{sid}",
-        "lines": f"{prefix}:lines:{sid}",
-        "summaries": f"{prefix}:summaries:{sid}",
-        "audio": f"{prefix}:audio:{sid}"
-    }
-
-
-async def ingest_session_to_db(
-    sid: str, 
-    prefix: Optional[str] = None,
-    db: Optional[AsyncSession] = None
-):
-    """
-    Redis → PostgreSQL 이관 (Async 버전)
-    
-    Args:
-        sid: 세션 ID
-        prefix: Redis 키 프리픽스 (None이면 자동 생성)
-        db: AsyncSession (None이면 새로 생성)
-        
-    Returns:
-        int: recording_sessions.id
-    """
-    should_close_db = False
-    should_close_redis = True
-    
-    # ✅ DB 세션 생성
-    if db is None:
-        db = AsyncSessionLocal()
-        should_close_db = True
-    
-    # ✅ Redis 클라이언트 생성
-    redis_client = await get_redis_client()
-    
+def _ms_to_dt(ms: Optional[int]) -> Optional[datetime]:
+    if ms is None:
+        return None
     try:
-        # prefix 자동 생성
-        if prefix is None:
-            prefix = datetime.now().strftime("stt:%Y-%m-%d")
-        
-        keys = _keys(prefix, sid)
-        
-        # ✅ 멱등성 체크: 이미 적재된 세션인지 확인
-        cached_key = f"{prefix}:ingested:{sid}"
-        cached = await redis_client.get(cached_key)
-        if cached:
-            print(f"[INFO] Session {sid} already ingested")
-            return int(cached)
-        
-        # ✅ 메타 데이터 조회
-        meta_json = await redis_client.get(keys["meta"])
-        if not meta_json:
-            raise RuntimeError(f"Meta not found for sid={sid} (key={keys['meta']})")
-        
-        meta = json.loads(meta_json)
-        
-        # board_id, user_id 확인
-        board_id = resolve_board_id(meta)
-        user_id = await resolve_user_id(meta, db, board_id)
-        
-        # 타임스탬프 추출
-        started_at = datetime.fromtimestamp(meta.get("session_start_ts", 0))
-        ended_at = datetime.fromtimestamp(meta.get("session_end_ts", 0)) if meta.get("session_end_ts") else datetime.now()
-        
-        # ✅ 1. RecordingSession 생성
-        recording_session = RecordingSession(
-            id=int(sid),
-            board_id=board_id,
-            user_id=user_id,
-            status="completed",
-            started_at=started_at,
-            ended_at=ended_at,
-            is_diarized=False
-        )
-        
-        db.add(recording_session)
-        await db.flush()  # ✅ ID 즉시 생성
-        
-        print(f"[OK] RecordingSession created: id={recording_session.id}")
-        
-        # ✅ 2. Transcriptions 생성
-        lines_json = await redis_client.lrange(keys["lines"], 0, -1)
-        
-        inserted_results = 0
-        for idx, line_str in enumerate(lines_json):
-            try:
-                line = json.loads(line_str)
-                
-                # ✅ RecordingResult 객체 생성
-                result = RecordingResult(
-                    recording_session_id=recording_session.id,
-                    speaker_label=line.get("speaker", "SPEAKER_00"),
-                    raw_text=line.get("text", ""),
-                    started_at=datetime.fromtimestamp(line.get("start_time", 0)) if line.get("start_time") else None,
-                    ended_at=datetime.fromtimestamp(line.get("end_time", 0)) if line.get("end_time") else None
+        # DB가 timezone-aware라면 UTC로 저장, naive면 .replace(tzinfo=None) 써도 무방
+        return datetime.fromtimestamp(int(ms) / 1000.0, tz=timezone.utc)
+    except Exception:
+        return None
+    
+def _ms_rel_or_abs_to_dt(ms: Optional[int], base: Optional[datetime]) -> Optional[datetime]:
+    """
+    ms가 '상대 ms'(세션 시작 기준)인지 '절대 epoch ms'인지 구분해 datetime으로 변환.
+    - 보수적 기준: 1e12(≈ 2001-09-09) 이상이면 '절대 ms'로 간주
+    - 그 외에는 '상대 ms'로 보고 base + delta 적용
+    """
+    if ms is None:
+        return None
+    try:
+        ms_int = int(ms)
+    except Exception:
+        return None
+    # 절대 ms로 보이는 경우
+    if ms_int >= 10**12:
+        return _ms_to_dt(ms_int)
+    # 상대 ms인 경우 (base가 있어야 함)
+    if base is None:
+        return None
+    return base + timedelta(milliseconds=ms_int)
+
+def _b2s(v: Any) -> Any:
+    if isinstance(v, bytes):
+        return v.decode("utf-8", "ignore")
+    return v
+
+def _bmap2s(m: Dict[Any, Any]) -> Dict[str, Any]:
+    return { _b2s(k): _b2s(v) for k, v in m.items() }
+
+def _as_int(v: Any) -> Optional[int]:
+    try:
+        if v is None:
+            return None
+        return int(v)
+    except Exception:
+        return None
+
+def _as_float(v: Any) -> Optional[float]:
+    try:
+        if v is None:
+            return None
+        return float(v)
+    except Exception:
+        return None
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 메인 진입점
+# ──────────────────────────────────────────────────────────────────────────────
+
+async def ingest_session_to_db(*, sid: str, prefix: str) -> int:
+    """
+    Redis에 쌓인 한 세션의 메타/스트림을 읽어 PostgreSQL에 영속화.
+
+    Args:
+        sid: 세션 식별자(= recording_sessions.id 로 사용)
+        prefix: 날짜 prefix (예: 'stt:2025-11-04')
+
+    Returns:
+        session_id (int)
+
+    Raises:
+        Exception: 읽기/파싱/DB 쓰기 단계에서의 모든 예외는 로그 후 re-raise
+    """
+    r = await get_redis()
+    keys = build_keys(prefix, sid)
+
+    # 1) meta 읽기 (hash/string 모두 지원)
+    logger.info("📦 Ingest start: sid=%s prefix=%s", sid, prefix)
+    meta_type = await r.type(keys["meta"])
+    if isinstance(meta_type, bytes):
+        meta_type = meta_type.decode()
+
+    if meta_type == "hash":
+        meta_map = await r.hgetall(keys["meta"])
+        meta = _bmap2s(meta_map)
+    elif meta_type == "string":
+        meta_json = await r.get(keys["meta"])
+        meta = json.loads(_b2s(meta_json)) if meta_json else {}
+    elif meta_type == "none":
+        raise RuntimeError(f"meta key not found: {keys['meta']}")
+    else:
+        raise RuntimeError(f"unexpected meta key type={meta_type} for {keys['meta']}")
+
+    # 필터링/파싱
+    started_at_ms = _as_int(meta.get("started_at_ms"))
+    ended_at_ms   = _as_int(meta.get("ended_at_ms"))  # end_session_meta가 넣었을 것으로 가정 (없어도 OK)
+    board_id      = _as_int(meta.get("board_id"))
+    user_id       = _as_int(meta.get("user_id"))
+    audio_path    = meta.get("audio_path")
+    duration_ms   = _as_int(meta.get("duration_ms"))
+    language      = meta.get("language") or meta.get("lang")
+
+    dt_started = _ms_to_dt(started_at_ms)
+    dt_ended   = _ms_to_dt(ended_at_ms)
+
+    # 2) 스트림 읽기
+    seg_entries: List[Tuple[str, Dict[str, Any]]] = await r.xrange(keys["segments"], "-", "+")
+    sum_entries: List[Tuple[str, Dict[str, Any]]] = await r.xrange(keys["summaries"], "-", "+")
+
+    session_id = int(sid)
+    with SessionLocal() as db:
+        try:
+            # ✅ user_id 보정: meta에 없으면 board.owner_id로 폴백
+            resolved_user_id = user_id
+            if resolved_user_id is None and board_id is not None and hasattr(models, "Board"):
+                owner_row = db.query(models.Board.owner_id).filter(models.Board.id == board_id).first()
+                if owner_row and owner_row[0] is not None:
+                    resolved_user_id = int(owner_row[0])
+
+            if resolved_user_id is None:
+                # 스키마가 NOT NULL이면 여기서 명시적으로 막아 오류 원인을 분명히 함
+                raise RuntimeError(
+                    f"user_id is required but missing (sid={sid}, board_id={board_id}); "
+                    "meta had no user_id and board lookup failed."
                 )
-                
-                db.add(result)
-                inserted_results += 1
-            except Exception as e:
-                print(f"[WARN] Failed to parse line {idx}: {e}")
-                continue
-        
-        print(f"[OK] RecordingResults inserted: {inserted_results}")
-        
-        # ✅ 3. AudioData 생성
-        audio_path = meta.get("audio_path")
-        if audio_path:
+
+            # 3-1) RecordingSession upsert(=merge)
+            sess_payload = {
+                "id": session_id,
+                "board_id": board_id,
+                "user_id": resolved_user_id,   # ⬅️ 여기!
+                "started_at": dt_started,
+                "ended_at": dt_ended,
+            }
+
+            # ✅ status: 종료 후 적재이므로 'saved'
+            status_value = "saved"
             try:
-                cipher_path = encrypt_path(audio_path)
-            except Exception as e:
-                print(f"[WARN] Failed to encrypt path: {e}")
-                cipher_path = audio_path
-            
-            duration = meta.get("duration_sec")
-            language = meta.get("language", "ko")
-            
-            audio_data = AudioData(
-                board_id=board_id,
-                recording_session_id=recording_session.id,
-                file_path=cipher_path,
-                duration=duration,
-                language=language
-            )
-            
-            db.add(audio_data)
-            print(f"[OK] AudioData inserted: {audio_path}")
-        
-        # ✅ 4. 커밋
-        await db.commit()
-        print(f"[SUCCESS] Session {sid} ingested successfully")
-        
-        # ✅ 5. 멱등성 캐시 설정 (7일)
-        await redis_client.setex(cached_key, 7 * 24 * 3600, str(recording_session.id))
-        
-        # ✅ 6. Redis 키 TTL 설정 (24시간 보존)
-        ttl = 24 * 3600
-        for key in keys.values():
-            try:
-                await redis_client.expire(key, ttl)
+                from backend.app.model import RecordingType
+                if hasattr(RecordingType, "saved"):
+                    status_value = RecordingType.saved
             except Exception:
                 pass
-        
-        return recording_session.id
-        
-    except Exception as e:
-        await db.rollback()  # ✅ 에러 시 롤백
-        print(f"[ERROR] Failed to ingest {sid}: {e}")
-        import traceback
-        traceback.print_exc()
-        raise
-        
-    finally:
-        # ✅ 리소스 정리
-        if should_close_redis:
-            await redis_client.close()
-        
-        if should_close_db:
-            await db.close()
+            if hasattr(models.RecordingSession, "status"):
+                sess_payload["status"] = status_value
 
+            # 선택 필드들 (있을 때만)
+            if hasattr(models.RecordingSession, "is_diarized"):
+                sess_payload["is_diarized"] = False
+            if hasattr(models.RecordingSession, "audio_path") and audio_path:
+                sess_payload["audio_path"] = audio_path
+            if hasattr(models.RecordingSession, "duration_ms") and duration_ms is not None:
+                sess_payload["duration_ms"] = duration_ms
+            if hasattr(models.RecordingSession, "language") and language:
+                sess_payload["language"] = language
 
-async def ingest_all_for_prefix(prefix: str):
-    """
-    같은 날짜(prefix)의 모든 sid를 찾아 순회 적재
-    """
-    redis_client = await get_redis_client()
-    
-    try:
-        # sids 세트에서 모든 세션 ID 가져오기
-        sids_key = f"{prefix}:sids"
-        sids = await redis_client.smembers(sids_key)
-        
-        if not sids:
-            print(f"[INFO] No sessions found for prefix: {prefix}")
-            return
-        
-        print(f"[INFO] Found {len(sids)} sessions for prefix: {prefix}")
-        
-        for sid in sorted(sids):
-            try:
-                await ingest_session_to_db(sid, prefix)
-            except Exception as e:
-                print(f"[ERROR] Failed to ingest {sid}: {e}")
-                continue
-                
-    finally:
-        await redis_client.close()
+            sess_obj = models.RecordingSession(**sess_payload)
+            db.merge(sess_obj)
+            db.flush()
 
+            # 3-2) segments → RecordingResult (존재할 때만)
+            if hasattr(models, "RecordingResult"):
+                batch_results = []
+                for _id, data in seg_entries:
+                    fm = _bmap2s(data)
+                    raw_text = fm.get("raw_text", "")
+                    if not raw_text:
+                        continue
+                    speaker_label = fm.get("speaker_label")
+                    ts_start_ms = _as_int(fm.get("ts_start_ms"))
+                    ts_end_ms   = _as_int(fm.get("ts_end_ms"))
 
-# ✅ CLI 실행을 위한 동기 래퍼
-def sync_ingest_one(sid: str, prefix: str):
-    """동기 버전 (CLI용)"""
-    import asyncio
-    asyncio.run(ingest_session_to_db(sid, prefix))
+                    row_payload: Dict[str, Any] = {
+                        "recording_session_id": session_id,
+                        "raw_text": raw_text,
+                    }
+                    if speaker_label and hasattr(models.RecordingResult, "speaker_label"):
+                        row_payload["speaker_label"] = speaker_label
+                    if hasattr(models.RecordingResult, "started_at"):
+                        # ✅ 상대 ms(세션 시작 기준) → 절대 시각 보정
+                        row_payload["started_at"] = _ms_rel_or_abs_to_dt(ts_start_ms, dt_started)
+                    if hasattr(models.RecordingResult, "ended_at"):
+                        # ✅ 상대 ms(세션 시작 기준) → 절대 시각 보정
+                        row_payload["ended_at"] = _ms_rel_or_abs_to_dt(ts_end_ms, dt_started)
+ 
 
+                    batch_results.append(models.RecordingResult(**row_payload))
 
-def sync_ingest_all(prefix: str):
-    """동기 버전 (CLI용)"""
-    import asyncio
-    asyncio.run(ingest_all_for_prefix(prefix))
+                if batch_results:
+                    db.add_all(batch_results)
+                    logger.info("🧾 Inserted %d RecordingResult rows (sid=%s)", len(batch_results), sid)
+            else:
+                logger.info("ℹ️ models.RecordingResult not found; skip segments ingestion")
 
+            # 3-3) summaries → Summary/RecordingSummary 등 (존재하는 모델만 선택 적용)
+            summary_model = None
+            if hasattr(models, "Summary"):
+                summary_model = models.Summary
+            elif hasattr(models, "RecordingSummary"):
+                summary_model = models.RecordingSummary
 
-if __name__ == "__main__":
-    # CLI 사용:
-    # 1) 한 세션:  python backend/app/tasks/redis_to_pg.py <sid> stt:YYYY-MM-DD
-    # 2) 하루 전체: python backend/app/tasks/redis_to_pg.py --all stt:YYYY-MM-DD
-    if len(sys.argv) < 2:
-        print("Usage: python backend/app/tasks/redis_to_pg.py <sid> <stt:YYYY-MM-DD>")
-        print("   or: python backend/app/tasks/redis_to_pg.py --all <stt:YYYY-MM-DD>")
-        sys.exit(1)
-    
-    if sys.argv[1] == "--all":
-        if len(sys.argv) < 3:
-            print("Missing prefix for --all")
-            sys.exit(1)
-        prefix = sys.argv[2]
-        sync_ingest_all(prefix)
-    else:
-        if len(sys.argv) < 3:
-            print("Missing prefix")
-            sys.exit(1)
-        sid = sys.argv[1]
-        prefix = sys.argv[2]
-        sync_ingest_one(sid, prefix)
+            if summary_model:
+                batch_summaries = []
+                for _id, data in sum_entries:
+                    fm = _bmap2s(data)
+                    summary_text = fm.get("summary_text")
+                    if not summary_text:
+                        continue
+
+                    st_ms = _as_int(fm.get("interval_start_ms"))
+                    en_ms = _as_int(fm.get("interval_end_ms"))
+                    model_name   = fm.get("model")
+                    tokens_in    = _as_int(fm.get("tokens_input"))
+                    tokens_out   = _as_int(fm.get("tokens_output"))
+                    source_text  = fm.get("source_text")
+
+                    row_payload: Dict[str, Any] = {
+                        "recording_session_id": session_id,
+                    }
+
+                    # 존재하는 칼럼만 매핑
+                    if hasattr(summary_model, "summary_type"):
+                        row_payload["summary_type"] = "interval"
+                    if hasattr(summary_model, "content"):
+                        row_payload["content"] = summary_text
+                    if hasattr(summary_model, "interval_start_at"):
+                        row_payload["interval_start_at"] = _ms_rel_or_abs_to_dt(st_ms, dt_started)
+                    if hasattr(summary_model, "interval_end_at"):
+                        row_payload["interval_end_at"] = _ms_rel_or_abs_to_dt(en_ms, dt_started)
+                    if hasattr(summary_model, "model") and model_name:
+                        row_payload["model"] = model_name
+                    if hasattr(summary_model, "tokens_input") and tokens_in is not None:
+                        row_payload["tokens_input"] = tokens_in
+                    if hasattr(summary_model, "tokens_output") and tokens_out is not None:
+                        row_payload["tokens_output"] = tokens_out
+                    if hasattr(summary_model, "source_text") and source_text:
+                        row_payload["source_text"] = source_text
+
+                    batch_summaries.append(summary_model(**row_payload))
+
+                if batch_summaries:
+                    db.add_all(batch_summaries)
+                    logger.info("🧾 Inserted %d summary rows (sid=%s)", len(batch_summaries), sid)
+            else:
+                logger.info("ℹ️ No summary model found; skip summaries ingestion")
+
+            db.commit()
+            logger.info("✅ Ingest committed (sid=%s)", sid)
+
+        except Exception as e:
+            db.rollback()
+            logger.exception("❌ Ingest failed (sid=%s): %s", sid, e)
+            raise
+
+    return session_id

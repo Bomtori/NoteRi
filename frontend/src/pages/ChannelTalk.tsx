@@ -62,15 +62,7 @@ export default function ChannelTalk() {
   };
 
   return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-xl font-semibold">채널톡 문의</h1>
-      <p className="text-sm text-gray-600">아래 버튼을 눌러 바로 문의를 시작하세요.</p>
-      <button
-        onClick={handleOpen}
-        className="px-4 py-2 rounded-lg shadow border hover:opacity-90"
-      >
-        채팅 열기
-      </button>
-    </div>
+<>
+    </>
   );
 }

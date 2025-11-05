@@ -7,7 +7,7 @@ export default function AdminLayout() {
           {/* 사이드바 */}
           <AdminSidebar />
                  {/* 메인 콘텐츠 영역 */}
-          <main className="flex-1 p-6 overflow-y-auto">
+          <main className="flex-1 p-6 ">
             <Outlet />
           </main>
         </div>

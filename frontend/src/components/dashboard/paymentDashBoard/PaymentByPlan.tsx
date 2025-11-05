@@ -2,6 +2,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card";
 import RechartsDonut from "../cards/RechartsDonut";
+import {DASH_CARD} from "../cards/cardStyles";
+import {cn} from "../../../lib/utils";
 
 type PlanDatum = { id: string; value: number; color?: string };
 
@@ -146,7 +148,7 @@ export default function PaymentByPlan({
   }, [resp, data]);
 
   return (
-    <Card className={`bg-card text-card-foreground ${className}`}>
+    <Card className={cn(DASH_CARD, className)}>
       <CardHeader className="p-5 pb-2">
         <CardTitle className="text-muted-foreground">{title}</CardTitle>
       </CardHeader>

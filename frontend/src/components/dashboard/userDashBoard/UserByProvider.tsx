@@ -58,9 +58,11 @@ export default function UserByProvider({
     () => data.reduce((s, d) => s + (Number(d.value) || 0), 0),
     [data]
   );
+  // 공통 카드 스타일 (원하는 강도로 조절 가능)
+  const CARD = "bg-white rounded-2xl shadow-sm transition-all duration-200 hover:-translate-y-0.1 hover:shadow-lg";
 
   return (
-    <Card className={`bg-card text-card-foreground ${className}`}>
+    <Card className={`${CARD} ${className}`}>
       <CardHeader className="p-5 pb-2">
         <CardTitle className="text-muted-foreground">플랫폼 별 가입자 비율</CardTitle>
       </CardHeader>

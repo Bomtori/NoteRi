@@ -28,7 +28,18 @@
         @apply font-sans;
     }
 }
-
+@layer base {
+  /* 카드 배경만 살짝 오프로 화이트(#f9f9fd) */
+  .card-hard-white { --card: 0 0% 100%; } /* hsl -> #ffffff */
+  .dark .card-hard-white { --card: 222 17% 16%; } /* 다크톤 원하면 조정 */
+  .card-soft {
+    --card: 240 33% 98%;   /* hsl(240, 33%, 98%) ≈ #f9f9fd */
+  }
+  /* (선택) 다크모드 대비값 */
+  .dark .card-soft {
+    --card: 240 10% 12%;
+  }
+}
 /* ==========================
    💫 커스텀 애니메이션 정의
    ========================== */

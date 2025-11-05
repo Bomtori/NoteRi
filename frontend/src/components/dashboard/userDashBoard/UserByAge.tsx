@@ -1,6 +1,8 @@
 // src/test/components/userDashBoard/UserByAge.tsx
 import React, { useMemo } from "react";
 import RechartsDonut from "../cards/RechartsDonut"; // 경로는 프로젝트에 맞게 조정
+import { Card } from "../../../components/ui/card";
+import { DASH_CARD } from "../cards/cardStyles";
 
 type Props = {
   /** 랜덤 목업이 필요하면 시드 변경용(선택) */
@@ -9,12 +11,14 @@ type Props = {
   mode?: "static" | "random";
 };
 
-const PALETTE = [
-  "#3b82f6", // 10대
-  "#22c55e", // 20대
-  "#f59e0b", // 30대
-  "#ef4444", // 40대
-  "#8b5cf6", // 50대+
+
+
+const PALETTE: string[] = [
+  "#5B8CFF", // 10대  : Indigo Blue
+  "#2AC3A2", // 20대  : Teal
+  "#F6C56B", // 30대  : Amber
+  "#F07F7F", // 40대  : Rose
+  "#7E37F9", // 50대+ : Brand Purple
 ];
 
 export default function UserByAge({ seed = 42, mode = "static" }: Props) {
@@ -56,8 +60,7 @@ export default function UserByAge({ seed = 42, mode = "static" }: Props) {
           데이터: {mode === "static" ? "고정 목업" : `랜덤 목업 (seed=${seed})`}
         </span>
       </div>
-
-      <RechartsDonut data={data} height={300} />
+       <RechartsDonut data={data} height={300} />
 
       {/*/!* 간단한 범례 *!/*/}
       {/*<div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">*/}

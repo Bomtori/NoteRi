@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../components/ui/card";
 import DateButtons from "../../dashboard/cards/DateButtons";
+import AdminToggleTabs from "../../../components/admin/AdminToggleTabs";
 
 type Range = "today" | "7d" | "month" | "year";
 
@@ -75,30 +76,34 @@ export default function SingUserByDate({
   }, [range]);
 
   const badgeLabel = range === "today" ? "전일" : range === "7d" ? "전주" : range === "month" ? "전월" : "전년";
+  const CARD = "bg-white rounded-2xl shadow-sm transition-all duration-200 hover:-translate-y-0.1 hover:shadow-lg";
 
   return (
-    <Card className={`bg-card text-card-foreground flex flex-col ${className}`}>
-      <CardHeader className="px-4 py-3 pb-2">
+    <Card className={`${CARD} flex flex-col ${className}`}>
+       <CardHeader className="px-4 py-3 pb-2 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="mt-1 mb-1 flex justify-end">
+            <AdminToggleTabs
+              size="sm"                                // ← 작게
+              layoutId="signup-range-tabs"             // ← 고유 ID
+              className="bg-muted/60"                  // ← 배경 살짝 톤다운 (선택)
+              tabs={[
+                { id: "today", label: "오늘" },
+                { id: "7d", label: "최근 7일" },
+                { id: "month", label: "최근 1개월" },
+                { id: "year", label: "최근 1년" },
+              ]}
+              active={range}
+              onChange={(id) => setRange(id as Range)}
+            />
+          </div>
+        </div>
+
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-xs text-muted-foreground">{title}</CardTitle>
           <GrowthBadge rate={growthRate ?? 0} label={badgeLabel} />
         </div>
 
-        <div className="mt-1 mb-1 flex justify-end">
-          <div className="max-w-full overflow-x-auto no-scrollbar">
-            <DateButtons<Range>
-              range={range}
-              onRangeChange={setRange}
-              className="[*]:h-6 [*]:px-2 [*]:text-[11px] [*]:rounded-md"
-              options={[
-                { value: "today", label: "오늘" },
-                { value: "7d", label: "최근 7일" },
-                { value: "month", label: "최근 1개월" },
-                { value: "year", label: "최근 1년" },
-              ]}
-            />
-          </div>
-        </div>
 
         <div className="text-lg font-semibold leading-none">
           {loading ? "로딩…" : error ? "-" : `${Number(value).toLocaleString()} 명`}

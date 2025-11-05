@@ -37,12 +37,12 @@ oauth.register(
     client_kwargs={"scope": "profile"},  # email 포함하려면 'profile'로 충분 (응답에서 제공)
 )
 
-@router.get("/login")
+@router.get("/login", summary="네이버 로그인")
 async def login_naver(request: Request):
     redirect_uri = request.url_for("naver_callback")
     return await oauth.naver.authorize_redirect(request, redirect_uri)
 
-@router.get("/callback", name="naver_callback")
+@router.get("/callback", name="naver_callback", summary="네이버 콜백")
 async def naver_callback(request: Request, db: Session = Depends(get_db)):
     # 1) 토큰 교환
     token = await oauth.naver.authorize_access_token(request)
@@ -125,7 +125,7 @@ async def naver_callback(request: Request, db: Session = Depends(get_db)):
 
     return resp
 
-@router.post("/rejoin")
+@router.post("/rejoin", summary="네이버 재가입")
 def naver_rejoin(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)

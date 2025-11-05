@@ -8,6 +8,9 @@ type Item = { id: string; label: string; count: number };
 type UsersByPlanRow = { plan: string; user_count: number };
 type UsersByPlanInput = UsersByPlanRow[] | Record<string, number> | undefined;
 
+const DASH_CARD = "bg-white rounded-2xl shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg";
+
+
 interface Props {
   items?: Item[];
   usersByPlan?: UsersByPlanInput;
@@ -48,7 +51,7 @@ const PricingBreakdownCard: React.FC<Props> = ({
   );
 
   return (
-    <Card className={cn("w-full", className)}>
+    <Card className={cn(DASH_CARD, className)}>
       <CardHeader className="pb-3">
         <div className="flex items-center gap-2">
           <BarChart3 className="h-4 w-4 text-muted-foreground" />

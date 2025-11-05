@@ -14,7 +14,7 @@ router = APIRouter()
 # 📌 Pydantic 모델 정의
 
 # ✅ 사용자 정보 조회 (GET)
-@router.get("/users/me", response_model=user_schema.UserResponse)
+@router.get("/users/me", response_model=user_schema.UserResponse, summary="사용자 본인 정보 조회")
 async def get_user_me(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -61,7 +61,7 @@ async def get_user_me(
 
 
 # ✅ 사용자 정보 수정 (PATCH)
-@router.patch("/users/me")
+@router.patch("/users/me", summary="사용자 정보 수정")
 async def update_user(
     data: user_schema.UserUpdate,
     db: Session = Depends(get_db),
@@ -86,7 +86,7 @@ async def update_user(
     }
 
 # ✅ 사용자 탈퇴 (soft delete)
-@router.delete("/users/me")
+@router.delete("/users/me", summary="사용자 탈퇴")
 async def delete_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)

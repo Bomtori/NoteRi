@@ -24,7 +24,7 @@ JWT_SECRET = os.getenv("GUEST_SECRET_KEY")      # 환경변수로!
 JWT_ALG = "HS256"
 
 # ✅ 비밀번호 설정/변경 (오너만)
-@router.patch("/{board_id}/password", response_model=schemas.BoardResponse)
+@router.patch("/{board_id}/password", response_model=schemas.BoardResponse, summary="비밀번호 변경/설정")
 def set_password(
     board_id: int,
     body: BoardPasswordSet,
@@ -42,7 +42,7 @@ def set_password(
 
 
 # ✅ 비밀번호 제거 (오너만)
-@router.delete("/{board_id}/password", response_model=schemas.BoardResponse)
+@router.delete("/{board_id}/password", response_model=schemas.BoardResponse, summary="비밀번호 제거")
 def clear_password(
     board_id: int,
     db: Session = Depends(get_db),
@@ -55,7 +55,7 @@ def clear_password(
 
 
 # ✅ 비밀번호 검증 (게스트/사용자 공통; 비로그인 허용)
-@router.post("/{board_id}/verify-password")
+@router.post("/{board_id}/verify-password", summary="비밀번호 검증")
 def verify_password(
     board_id: int,
     body: BoardPasswordVerify,

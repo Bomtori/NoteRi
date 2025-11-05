@@ -6,6 +6,7 @@ import MetricStatCard from "../components/dashboard/userDashBoard/MetricsStatCar
 import UserSignupTrend from "../components/dashboard/userDashBoard/UserSignupTrend";
 import UserAway from "../components/dashboard/userDashBoard/UserAway";
 import UserByAge from "../components/dashboard/userDashBoard/UserByAge";
+import { Card, CardContent } from "../components/ui/card";
 
 type Range = "today" | "7d" | "month" | "year";
 type ProviderCounts = Record<string, number>;
@@ -14,6 +15,9 @@ const API_BASE_URL =
   (import.meta as any).env?.VITE_API_BASE ??
   (import.meta as any).env?.API_BASE_URL ??
   "http://127.0.0.1:8000";
+
+const CARD =
+  "bg-white rounded-2xl shadow-sm transition-all duration-200 hover:-translate-y-0.1 hover:shadow-lg";
 
 function pickGrowthRate(payload: any): number {
   if (payload && typeof payload.growth_rate === "number") return payload.growth_rate;
@@ -126,7 +130,7 @@ export default function UserCards() {
       }
     })();
     return () => ac.abort();
-  }, [range]);
+  }, []);
 
   // 전체 유저 수
   useEffect(() => {
@@ -144,7 +148,7 @@ export default function UserCards() {
         setLoading(false);
       }
     })();
-  }, [range]);
+  }, []);
 
   // 비활성 유저 수
   useEffect(() => {
@@ -162,7 +166,7 @@ export default function UserCards() {
         setLoading(false);
       }
     })();
-  }, [range]);
+  }, []);
 
   // 도넛 데이터
   const provider = useMemo(
@@ -175,42 +179,73 @@ export default function UserCards() {
   );
 
   return (
-    <div className="min-w-0">
-      <div className="min-w-0 grid gap-6">
-        <MetricStatCard
-          title="전체 사용자"
-          value={totalUsers ?? 0}
-          caption={`비활성 유저 : ${(noActiveUsers ?? 0).toLocaleString()} 명`}
-          loading={loading}
-          error={error ?? undefined}
-        />
+     <div className="min-w-0 bg-[#f9f9fd] px-6 py-6 card-hard-white">
+    {/* 1줄: 전체 사용자 | MAU | 오늘 가입자 수 | 이탈 유저 */}
+      <div className="grid gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-4 items-stretch">
 
-        <StatCard title="MAU" value="1,532" delta="+7.4%" trend="up" highlight="전일 대비 7.4% 상승" />
+      <MetricStatCard
+        title="전체 사용자"
+        value={totalUsers ?? 0}
+        caption={`비활성 유저 : ${(noActiveUsers ?? 0).toLocaleString()} 명`}
+        loading={loading}
+        error={error ?? undefined}
+      />
 
-        <SingUserByDate
-          range={range}
-          setRange={setRange}
-          todaySignupUsers={todaySignupUsers}
-          last7dSignupUsers={last7dSignupUsers}
-          lastMonthSignupUsers={lastMonthSignupUsers}
-          lastYearSignupUsers={lastYearSignupUsers}
-          growthRate={growthRate}
-          loading={loading}
-          error={error ?? undefined}
-        />
 
-        <UserByProvider providerUsers={provider} />
 
-        <UserAway range={range} />
+      <StatCard
+        title="MAU"
+        value="1,532"
+        delta="+7.4%"
+        trend="up"
+        highlight="전일 대비 7.4% 상승"
+      />
 
-        <div className="min-w-0">
-          <UserByAge />
-        </div>
 
-        <div className="min-w-0">
-          <UserSignupTrend />
-        </div>
+
+      <SingUserByDate
+        range={range}
+        setRange={setRange}
+        todaySignupUsers={todaySignupUsers}
+        last7dSignupUsers={last7dSignupUsers}
+        lastMonthSignupUsers={lastMonthSignupUsers}
+        lastYearSignupUsers={lastYearSignupUsers}
+        growthRate={growthRate}
+        loading={loading}
+        error={error ?? undefined}
+      />
+
+
+      <UserAway range={range} />
+
+    </div>
+
+    {/* 2줄: 플랫폼 별 가입자 비율 | 유저 나이 분포 | 최근 가입자 */}
+    <div className="mt-6 grid gap-6 grid-cols-1 lg:grid-cols-2">
+      <UserByProvider
+        providerUsers={provider}
+        // Recharts 쓰는 중이면 두께 조절 이렇게
+        // @ts-expect-error - RechartsDonut prop 전달용
+        ringWidth={28}
+        className="min-w-0"
+        height={260}
+      />
+
+      <div className="min-w-0">
+        <Card className={`h-full ${CARD}`}>
+       <CardContent className="p-5">
+        <UserByAge />
+         </CardContent>
+     </Card>
       </div>
     </div>
+     <div className="min-w-0 mt-6">
+      <Card className={`h-full ${CARD}`}>
+       <CardContent className="p-5">
+         <UserSignupTrend />
+       </CardContent>
+     </Card>
+   </div>
+  </div>
   );
 }

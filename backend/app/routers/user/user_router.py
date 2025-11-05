@@ -13,82 +13,82 @@ from backend.app.util.authz import require_admin
 router = APIRouter(prefix="/users", tags=["Users"])
 
 # 사용자 숫자 확인
-@router.get("/count")
+@router.get("/count", summary="총 가입자 수")
 def get_user_count(db: Session = Depends(get_db)):
     total_users = user_crud.get_total_users_count(db)
     return {"total_users": total_users}
 
 # 비활성 사용자 수 확인
-@router.get("/count/noactive")
+@router.get("/count/noactive", summary="비활성 사용자 수")
 def get_user_count_no_active(db: Session = Depends(get_db)):
     no_active_users = user_crud.get_no_active_users_count(db)
     return {"no_active_users": no_active_users}
 
 # OAuth 구분
-@router.get("/count/provider")
+@router.get("/count/provider", summary="provider 별 가입자 수")
 def get_user_count_provider(db: Session = Depends(get_db)):
     return user_crud.get_user_count_by_provider(db)
 
 # 오늘 가입자 수
-@router.get("/count/signup/today")
+@router.get("/count/signup/today", summary="오늘 가입자 수")
 def get_signup_today(db: Session = Depends(get_db)):
     return user_crud.get_user_signup_today_stats(db)
 
 # 최근 일주일 가입자 수 추이
-@router.get("/count/signup/last-7-days")
+@router.get("/count/signup/last-7-days", summary="7일간 가입자 수 추이")
 def signup_last_7_days(db: Session = Depends(get_db)):
     return user_crud.get_user_signup_last_7_days(db)
 
 # 최근 5주간 가입자 수 추이
-@router.get("/count/signup/last-5-weeks")
+@router.get("/count/signup/last-5-weeks", summary="5주간 가입자 수 추이")
 def signup_last_5_weeks(db: Session = Depends(get_db)):
     return user_crud.get_user_signup_last_5_weeks(db)
 
 # 최근 6개월 간 가입자 수 추이
-@router.get("/count/signup/last-6-months")
+@router.get("/count/signup/last-6-months", summary="6개월간 가입자 수 추이")
 def signup_last_6_months(db: Session = Depends(get_db)):
     return user_crud.get_user_signup_last_6_months(db)
 
 # 최근 5년간 가입자 수 추이
-@router.get("/count/signup/last-5-years")
+@router.get("/count/signup/last-5-years", summary="5년간 가입자 수 추이")
 def signup_last_5_years(db: Session = Depends(get_db)):
     return user_crud.get_user_signup_last_5_years(db)
 
-@router.get("/last-7d")
+@router.get("/last-7d", summary="7일간 가입자 수")
 def last_7d(db: Session = Depends(get_db)):
     return {"total": user_crud.get_last_7d_signups(db)}
 
-@router.get("/last-m")
+@router.get("/last-m", summary="한 달간 가입자 수")
 def last_6m(db: Session = Depends(get_db)):
     print("한 달동안 가입자 수 ", user_crud.get_last_m_signups(db))
     return {"total": user_crud.get_last_m_signups(db)}
 
-@router.get("/last-12m")
+@router.get("/last-12m", summary="12개월 간 가입자 수")
 def last_12m(db: Session = Depends(get_db)):
     return {"total": user_crud.get_last_12m_signups(db)}
 
-@router.get("/dod")
+@router.get("/dod", summary="전일 대비 가입자 수")
 def dod(db: Session = Depends(get_db)):
     return user_crud.get_dod_signup_growth(db)
 
-@router.get("/wow")
+@router.get("/wow", summary="전주대비 가입자 수")
 def wow(db: Session = Depends(get_db)):
     return user_crud.get_wow_signup_growth(db)
 
-@router.get("/mom")
+@router.get("/mom", summary="전월대비 가입자 수")
 def mom(db: Session = Depends(get_db)):
     return user_crud.get_mom_signup_growth(db)
 
-@router.get("/yoy")
+@router.get("/yoy", summary="전년대비 가입자 수")
 def yoy(db: Session = Depends(get_db)):
     return user_crud.get_yoy_signup_growth(db)
 
-@router.get("/away/count")
+@router.get("/away/count", summary="떠난 유저 수")
 def get_inactive_stats(db: Session = Depends(get_db)):
     return user_crud.inactive_stats_last_6_months(db)
 
 # 유저 밴 상태 수정
-@router.patch("/{user_id}/ban", response_model=BanStatusResponse)
+@router.patch("/{user_id}/ban", response_model=BanStatusResponse, summary="유저 밴 상태 수정")
 def update_ban_state(
     user_id: int = Path(..., ge=1),
     body: BanUpdateRequest = ...,
@@ -115,7 +115,7 @@ def update_ban_state(
     )
 
 # 유저 밴 로그 조회
-@router.get("/{user_id}/ban/logs")
+@router.get("/{user_id}/ban/logs", summary="유저 밴 로그 조회")
 def get_ban_logs(
     user_id: int,
     db: Session = Depends(get_db),
@@ -140,12 +140,12 @@ def get_ban_logs(
     ]
 
 # 유저가 본인의 밴 사유 확인
-@router.get("/me/banned", response_model=UserMeResponse)
+@router.get("/me/banned", response_model=UserMeResponse, summary="유저 본인이 밴 사유 확인")
 def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 # 운영자가 보는 밴 사유
-@router.get("/{user_id}/ban", response_model=BanInfoResponse)
+@router.get("/{user_id}/ban", response_model=BanInfoResponse, summary="운영자가 밴 사유 확인")
 def get_user_ban_info(
     user_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),

@@ -1,8 +1,29 @@
 /* filename: src/test/components/PaymentByPlanTrend.tsx */
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import DateButtons, { DateButtonsOption } from "../cards/DateButtons";
+// import DateButtons, { DateButtonsOption } from "../cards/DateButtons";
 import ShadcnAreaChart from "../cards/ShadcnAreaChart";
 import { pivotPlansForMultiSeries } from "../utils/pivotPlansForMultiSeries";
+import AdminToggleTabs from "../../../components/admin/AdminToggleTabs";
+import {DateButtonsOption} from "../cards/DateButtons";
+
+function makeXs(range: UiRange): string[] {
+  const today = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+  const xs: string[] = [];
+  if (range === "7d") {
+    for (let i = 6; i >= 0; i--) { const d = new Date(today); d.setDate(today.getDate() - i); xs.push(fmt(d)); }
+  } else if (range === "5w") {
+    for (let i = 4; i >= 0; i--) { const d = new Date(today); d.setDate(today.getDate() - i * 7); xs.push(fmt(d)); }
+  } else if (range === "6m") {
+    for (let i = 5; i >= 0; i--) { const d = new Date(today); d.setDate(1); d.setMonth(d.getMonth() - i); xs.push(fmt(d)); }
+  } else { // 5y
+    for (let i = 4; i >= 0; i--) { const d = new Date(today); d.setMonth(0, 1); d.setFullYear(d.getFullYear() - i); xs.push(fmt(d)); }
+  }
+  return xs;
+}
 
 function pickArray(resp: unknown): any[] {
   const r = resp as any;                 // ✅ any 로 접근
@@ -152,26 +173,36 @@ export default function PaymentByPlanTrend({
         console.log("PaymentTrend", resp)
 
         // 1) 응답에서 플랜 키 동적 추출
-        const keys = inferPlanKeys(resp);
-        // 안전장치: 아무 것도 못 찾았으면 기본 키를 비워두고 종료
+       // 1) 응답에서 플랜 키 동적 추출
+        let keys = inferPlanKeys(resp);
+        // 키가 없으면, 기존 팔레트 키(= 현재 쓰는 플랜 레이블)를 기본으로 사용
         if (keys.length === 0) {
-          setPlanKeys([]);
-          setSeriesRows([]);
-          prevSig.current = "0:0";
-          return;
+          keys = Object.keys(PLAN_COLORS); // ["free","pro","enterprise"]
         }
 
         // 2) 피벗 (동적 키 사용)
         const wide = pivotPlansForMultiSeries(resp, keys as readonly string[]);
         // 3) 숫자/형식 정리
-        const next: SeriesRow[] = wide.map((row: any) => {
-          const out = {} as SeriesRow;     // ✅ 먼저 캐스팅한 뒤
-          out.x = String(row.x);           // ✅ 나눠서 채운다
-          for (const k of keys) {
-            out[k] = Number(row[k] ?? 0);  // ✅ 숫자 값 채우기
-          }
-          return out;
+       const next: SeriesRow[] = wide.map((row: any) => {
+        const out = {} as SeriesRow;
+        out.x = String(row.x);
+        for (const k of keys) {
+          out[k] = Number(row[k] ?? 0);
+        }
+        return out;
+      });
+       if (next.length === 0) {
+        const xs = makeXs(uiRange);
+        const filled = xs.map((x) => {
+          const r: SeriesRow = { x } as SeriesRow;
+          for (const k of keys) (r as any)[k] = 0;
+          return r;
         });
+        setPlanKeys(keys);
+        setSeriesRows(filled);
+        prevSig.current = `${filled.length}:0`;
+        return;
+      }
 
         const totalSum = next.reduce(
           (s: number, r: any) => s + keys.reduce((ss, k) => ss + (r[k] || 0), 0),
@@ -222,7 +253,18 @@ export default function PaymentByPlanTrend({
   return (
     <div className={`space-y-3 ${className}`}>
       <div className="flex justify-end">
-        <DateButtons<UiRange> range={uiRange} onRangeChange={setUiRange} options={trendOptions} />
+        <AdminToggleTabs
+            size="sm"
+            layoutId="payment-plan-range"
+            tabs={[
+              { id: "7d", label: "최근 7일" },
+              { id: "5w", label: "최근 5주" },
+              { id: "6m", label: "최근 6개월" },
+              { id: "5y", label: "최근 5년" },
+            ]}
+            active={uiRange}
+            onChange={(id) => setUiRange(id as UiRange)}
+          />
       </div>
 
       <ShadcnAreaChart

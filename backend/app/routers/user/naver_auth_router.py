@@ -1,4 +1,5 @@
 # backend/app/routers/naver_auth_router.py
+import traceback
 from fastapi import APIRouter, Request, Depends, status, Cookie, HTTPException
 from sqlalchemy.orm import Session
 from authlib.integrations.starlette_client import OAuth
@@ -92,11 +93,11 @@ async def naver_callback(request: Request, db: Session = Depends(get_db)):
             f"&email={quote(email or '')}&try_provider={provider}",
             status_code=302,
         )
-    except Exception:
-        return RedirectResponse(
-            f"{FRONTEND_URL}/auth/callback?error=internal_error",
-            status_code=302,
-        )
+    except Exception as e:
+        traceback.print_exc()
+        print("🔥 NAVER OAUTH ERROR:", e)
+        return RedirectResponse(f"{FRONTEND_URL}/auth/callback?error=internal_error", status_code=302)
+
 
     # 4) 탈퇴 계정
     if db_user and not db_user.is_active:

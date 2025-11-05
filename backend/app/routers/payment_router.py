@@ -2,13 +2,16 @@
 import logging
 import os
 import uuid
+import asyncio
 from typing import Optional, List, Tuple
 
 import httpx
 import base64
+
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query, Header
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload        # ✅ joinedload 추가
+from sqlalchemy import func, desc, Enum
 
 from backend.app.deps.auth import get_current_user
 from backend.app.model import User
@@ -102,21 +105,7 @@ async def confirm_payment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # ① 토스 결제 승인
-    url = "https://api.tosspayments.com/v1/payments/confirm"
-    encoded = base64.b64encode(f"{TOSS_SECRET_KEY}:".encode()).decode()
-    headers = {"Authorization": f"Basic {encoded}", "Content-Type": "application/json"}
-    data = {"paymentKey": req.paymentKey, "orderId": req.orderId, "amount": req.amount}
-
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(url, json=data, headers=headers)
-
-    if resp.status_code != 200:
-        raise HTTPException(status_code=resp.status_code, detail=resp.json())
-
-    payment_result = resp.json()
-
-    # ② 멱등성
+    # ✅ ② 멱등성 체크를 맨 앞으로 이동
     already = (
         db.query(Payment)
         .filter(Payment.order_id == req.orderId, Payment.status.in_(["SUCCESS", "DONE"]))
@@ -142,10 +131,55 @@ async def confirm_payment(
             },
         }
 
-    # ③ 플랜 조회
-    plan = db.query(Plan).filter(Plan.name == req.plan_name).first()
+    # ① 토스 결제 승인
+    url = "https://api.tosspayments.com/v1/payments/confirm"
+    encoded = base64.b64encode(f"{TOSS_SECRET_KEY}:".encode()).decode()
+    headers = {"Authorization": f"Basic {encoded}", "Content-Type": "application/json"}
+    data = {"paymentKey": req.paymentKey, "orderId": req.orderId, "amount": req.amount}
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(url, json=data, headers=headers)
+
+        # ✅ Toss가 "S008 - 기존 요청 처리중"이라면 2초 뒤 재시도
+        if resp.status_code != 200:
+            try:
+                detail = resp.json().get("detail", {})
+                if isinstance(detail, dict) and detail.get("code") == "FAILED_PAYMENT_INTERNAL_SYSTEM_PROCESSING":
+                    await asyncio.sleep(2)
+                    resp = await client.post(url, json=data, headers=headers)
+            except Exception:
+                pass
+    if resp.status_code != 200:
+        raise HTTPException(status_code=resp.status_code, detail=resp.json())
+
+    payment_result = resp.json()
+
+    # ③ 플랜 조회 - ✅ 강력한 정규화
+    # "PlanType.PRO" → "pro", "BASIC" → "basic", "Pro" → "pro"
+    plan_name_input = req.plan_name
+    if "PlanType." in plan_name_input:
+        plan_name_input = plan_name_input.replace("PlanType.", "")
+    plan_name_normalized = plan_name_input.lower().strip()
+    
+    print(f"🔍 플랜 조회 시도: 입력='{req.plan_name}' → 정규화='{plan_name_normalized}'")
+    
+    # ✅ Plan 테이블에서 대소문자 무시하고 조회
+    plan = (
+        db.query(Plan)
+        .filter(func.lower(Plan.name) == plan_name_normalized)
+        .first()
+    )
+    
     if not plan:
-        raise HTTPException(status_code=404, detail="Invalid plan")
+        # ✅ 디버깅: DB에 있는 모든 플랜 이름 출력
+        all_plans = db.query(Plan.name).all()
+        print(f"❌ 플랜을 찾을 수 없음. DB의 플랜 목록: {[p.name for p in all_plans]}")
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Invalid plan: '{req.plan_name}' (normalized: '{plan_name_normalized}')"
+        )
+    
+    print(f"✅ 플랜 찾음: id={plan.id}, name={plan.name}")
 
     # ④ 구독 upsert
     billing_key = payment_result.get("billingKey")
@@ -156,6 +190,7 @@ async def confirm_payment(
     new_end = today + timedelta(days=plan.duration_days)
 
     if sub:
+        old_plan_id = sub.plan_id
         sub.plan_id = plan.id
         sub.start_date = today
         sub.end_date = new_end
@@ -166,6 +201,7 @@ async def confirm_payment(
         if customer_key:
             sub.customer_key = customer_key
         sub.next_renew_on = new_end
+        print(f"✅ 구독 업데이트: user_id={current_user.id}, plan_id {old_plan_id} → {plan.id}")
     else:
         sub = Subscription(
             user_id=current_user.id,
@@ -179,6 +215,7 @@ async def confirm_payment(
             next_renew_on=new_end,
         )
         db.add(sub)
+        print(f"✅ 구독 생성: user_id={current_user.id}, plan_id={plan.id}")
 
     db.commit()
     db.refresh(sub)
@@ -203,20 +240,30 @@ async def confirm_payment(
     db.commit()
     db.refresh(new_payment)
 
-    # ⑦ 응답
+    # ✅ ⑦ Plan 이름 안전하게 추출
+    raw_name = plan.name
+    if isinstance(raw_name, Enum):
+        effective_plan_name = raw_name.value.lower()
+    else:
+        effective_plan_name = str(raw_name).lower()
+
+    print(f"✅ 결제 완료: subscription_id={sub.id}, plan_name={effective_plan_name}")
+
+    # ✅ ⑧ 응답
     return {
         "message": "Payment successful",
         "subscription": {
             "subscription_id": sub.id,
-            "plan_name": plan.name,
+            "plan_id": sub.plan_id,
+            "plan_name": effective_plan_name,
             "start_date": str(sub.start_date),
             "end_date": str(sub.end_date),
             "is_active": sub.is_active,
+            "auto_renew": sub.auto_renew,
         },
         "usage": {
-            # 프로젝트 모델에 맞춰 seconds/minutes 중 선택
-            "allocated_seconds": sub.plan.allocated_seconds,
-            "duration_days": sub.plan.duration_days,
+            "allocated_seconds": plan.allocated_seconds,
+            "duration_days": plan.duration_days,
         },
         "payment": {
             "payment_id": new_payment.id,

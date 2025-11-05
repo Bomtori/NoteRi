@@ -24,7 +24,7 @@ def _to_event_out(ev) -> EventOut:
         extendedProps=ev.extended_props or {},
     )
 
-@router.get("", response_model=List[EventOut], summary="기간 내 이벤트 조회 (FullCalendar용)")
+@router.get("/", response_model=List[EventOut], summary="기간 내 이벤트 조회 (FullCalendar용)")
 def list_events(
     start: datetime = Query(..., description="ISO8601"),
     end: datetime = Query(..., description="ISO8601"),
@@ -35,7 +35,7 @@ def list_events(
     events = calendar_event_crud.list_events(db, current_user.id, start, end, board_id)
     return [_to_event_out(e) for e in events]
 
-@router.post("", response_model=EventOut, summary="이벤트 생성")
+@router.post("/", response_model=EventOut, summary="이벤트 생성")
 def create_event(
     payload: EventCreate,
     db: Session = Depends(get_db),

@@ -5,6 +5,7 @@ import io
 import wave
 
 class STTModel:
+    
     def __init__(self, model_size="medium", device="cuda",
                  chunk_seconds=3.0, overlap_seconds=1.0, sample_rate=16000):
         print(f"🚀 FastWhisper {model_size} 모델 로딩 중... (device={device})")

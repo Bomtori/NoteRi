@@ -8,8 +8,10 @@ from backend.app.model import User
 from backend.app.schemas.recording_usage_schema import RecordingUseRequest, RecordingUseResponse
 from backend.app.util.errors import NotReadyError, AlreadyDebitedError, UsageExceededError
 from backend.app.crud import recording_usage_crud
+import logging
 
 router = APIRouter(prefix="/recordings/usage", tags=["recordings"])
+logger = logging.getLogger("recordings")
 
 @router.post("/use/{audio_id}", response_model=RecordingUseResponse, summary="사용량 소모")
 def use_by_audio_owner(
@@ -48,31 +50,50 @@ def get_current_usage(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    usage = (
-        db.query(recording_usage_crud.RecordingUsage)
-        .filter(
-            recording_usage_crud.RecordingUsage.user_id == current_user.id,
-            (recording_usage_crud.RecordingUsage.period_end == None)
-            | (recording_usage_crud.RecordingUsage.period_end >= date.today()),
+    try:
+        usage = (
+            db.query(recording_usage_crud.RecordingUsage)
+            .filter(
+                recording_usage_crud.RecordingUsage.user_id == current_user.id,
+                (recording_usage_crud.RecordingUsage.period_end == None)
+                | (recording_usage_crud.RecordingUsage.period_end >= date.today()),
+            )
+            .order_by(recording_usage_crud.RecordingUsage.created_at.desc())
+            .first()
         )
-        .order_by(recording_usage_crud.RecordingUsage.created_at.desc())
-        .first()
-    )
-    if not usage:
-        raise HTTPException(status_code=404, detail="No active recording usage found")
 
-    if usage.allocated_seconds is None:
-        remaining = "unlimited"
-    else:
-        remaining = max(int(usage.allocated_seconds) - int(usage.used_seconds or 0), 0)
+        # ✅ 사용량 데이터가 없을 경우 (404 대신 기본값 반환)
+        if not usage:
+            logger.info(f"[recordings] No usage found for user_id={current_user.id}, returning default 0 usage.")
+            return RecordingUseResponse(
+                user_id=current_user.id,
+                used_seconds=0,
+                remaining_seconds=0,
+                allocated_seconds=0,
+                period_end=None
+            )
 
-    return RecordingUseResponse(
-        user_id=current_user.id,
-        used_seconds=int(usage.used_seconds or 0),
-        remaining_seconds=remaining,
-        allocated_seconds=None if usage.allocated_seconds is None else int(usage.allocated_seconds),
-        period_end=usage.period_end,
-    )
+        # ✅ 남은 시간 계산
+        remaining = (
+            "unlimited"
+            if usage.allocated_seconds is None
+            else max(int(usage.allocated_seconds) - int(usage.used_seconds or 0), 0)
+        )
+
+        return RecordingUseResponse(
+            user_id=current_user.id,
+            used_seconds=int(usage.used_seconds or 0),
+            remaining_seconds=remaining,
+            allocated_seconds=None if usage.allocated_seconds is None else int(usage.allocated_seconds),
+            period_end=usage.period_end,
+        )
+
+    except Exception as e:
+        logger.exception(f"[recordings] Unexpected error for user_id={current_user.id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Recording usage check failed: {str(e)}"
+        )
 
 @router.get("/total", summary="모든 사용량 조회")
 def get_total_usage(db: Session = Depends(get_db)):

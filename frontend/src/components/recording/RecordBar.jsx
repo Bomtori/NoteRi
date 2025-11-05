@@ -14,6 +14,10 @@ export default function RecordBar({
                                       onStop,
                                       onCreateTemplate,
                                       onTogglePanel, // 사이드바 열기 버튼
+                                      boardTitle,          // 👈 추가
+                                      summaries = [],      // 👈 추가
+                                      refinedScript = [],  // 👈 추가
+                                      memo = null,         // 👈 추가
                                   }) {
     const [state, setState] = useState(recordingState);
     const [elapsed, setElapsed] = useState(0);
@@ -198,7 +202,12 @@ export default function RecordBar({
                         <RecordShareModal
                             isOpen={showShareModal}
                             onClose={() => setShowShareModal(false)}
-                            boardId={boardId} // ✅ 실제 보드 id 전달 추가
+                            boardId={boardId}
+                            // 👇 새로 받은 props 전달
+                            boardTitle={boardTitle}
+                            summaries={summaries}
+                            refinedScript={refinedScript}
+                            memo={memo}
                         />
                     )}
                 </AnimatePresence>

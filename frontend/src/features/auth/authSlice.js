@@ -49,7 +49,7 @@ const authSlice = createSlice({
             state.isAuthenticated = false;
             localStorage.removeItem("user");
             localStorage.removeItem("access_token");
-            window.location.href = "/login";
+            window.location.href = "/";
         },
     },
 });

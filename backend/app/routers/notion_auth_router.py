@@ -96,45 +96,71 @@ def notion_callback(code: str, state: str, db: Session = Depends(get_db)):
     redirect_to = f"{frontend_url}/user?notion=connected"
     return RedirectResponse(url=redirect_to, status_code=302)
 
-@router.post("/upload", summary="노션 공유")
+@router.get("/status")
+def notion_status(auth: Optional[NotionAuth] = Depends(crud.get_user_notion_auth)):
+    """
+    현재 로그인 사용자의 노션 연동 상태 조회
+    - Authorization: Bearer <access_jwt> 필요
+    """
+    return {
+        "connected": bool(auth),
+        "workspace_id": getattr(auth, "workspace_id", None),
+        "workspace_name": getattr(auth, "workspace_name", None),
+    }
+
+@router.post("/upload")
 def upload_to_notion(
     title: str = Body(..., embed=True),
     content: str = Body(..., embed=True),
     parent_id: str = Body(..., embed=True),
-    parent_type: str = Body("database", embed=True),  # 'database' | 'page'
+    parent_type: str = Body("database", embed=True),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    token: Optional[str] = Depends(crud.get_user_notion_token),  # JWT에서 user_id→DB조회로 주입
+    token: Optional[str] = Depends(crud.get_user_notion_token),
 ):
-    """
-    parent_type: 'database' | 'page'
-    parent_id: 사용자가 선택한 데이터베이스ID or 페이지ID
-    """
     if not token:
         raise HTTPException(status_code=400, detail="Notion 계정이 연결되지 않았습니다.")
 
-    parent = {"database_id": parent_id} if parent_type == "database" else {"page_id": parent_id}
+    # 1 DB 정보 요청해서 title property 자동 감지
+    db_info = requests.get(
+        f"https://api.notion.com/v1/databases/{parent_id}",
+        headers=notion_headers(token),
+    )
+    if db_info.status_code != 200:
+        raise HTTPException(status_code=400, detail="데이터베이스 정보를 불러올 수 없습니다.")
+
+    db_data = db_info.json()
+    title_prop = next(
+        (key for key, val in db_data.get("properties", {}).items()
+         if val.get("type") == "title"),
+        "Name"  # fallback
+    )
+    logger.info(f"✅ 감지된 Notion 타이틀 속성명: {title_prop}")
+
+    # 2 본문 생성
     body = {
-        "parent": parent,
+        "parent": {"database_id": parent_id},
         "properties": {
-            # DB의 타이틀 프로퍼티명이 'Name'일 때 예시
-            "Name": {"title": [{"text": {"content": title}}]}
+            title_prop: {"title": [{"text": {"content": title}}]}
         },
         "children": [
             {
                 "object": "block",
                 "type": "paragraph",
-                "paragraph": {"rich_text": [{"text": {"content": content}}]},
+                "paragraph": {
+                    "rich_text": [{"text": {"content": content or " "}}]
+                },
             }
         ],
     }
+
+    # 3 업로드
     r = requests.post("https://api.notion.com/v1/pages", headers=notion_headers(token), json=body)
+    logger.info(f"🧭 Notion upload status={r.status_code}")
+    logger.info(f"🧭 Notion upload response={r.text}")
 
     if r.status_code == 401:
-        # 필요 시 refresh_token 사용해 토큰 갱신 시도 후 재호출 로직을 붙일 수 있습니다.
-        # 예: refresh_notion_token(db, current_user.id); 그 후 재시도
         raise HTTPException(status_code=401, detail="Notion 토큰이 만료되었습니다. 다시 연결해주세요.")
-
     if r.status_code != 200:
         try:
             raise HTTPException(status_code=r.status_code, detail=r.json())
@@ -144,6 +170,57 @@ def upload_to_notion(
     page = r.json()
     return {"id": page["id"], "url": page["url"]}
 
+
+
+
+
+@router.get("/databases")
+def list_notion_databases(
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+        token: Optional[str] = Depends(crud.get_user_notion_token),
+):
+    if not token:
+        raise HTTPException(status_code=400, detail="Notion 계정이 연결되지 않았습니다.")
+
+    try:
+        # ✅ 데이터베이스만 검색
+        r = requests.post(
+            "https://api.notion.com/v1/search",
+            headers=notion_headers(token),
+            json={"filter": {"value": "database", "property": "object"}},
+            timeout=10,
+        )
+        logger.info(f"🧭 Notion search status={r.status_code}")
+        logger.info(f"🧭 Notion search response: {r.text}")
+
+        if r.status_code == 401:
+            raise HTTPException(status_code=401, detail="Notion 토큰이 만료되었거나 잘못되었습니다.")
+        if r.status_code != 200:
+            raise HTTPException(status_code=r.status_code, detail=r.text)
+
+        data = r.json()
+        results = []
+        for d in data.get("results", []):
+            if d["object"] != "database":
+                continue
+            # ✅ title 안전하게 파싱
+            title = (
+                d.get("title", [{}])[0].get("plain_text", "제목 없음")
+                if d.get("title")
+                else "제목 없음"
+            )
+            results.append({
+                "id": d["id"],
+                "title": title,
+            })
+
+        logger.info(f"✅ Parsed {len(results)} databases from Notion.")
+        return results
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"❌ Notion API 요청 실패: {e}")
+        raise HTTPException(status_code=500, detail=f"Notion API 요청 실패: {e}")
 
 @router.delete("/disconnect", status_code=status.HTTP_204_NO_CONTENT, summary="노션 연동 해제")
 def disconnect_notion(

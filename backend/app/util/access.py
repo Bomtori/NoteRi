@@ -8,8 +8,10 @@ def can_read_board(db: Session, board_id: int, principal) -> bool:
       {"type":"guest","board_id":<board_id>}
     """
     if not principal:
+        print("🚫 principal is None")
         return False
 
+    print(f"🔍 can_read_board: board_id={board_id}, principal={principal}")
     board = (
         db.query(model.Board)
         .filter(model.Board.id == board_id)

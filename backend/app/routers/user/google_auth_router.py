@@ -3,6 +3,7 @@ from urllib.parse import quote
 from sqlalchemy.orm import Session
 from authlib.integrations.starlette_client import OAuth
 import os
+import traceback
 from fastapi.responses import RedirectResponse
 from datetime import datetime, UTC
 from starlette.responses import JSONResponse
@@ -22,8 +23,8 @@ oauth.register(
     client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
     server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
     client_kwargs={"scope": "openid email profile"},
+    redirect_uri=os.getenv("GOOGLE_REDIRECT_URI")
 )
-
 COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN", None)
 ACCESS_TOKEN_MAX_AGE = 3600  # 초
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
@@ -84,12 +85,10 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
             f"&email={quote(email)}&try_provider={provider}",
             status_code=302,
         )
-    except Exception:
-        # 기타 예외는 일반 오류로 리다이렉트
-        return RedirectResponse(
-            f"{FRONTEND_URL}/auth/callback?error=internal_error",
-            status_code=302,
-        )
+    except Exception as e:
+        traceback.print_exc()
+        print("🔥 GOOGLE OAUTH ERROR:", e)
+        return RedirectResponse(f"{FRONTEND_URL}/auth/callback?error=internal_error", status_code=302)
 
     # 3) 비활성(탈퇴) 계정 처리
     if db_user and not db_user.is_active:

@@ -1,11 +1,14 @@
+// src/pages/UserPage.tsx
 import { useCallback, useEffect, useRef, useState } from "react";
 import UserHeader from "../components/user/UserHeader";
 import apiClient from "../api/apiClient";
 import { API_BASE_URL } from "../config";
 import { useToast } from "../hooks/useToast";
+import PlanChangeModal from "../components/user/PlanChangeModal";
+
 
 // =======================
-// ✅ 타입 정의
+// 타입 정의
 // =======================
 interface Plan {
     name: "free" | "pro" | "enterprise";
@@ -13,15 +16,6 @@ interface Plan {
     allocated_minutes: number;
     description: string;
     end_date?: string;
-}
-
-interface PlanOption {
-    id: number;
-    name: string;
-    price: number;
-    duration_days: number;
-    allocated_seconds: number;
-    description?: string;
 }
 
 interface Billing {
@@ -69,8 +63,17 @@ interface NotificationItem {
     created_at: string;
 }
 
+interface PlanOption {
+    id: number;
+    name: string;
+    price: number;
+    duration_days: number;
+    allocated_seconds: number;
+    description?: string;
+}
+
 // =======================
-// 📊 진행률 바 컴포넌트
+//  진행률 바 컴포넌트
 // =======================
 interface ProgressBarProps {
     used: number;
@@ -100,62 +103,116 @@ function ProgressBar({ used, total, mode = "remaining" }: ProgressBarProps) {
 }
 
 // =======================
-// 💰 결제내역 섹션
+//  결제내역 섹션
 // =======================
 function BillingSection({ billings }: { billings: Billing[] }) {
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 5; // 페이지당 항목 수
+    const totalPages = Math.ceil(billings.length / itemsPerPage);
+
+    const startIdx = (currentPage - 1) * itemsPerPage;
+    const currentItems = billings.slice(startIdx, startIdx + itemsPerPage);
+
+    const handlePageChange = (page: number) => {
+        if (page >= 1 && page <= totalPages) {
+            setCurrentPage(page);
+        }
+    };
+
     return (
         <section className="bg-white rounded-2xl p-6 shadow-sm">
             <h2 className="text-lg font-semibold mb-3">결제 내역</h2>
+
             {billings.length === 0 ? (
                 <p className="text-gray-400 text-sm">결제 내역이 없습니다.</p>
             ) : (
-                <table className="w-full text-sm text-left border-t border-gray-100">
-                    <thead>
-                    <tr className="text-gray-500 border-b border-gray-100">
-                        <th className="py-2">결제일</th>
-                        <th>플랜</th>
-                        <th>금액</th>
-                        <th>결제수단</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {billings.map((b) => (
-                        <tr key={b.id} className="border-b border-gray-100">
-                            <td className="py-2 text-gray-600">
-                                {new Date(b.date).toLocaleDateString("ko-KR")}
-                            </td>
-                            <td>{b.planName}</td>
-                            <td>₩{b.amount.toLocaleString()}</td>
-                            <td className="text-gray-500">{b.method}</td>
+                <>
+                    <table className="w-full text-sm text-left border-t border-gray-100">
+                        <thead>
+                        <tr className="text-gray-500 border-b border-gray-100">
+                            <th className="py-2">결제일</th>
+                            <th>플랜</th>
+                            <th>금액</th>
+                            <th>결제수단</th>
                         </tr>
-                    ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                        {/* ✅ currentItems 로 변경 */}
+                        {currentItems.map((b) => (
+                            <tr key={b.id} className="border-b border-gray-100">
+                                <td className="py-2 text-gray-600">
+                                    {new Date(b.date).toLocaleDateString("ko-KR")}
+                                </td>
+                                <td>{b.planName}</td>
+                                <td>₩{b.amount.toLocaleString()}</td>
+                                <td className="text-gray-500">{b.method}</td>
+                            </tr>
+                        ))}
+                        </tbody>
+                    </table>
+
+                    {/* ✅ 페이지네이션 UI */}
+                    <div className="flex justify-center items-center gap-3 mt-4">
+                        <button
+                            onClick={() => handlePageChange(currentPage - 1)}
+                            disabled={currentPage === 1}
+                            className={`px-3 py-1 text-sm rounded-md border ${
+                                currentPage === 1
+                                    ? "text-gray-400 border-gray-200 cursor-not-allowed"
+                                    : "text-[#7E37F9] border-[#7E37F9] hover:bg-[#F3EFFF]"
+                            }`}
+                        >
+                            이전
+                        </button>
+
+                        <span className="text-sm text-gray-500">
+              {currentPage} / {totalPages}
+            </span>
+
+                        <button
+                            onClick={() => handlePageChange(currentPage + 1)}
+                            disabled={currentPage === totalPages}
+                            className={`px-3 py-1 text-sm rounded-md border ${
+                                currentPage === totalPages
+                                    ? "text-gray-400 border-gray-200 cursor-not-allowed"
+                                    : "text-[#7E37F9] border-[#7E37F9] hover:bg-[#F3EFFF]"
+                            }`}
+                        >
+                            다음
+                        </button>
+                    </div>
+                </>
             )}
         </section>
     );
 }
 
+
 // =======================
-// 🧩 노션 연동 섹션
+//  노션 연동 섹션
 // =======================
-type NotionProps = {
+type Props = {
     connected: boolean;
     onConnect: () => void;
     onDisconnect: () => void;
 };
 
-function NotionIntegration({ connected, onConnect, onDisconnect }: NotionProps) {
+function NotionIntegration({ connected, onConnect, onDisconnect }: Props) {
     const [loading, setLoading] = useState(false);
 
     return (
         <section className="bg-white rounded-2xl p-6 shadow-sm text-center">
             <h2 className="text-lg font-semibold mb-3">노션 연동</h2>
+
             {connected ? (
                 <>
                     <p className="text-sm text-gray-600 mb-4">노션과 연동이 완료되었습니다.</p>
                     <button
-                        onClick={async () => { setLoading(true); await onDisconnect(); setLoading(false); }}
+                        onClick={async () => {
+                            setLoading(true);
+                            await onDisconnect();
+                            setLoading(false);
+                        }}
                         disabled={loading}
                         className="px-4 py-2 rounded-md border border-red-400 text-red-500 hover:bg-red-50 text-sm disabled:opacity-60"
                     >
@@ -164,9 +221,15 @@ function NotionIntegration({ connected, onConnect, onDisconnect }: NotionProps) 
                 </>
             ) : (
                 <>
-                    <p className="text-sm text-gray-600 mb-4">노션 계정을 연결하여 회의록을 자동으로 동기화하세요.</p>
+                    <p className="text-sm text-gray-600 mb-4">
+                        노션 계정을 연결하여 회의록을 자동으로 동기화하세요.
+                    </p>
                     <button
-                        onClick={async () => { setLoading(true); await onConnect(); setLoading(false); }}
+                        onClick={async () => {
+                            setLoading(true);
+                            await onConnect();
+                            setLoading(false);
+                        }}
                         disabled={loading}
                         className="px-4 py-2 rounded-md bg-[#7E37F9] text-white hover:bg-[#6b29e3] text-sm disabled:opacity-60"
                     >
@@ -179,149 +242,38 @@ function NotionIntegration({ connected, onConnect, onDisconnect }: NotionProps) 
 }
 
 // =======================
-// 💳 플랜 변경 모달
-// =======================
-interface PlanModalProps {
-    currentPlan: string;
-    plans: PlanOption[];
-    onClose: () => void;
-    onSelectPlan: (plan: PlanOption) => void;
-}
-function PlanChangeModal({ currentPlan, plans, onClose, onSelectPlan }: PlanModalProps) {
-    const formatKrw = (v: number) =>
-        v === 0 ? "₩0" : `₩${Math.round(v).toLocaleString()}`;
-    const toMinutes = (sec: number) =>
-        Math.floor((sec ?? 0) / 60).toLocaleString();
-
-    // 💜 enterprise 분리, 나머지는 오름차순 정렬
-    const enterprisePlans = plans.filter(
-        (p) => p.name.toLowerCase() === "enterprise"
-    );
-    const nonEnterprise = plans
-        .filter((p) => p.name.toLowerCase() !== "enterprise")
-        .sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
-
-    const sortedPlans = [...nonEnterprise, ...enterprisePlans];
-
-    return (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-3xl p-8 w-[95%] max-w-6xl shadow-2xl max-h-[80vh] overflow-y-auto">
-                <div className="flex justify-between items-center mb-8">
-                    <h2 className="text-2xl font-bold text-gray-800">플랜 변경</h2>
-                    <button
-                        onClick={onClose}
-                        className="text-gray-400 hover:text-gray-600 text-xl"
-                    >
-                        ✕
-                    </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                    {sortedPlans.map((plan) => {
-                        const isCurrent =
-                            plan.name.toLowerCase() === currentPlan.toLowerCase();
-                        const isEnterprise =
-                            plan.name.toLowerCase() === "enterprise";
-
-                        return (
-                            <div
-                                key={plan.id}
-                                className={[
-                                    "relative flex flex-col justify-between text-center p-8 rounded-3xl bg-white border transition-all duration-300",
-                                    isCurrent
-                                        ? "border-[#7E37F9] shadow-[0_8px_25px_rgba(126,55,249,0.15)]"
-                                        : "border-gray-200 hover:border-[#C19EF8] hover:shadow-[0_10px_25px_rgba(126,55,249,0.12)]",
-                                ].join(" ")}
-                            >
-                                <div>
-                                    <h3 className="text-xl font-extrabold text-[#7E37F9] mb-2">
-                                        {plan.name.toUpperCase()}
-                                    </h3>
-                                    <p className="text-sm text-gray-600 mb-6 min-h-[36px]">
-                                        {plan.description ||
-                                            `${plan.name} 플랜 설명`}
-                                    </p>
-                                    <div className="text-3xl font-extrabold mb-2">
-                                        {formatKrw(plan.price)}
-                                    </div>
-                                    <p className="text-sm text-gray-500 mb-8">
-                                        {toMinutes(plan.allocated_seconds)}분 제공{" "}
-                                        {plan.duration_days > 0
-                                            ? `/ ${plan.duration_days}일`
-                                            : ""}
-                                    </p>
-                                </div>
-
-                                {isCurrent ? (
-                                    <button
-                                        disabled
-                                        className="w-full py-2.5 rounded-full bg-gray-200 text-gray-500 font-medium cursor-not-allowed"
-                                    >
-                                        현재 플랜
-                                    </button>
-                                ) : (
-                                    <button
-                                        onClick={() => onSelectPlan(plan)}
-                                        className={`w-full py-2.5 rounded-full font-semibold transition
-                                        ${
-                                            isEnterprise
-                                                ? "bg-gray-700 hover:bg-gray-800 text-white"
-                                                : "bg-[#7E37F9] hover:bg-[#6b29e3] text-white"
-                                        }`}
-                                    >
-                                        {isEnterprise ? "담당자 문의" : "변경하기"}
-                                    </button>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-
-// =======================
-// 🧭 메인 UserPage
+//  메인 UserPage
 // =======================
 export default function UserPage() {
     const prevUnreadRef = useRef(0);
+    const intervalRef = useRef<NodeJS.Timeout | null>(null); // interval 참조 저장
+
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
-    const [availablePlans, setAvailablePlans] = useState<PlanOption[]>([]);
     const { showToast } = useToast();
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
-    // 맨 위 import 밑 아무 곳
-    const formatKrw = (v: number) => (v === 0 ? "₩0" : `₩${Math.round(v).toLocaleString()}`);
-    const toMinutes = (sec: number) => Math.floor((sec ?? 0) / 60).toLocaleString();
+    const [availablePlans, setAvailablePlans] = useState<PlanOption[]>([]);
 
-    // ✅ 플랜 목록 가져오기
-    const fetchAvailablePlans = useCallback(async () => {
-        try {
-            const res = await apiClient.get(`/plans`);
-            setAvailablePlans(res.data);
-        } catch (err) {
-            console.error("플랜 목록 조회 실패:", err);
-        }
-    }, []);
 
+    // 사용자 정보 불러오기
     useEffect(() => {
         async function fetchUser() {
             try {
-                const [userRes, paymentsRes, usageRes, subRes, notiRes] = await Promise.all([
-                    apiClient.get(`/users/me`),
-                    apiClient.get(`/payments/me`),
-                    apiClient.get(`/recordings/usage`),
-                    apiClient.get(`/subscriptions/me`),
-                    apiClient.get(`/notifications`),
+                const [userRes, paymentsRes, usageRes, subRes, notiRes, planRes] = await Promise.all([
+                    apiClient.get(`${API_BASE_URL}/users/me`),
+                    apiClient.get(`${API_BASE_URL}/payments/me`),
+                    apiClient.get(`${API_BASE_URL}/recordings/usage`),
+                    apiClient.get(`${API_BASE_URL}/subscriptions/me`),
+                    apiClient.get(`${API_BASE_URL}/notifications`),
+                    apiClient.get(`${API_BASE_URL}/plans/me`)
                 ]);
 
+                // 노션 연동 상태 확인
                 let notionConnected = false;
                 try {
-                    const notionRes = await apiClient.get(`/notion/status`);
+                    const notionRes = await apiClient.get(`${API_BASE_URL}/notion/status`);
                     notionConnected = !!notionRes.data?.connected;
                 } catch {
                     notionConnected = !!userRes.data?.notion_connected;
@@ -330,19 +282,40 @@ export default function UserPage() {
                 const data = userRes.data;
                 const usage = usageRes.data;
                 const subscription = subRes.data;
-                const endDate = subscription?.end_date || null;
                 const usedMinutes = Math.floor((usage.used_seconds ?? 0) / 60);
+                const planId = subscription?.plan_id;
+                console.log("subscription: ", subscription)
+                let planData = null;
+                if (planId) {
+                    try {
+                        const planDetailRes = await apiClient.get(`${API_BASE_URL}/plans/${planId}`);
+                        console.log("planDetailRes: ",planDetailRes)
+                        planData = planDetailRes.data;
+                    } catch (err) {
+                        console.error("플랜 상세 불러오기 실패:", err);
+                    }
+                }
+                const endDate = subscription?.end_date || null;
+                // 구독 만료 체크 (핵심 수정)
+                const isExpired = endDate && new Date(endDate) < new Date();
+                const effectivePlanName = isExpired ? "free" : (data.plan_name || "free");
+                console.log("planData: ",planData)
+                // 플랜 정보 설정
+                const plan: Plan = {
+                    name: planData?.name || subscription?.plan_name || "free",
+                    price: planData?.price ?? 0,
+                    allocated_minutes: Math.floor((planData?.allocated_seconds ?? 0) / 60),
+                    description: planData?.description ?? "",
+                    end_date: endDate,
+                };
 
-                const plan: Plan =
-                    data.plan_name === "pro"
-                        ? { name: "pro", price: 10000, allocated_minutes: usage.allocated_minutes ?? 500, description: "PRO 플랜 (30일 500분)" }
-                        : data.plan_name === "enterprise"
-                            ? { name: "enterprise", price: 30000, allocated_minutes: usage.allocated_minutes ?? 999999, description: "엔터프라이즈 (무제한)" }
-                            : { name: "free", price: 0, allocated_minutes: usage.allocated_minutes ?? 300, description: "무료 플랜 (평생 300분)" };
-
+                // 결제 내역 가공
                 const billings: Billing[] = paymentsRes.data
                     .filter((p: PaymentItem) => p.plan_name?.toLowerCase() !== "free")
-                    .sort((a: PaymentItem, b: PaymentItem) => new Date(b.approved_at).getTime() - new Date(a.approved_at).getTime())
+                    .sort(
+                        (a: PaymentItem, b: PaymentItem) =>
+                            new Date(b.approved_at).getTime() - new Date(a.approved_at).getTime()
+                    )
                     .map((p: PaymentItem) => ({
                         id: p.id,
                         date: p.approved_at,
@@ -368,47 +341,17 @@ export default function UserPage() {
         }
 
         fetchUser();
-        fetchAvailablePlans();
 
+        // 노션 콜백에서 ?notion=connected 로 돌아오면 즉시 반영
         const qs = new URLSearchParams(window.location.search);
         if (qs.get("notion") === "connected") {
             setUser((u) => (u ? { ...u, notion_connected: true } : u));
             window.history.replaceState({}, "", window.location.pathname);
         }
-    }, [fetchAvailablePlans]);
+    }, [showModal]);
 
-    const refreshNotifications = useCallback(async () => {
-        try {
-            const unreadRes = await apiClient.get(`/notifications/unread`, { withCredentials: true });
-            const unread = unreadRes.data.length;
-
-            if (unread > prevUnreadRef.current) {
-                showToast(unread === 1 ? "🔔 새 알림이 1개 도착했습니다." : `🔔 새 알림이 ${unread}개 도착했습니다.`);
-                const listRes = await apiClient.get(`/notifications`);
-                setNotifications(listRes.data ?? []);
-            }
-
-            setUnreadCount(unread);
-            prevUnreadRef.current = unread;
-        } catch (e) {
-            console.error("알림 확인 실패:", e);
-        }
-    }, [showToast]);
-
-    useEffect(() => {
-        refreshNotifications();
-        const interval = setInterval(refreshNotifications, 15000);
-        return () => clearInterval(interval);
-    }, [refreshNotifications]);
-    // 모달 렌더 가격필터링
-    const enterprisePlans = availablePlans.filter(p => p.name.toLowerCase() === "enterprise");
-    const nonEnterprise = availablePlans
-        .filter(p => p.name.toLowerCase() !== "enterprise")
-        .sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
-
-    const sortedPlans = [...nonEnterprise, ...enterprisePlans];
-
-    // 플랜 선택 시 결제 진행
+    // 결제연동
+    // 결제연동
     const handleSelectPlan = async (selectedPlan: PlanOption) => {
         console.log("선택된 플랜:", selectedPlan);
 
@@ -451,6 +394,121 @@ export default function UserPage() {
         }
     };
 
+
+    // 구독 해지 핸들러 추가
+    const handleCancelSubscription = async () => {
+        if (!confirm("현재 구독을 취소하고 무료 플랜으로 전환하시겠습니까?")) {
+            return;
+        }
+
+        try {
+            // 🔹 /subscriptions/me 로 PATCH 요청
+            await apiClient.patch(`${API_BASE_URL}/subscriptions/me`, {
+                plan_name: "free", // 플랜을 free로 변경
+            });
+
+            showToast("무료 플랜으로 전환되었습니다.");
+            const planRes = await apiClient.get(`${API_BASE_URL}/plans/me`);
+
+            // UI 즉시 반영 (새로고침 없이)
+            setUser((prev) =>
+                prev
+                    ? {
+                        ...prev,
+                        plan: {
+                            ...prev.plan,
+                            name: planRes.data.name,
+                            price: planRes.data.price,
+                            allocated_minutes: planRes.data.allocated_seconds / 60,
+                            description: planRes.data.description,
+                        },                    }
+                    : prev
+            );
+        } catch (err) {
+            console.error("구독 취소(무료 전환) 실패:", err);
+            showToast("구독 취소에 실패했습니다. 다시 시도해주세요.");
+        }
+    };
+
+    // 알림 갱신 함수 (기존 기능 + 최적화)
+    const refreshNotifications = useCallback(async () => {
+        try {
+            const unreadRes = await apiClient.get(`${API_BASE_URL}/notifications/unread`, {
+                withCredentials: true,
+            });
+            const unread = unreadRes.data.length;
+
+            // 새 알림이 있을 때만 토스트 표시
+            if (unread > prevUnreadRef.current) {
+                showToast(
+                    unread === 1
+                        ? "🔔 새 알림이 1개 도착했습니다."
+                        : `🔔 새 알림이 ${unread}개 도착했습니다.`
+                );
+
+                // 새 알림 목록 즉시 반영
+                const listRes = await apiClient.get(`${API_BASE_URL}/notifications`);
+                setNotifications(listRes.data ?? []);
+            }
+
+            setUnreadCount(unread);
+            prevUnreadRef.current = unread;
+        } catch (e) {
+            console.error("알림 확인 실패:", e);
+        }
+    }, [showToast]);
+    // 플랜목록 api
+    useEffect(() => {
+        async function fetchPlans() {
+            try {
+                const res = await apiClient.get(`${API_BASE_URL}/plans`);
+                setAvailablePlans(res.data);
+            } catch (err) {
+                console.error("플랜 목록 불러오기 실패:", err);
+            }
+        }
+        fetchPlans();
+    }, []);
+
+
+    // 백그라운드 탭 감지 (탭 전환 시 폴링 중단/재개)
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                // 백그라운드로 이동 시 폴링 중단
+                if (intervalRef.current) {
+                    clearInterval(intervalRef.current);
+                    intervalRef.current = null;
+                    console.log("⏸️ 백그라운드 모드 - 폴링 중단");
+                }
+            } else {
+                // 포그라운드로 복귀 시 즉시 조회 + 폴링 재개
+                refreshNotifications();
+                intervalRef.current = setInterval(refreshNotifications, 30000); // 30초
+                console.log("▶️ 포그라운드 모드 - 폴링 재개");
+            }
+        };
+
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+
+        return () => {
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+        };
+    }, [refreshNotifications]);
+
+    // 알림 폴링 시작 (30초 주기로 변경)
+    useEffect(() => {
+        refreshNotifications(); // 진입 시 1회
+        intervalRef.current = setInterval(refreshNotifications, 30000); // 15초 → 30초
+
+        return () => {
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+            }
+        };
+    }, [refreshNotifications]);
+
+    // 로딩 상태
     if (loading)
         return (
             <main className="flex justify-center items-center min-h-screen text-gray-400">
@@ -458,6 +516,7 @@ export default function UserPage() {
             </main>
         );
 
+    // 사용자 정보 없음
     if (!user)
         return (
             <main className="flex justify-center items-center min-h-screen text-gray-400">
@@ -474,7 +533,9 @@ export default function UserPage() {
         <main className="bg-gray-50 min-h-screen p-8 space-y-8">
             <h1 className="text-2xl font-semibold mb-6">마이페이지</h1>
 
+            {/* 2열 그리드 레이아웃 */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                {/* 왼쪽: 프로필 + 플랜 */}
                 <div className="space-y-6">
                     <UserHeader user={user} />
 
@@ -482,9 +543,7 @@ export default function UserPage() {
                         <div className="flex justify-between items-center mb-3">
                             <div>
                                 <p className="text-sm text-gray-500">현재 플랜</p>
-                                <h2 className="text-xl font-semibold">
-                                    {user.plan.name.toUpperCase()}
-                                </h2>
+                                <h2 className="text-xl font-semibold">{user.plan.name.toUpperCase()}</h2>
 
                                 {user.plan.name !== "free" && (
                                     <p className="text-xs text-gray-500 mt-2">
@@ -504,6 +563,24 @@ export default function UserPage() {
                             >
                                 플랜 변경
                             </button>
+                            {/*/!* ✅ 구독 해지 버튼 추가 *!/*/}
+                            {/*{user.plan.name !== "free" && (*/}
+                            {/*    <button*/}
+                            {/*        onClick={handleCancelSubscription}*/}
+                            {/*        className="px-4 py-1.5 text-sm rounded-md border border-red-400 text-red-500 hover:bg-red-50 transition"*/}
+                            {/*    >*/}
+                            {/*        구독 해지*/}
+                            {/*    </button>*/}
+                            {/*)}*/}
+                            {showModal && (
+                                <PlanChangeModal
+                                    currentPlan={user.plan.name}
+                                    plans={availablePlans} // ✅ AdminSettingsPage에서 관리하는 plans 그대로 API로 가져온 값
+                                    onClose={() => setShowModal(false)}
+                                    onSelectPlan={handleSelectPlan}
+                                    onCancelSubscription={handleCancelSubscription}
+                                />
+                            )}
                         </div>
 
                         <p className="text-sm text-gray-600">
@@ -513,20 +590,69 @@ export default function UserPage() {
                         <p className="text-xs text-gray-400 mt-1">
                             남은 시간: {remaining.toLocaleString()}분
                         </p>
+
                     </section>
+                    {/* 노션 연동 섹션 */}
+                    <NotionIntegration
+                        connected={user.notion_connected}
+                        onConnect={async () => {
+                            const token = localStorage.getItem("access_token");
+                            if (!token) return alert("로그인이 필요합니다.");
+
+                            await fetch(`${API_BASE_URL}/healthz`, {
+                                headers: { "ngrok-skip-browser-warning": "1" },
+                                cache: "no-store",
+                            }).catch(() => {
+                                /* 무시해도 됨 */
+                            });
+
+                            const res = await fetch(`${API_BASE_URL}/notion/login`, {
+                                headers: { Authorization: `Bearer ${token}` },
+                            });
+
+                            if (!res.ok) {
+                                const text = await res.text();
+                                return alert(`노션 URL 요청 실패: ${res.status} ${text}`);
+                            }
+
+                            const { url } = await res.json();
+                            window.location.href = url;
+                        }}
+                        onDisconnect={async () => {
+                            const token = localStorage.getItem("access_token");
+                            if (!token) return alert("로그인이 필요합니다.");
+
+                            const res = await fetch(`${API_BASE_URL}/notion/disconnect`, {
+                                method: "DELETE",
+                                headers: { Authorization: `Bearer ${token}` },
+                            });
+
+                            if (!res.ok) {
+                                const text = await res.text();
+                                return alert(`연동 해제 실패: ${res.status} ${text}`);
+                            }
+
+                            alert("노션 연동이 해제되었습니다.");
+                            setUser((u) => (u ? { ...u, notion_connected: false } : u));
+                        }}
+                    />
                 </div>
 
+                {/* 오른쪽: 결제 내역 + 알림 + 노션 */}
                 <div className="space-y-6">
                     <BillingSection billings={user.billings} />
 
+                    {/* 알림 섹션 */}
                     <section className="bg-white rounded-2xl p-6 shadow-sm">
                         <div className="flex justify-between items-center mb-4">
                             <h2 className="text-lg font-semibold text-gray-800">알림</h2>
                             <button
                                 onClick={async () => {
                                     try {
-                                        await apiClient.post(`/notifications/read-all`);
-                                        setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+                                        await apiClient.post(`${API_BASE_URL}/notifications/read-all`);
+                                        setNotifications((prev) =>
+                                            prev.map((n) => ({ ...n, is_read: true }))
+                                        );
                                         refreshNotifications();
                                         showToast("모든 알림을 읽음 처리했습니다.");
                                     } catch {
@@ -544,63 +670,60 @@ export default function UserPage() {
                         ) : (
                             <ul className="space-y-2 max-h-72 overflow-y-auto no-scrollbar">
                                 {[...notifications]
-                                    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                                    .sort(
+                                        (a, b) =>
+                                            new Date(b.created_at).getTime() -
+                                            new Date(a.created_at).getTime()
+                                    )
                                     .map((n) => (
-                                        <li key={n.id} className={`p-3 rounded-lg border transition ${n.is_read ? "bg-gray-50 border-gray-200" : "bg-[#F3EFFF] border-[#E0CFFF]"}`}>
+                                        <li
+                                            key={n.id}
+                                            className={`p-3 rounded-lg border transition ${
+                                                n.is_read
+                                                    ? "bg-gray-50 border-gray-200"
+                                                    : "bg-[#F3EFFF] border-[#E0CFFF]"
+                                            }`}
+                                        >
                                             <p className="text-sm text-gray-800">{n.content}</p>
-                                            <p className="text-xs text-gray-400 mt-1">{new Date(n.created_at).toLocaleString("ko-KR")}</p>
+                                            <p className="text-xs text-gray-400 mt-1">
+                                                {new Date(n.created_at).toLocaleString("ko-KR")}
+                                            </p>
                                         </li>
                                     ))}
                             </ul>
                         )}
                     </section>
 
-                    <NotionIntegration
-                        connected={user.notion_connected}
-                        onConnect={async () => {
-                            const token = localStorage.getItem("access_token");
-                            if (!token) return alert("로그인이 필요합니다.");
-                            await fetch(`/healthz`, {
-                                headers: { "ngrok-skip-browser-warning": "1" },
-                                cache: "no-store",
-                            }).catch(() => {});
 
-                            const res = await fetch(`/notion/login`, {
-                                headers: { Authorization: `Bearer ${token}` },
-                            });
-                            if (!res.ok) {
-                                const text = await res.text();
-                                return alert(`노션 URL 요청 실패: ${res.status} ${text}`);
-                            }
-                            const { url } = await res.json();
-                            window.location.href = url;
-                        }}
-                        onDisconnect={async () => {
-                            const token = localStorage.getItem("access_token");
-                            if (!token) return alert("로그인이 필요합니다.");
-                            const res = await fetch(`/notion/disconnect`, {
-                                method: "DELETE",
-                                headers: { Authorization: `Bearer ${token}` },
-                            });
-                            if (!res.ok) {
-                                const text = await res.text();
-                                return alert(`연동 해제 실패: ${res.status} ${text}`);
-                            }
-                            alert("노션 연동이 해제되었습니다.");
-                            setUser((u) => (u ? { ...u, notion_connected: false } : u));
-                        }}
-                    />
                 </div>
             </div>
 
-            {showModal && (
-                <PlanChangeModal
-                    currentPlan={user.plan.name}
-                    plans={sortedPlans} // ← 여기!
-                    onClose={() => setShowModal(false)}
-                    onSelectPlan={handleSelectPlan}
-                />
-            )}
+            {/* 아침 알림 테스트 버튼 */}
+            <button
+                onClick={async () => {
+                    try {
+                        const token = localStorage.getItem("access_token");
+                        await apiClient.post(
+                            `${API_BASE_URL}/notifications/trigger-morning`,
+                            null,
+                            {
+                                withCredentials: true,
+                                headers: token ? { Authorization: `Bearer ${token}` } : {},
+                            }
+                        );
+                        showToast("🌅 아침 알림 트리거가 실행되었습니다.");
+                        setTimeout(() => {
+                            refreshNotifications();
+                        }, 800);
+                    } catch (err) {
+                        showToast("트리거 실행 실패");
+                        console.error(err);
+                    }
+                }}
+                className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+            >
+                아침 알림 테스트
+            </button>
         </main>
     );
 }

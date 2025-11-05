@@ -1,13 +1,14 @@
-import React, { useCallback, useRef, useState } from "react";
+import React, {useCallback, useEffect, useRef, useState} from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import type { EventClickArg, EventInput } from "@fullcalendar/core";
 import { AnimatePresence, motion } from "framer-motion";
-import { Label } from "../ui/label";
-import { Textarea } from "../ui/textarea";
+import apiClient from "../../api/apiClient";
+import type { DatesSetArg } from "@fullcalendar/core";
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000";
+
+const API_BASE = import.meta.env.VITE_API_BASE ?? "http://1.236.171.160:8000";
 
 const getAuthHeaders = (): HeadersInit => {
     const token = localStorage.getItem("access_token");
@@ -33,6 +34,8 @@ type FormState = {
 
 export default function Calendar() {
     const calRef = useRef<FullCalendar | null>(null);
+    const [monthWindow, setMonthWindow] = useState<{ start: Date; end: Date } | null>(null);
+
     const [events, setEvents] = useState<EventInput[]>([]);
     const [viewRange, setViewRange] = useState<{ start: Date; end: Date } | null>(
         null
@@ -40,19 +43,52 @@ export default function Calendar() {
     const [showEditor, setShowEditor] = useState(false);
     const [form, setForm] = useState<FormState | null>(null);
     const [isSaving, setIsSaving] = useState(false);
-    // const [editorPos, setEditorPos] = useState<{ x: number; y: number } | null>(null); // 폼위치계산 다틀려서 주석처리
+
+    // 초기값을 빈 문자열로 변경
+    const [currentRange, setCurrentRange] = useState<{ start: string | null; end: string | null }>({
+        start: null,
+        end: null
+    });
+    const [isLoading, setIsLoading] = useState(false);
+
     const COLORS = ["#7E37F9", "#FF7A00", "#2E90FA", "#14B8A6", "#EC4899"];
-    // HEX → RGBA 변환
-        const hexToRgba = (hex: string, opacity: number) => {
-            const r = parseInt(hex.slice(1, 3), 16);
-            const g = parseInt(hex.slice(3, 5), 16);
-            const b = parseInt(hex.slice(5, 7), 16);
-            return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+
+    const hexToRgba = (hex: string, opacity: number) => {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+    };
+
+    // 일정 불러오기 (start, end 기준)
+    useEffect(() => {
+        if (!currentRange.start || !currentRange.end) return;
+
+        const fetchEvents = async () => {
+            try {
+                setIsLoading(true);
+                const q = new URLSearchParams({
+                    start: currentRange.start!,
+                    end: currentRange.end!,
+                });
+                const resp = await fetch(`${API_BASE}/calendar?${q.toString()}`, {
+                    headers: getAuthHeaders(),
+                    credentials: "include",
+                });
+                const data = await resp.json();
+                setEvents(data.map(mapApiEventToFC));
+            } catch (err) {
+                console.error("📅 일정 불러오기 실패:", err);
+            } finally {
+                setIsLoading(false);
+            }
         };
+
+        fetchEvents();
+    }, [currentRange]);
 
     const mapApiEventToFC = (ev: any): EventInput => {
         const color = ev.extendedProps?.color ?? "#7E37F9";
-        const bg = hexToRgba(color, 0.2);
 
         return {
             id: String(ev.id),
@@ -60,10 +96,15 @@ export default function Calendar() {
             start: ev.start,
             end: ev.end,
             allDay: ev.allDay,
-            backgroundColor: `${color}22`, // ✅ 약간 투명한 배경
-            borderColor: color,             // ✅ 진한 테두리
-            textColor: "#111111",           // ✅ 글자 잘 보이게
-            classNames: ["custom-event"],   // ✅ 커스텀 CSS hook
+            // backgroundColor: `${color}55`,
+            // borderColor: color,
+            // textColor: "#111111",
+            eventBackgroundColor: color,   // ✅ FullCalendar 전용 키
+            eventBorderColor: color,       // ✅ 경계선 색
+            backgroundColor: color,        // ✅ fallback
+            borderColor: color,
+            textColor: "#111111",             // ✅ 대비 높이기
+            classNames: ["custom-event"],
             extendedProps: { ...ev.extendedProps, color },
         };
     };
@@ -82,19 +123,46 @@ export default function Calendar() {
 
     const refresh = () => viewRange && fetchEvents(viewRange.start, viewRange.end);
 
-    const onDatesSet = (arg: any) => {
-        setViewRange({ start: arg.start, end: arg.end });
-        fetchEvents(arg.start, arg.end);
+    // 달이 바뀔 때마다 호출
+    // const handleDatesSet = (arg: DatesSetArg) => {
+    //     const start = arg.start.toISOString();
+    //     const end = arg.end.toISOString();
+    //     setCurrentRange({ start, end });
+    // };
+    const handleDatesSet = (arg: DatesSetArg) => {
+        const start = arg.start.toISOString();
+        const end = arg.end.toISOString();
+
+        setCurrentRange({ start, end });
+
+        // dayGridMonth에서 '현재 달'의 1일 ~ 다음달 1일(exclusive)
+        const monthStart = arg.view.currentStart; // ex) 2025-11-01T00:00:00
+        const monthEnd   = arg.view.currentEnd;   // ex) 2025-12-01T00:00:00
+        setMonthWindow({ start: monthStart, end: monthEnd });
     };
+
+    const groupedEvents = React.useMemo(() => {
+        const groups: Record<string, EventInput[]> = {};
+        if (!monthWindow) return groups;
+
+        const { start: monthStart, end: monthEnd } = monthWindow;
+
+        events.forEach(ev => {
+            const d = new Date(ev.start as string);
+
+            // ✅ '보이는 달' 범위 밖이면 스킵 (currentStart ≤ d < currentEnd)
+            if (d < monthStart || d >= monthEnd) return;
+
+            const key = d.getDate().toString(); // 1~31
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(ev);
+        });
+
+        return groups;
+    }, [events, monthWindow]);
 
     const onSelect = (sel: any) => {
         if (!sel.jsEvent) return;
-        const rect = sel.jsEvent.target.getBoundingClientRect();
-
-        // setEditorPos({
-        //     x: rect.left + rect.width / 2,
-        //     y: rect.bottom + window.scrollY + 8,
-        // });
 
         setForm({
             title: "",
@@ -105,15 +173,8 @@ export default function Calendar() {
         });
         setShowEditor(true);
     };
+
     const onDateClick = (info: any) => {
-        // if (!info.jsEvent) return;
-        const rect = info.jsEvent.target.getBoundingClientRect();
-
-        // setEditorPos({
-        //     x: rect.left + rect.width / 2,
-        //     y: rect.bottom + window.scrollY + 6,
-        // });
-
         setForm({
             title: "",
             description: "",
@@ -121,10 +182,8 @@ export default function Calendar() {
             start: toISO(info.date)!,
             end: undefined
         });
-
         setShowEditor(true);
     };
-
 
     const onEventClick = (arg: EventClickArg) => {
         const e = arg.event;
@@ -135,6 +194,9 @@ export default function Calendar() {
             allDay: e.allDay,
             start: toISO(e.start)!,
             end: e.end ? toISO(e.end) : undefined,
+            color: (e.extendedProps as any)?.color ?? "#7E37F9",
+            location: (e.extendedProps as any)?.location ?? "",
+            remind_morning: (e.extendedProps as any)?.remind_morning ?? false,
         });
         setShowEditor(true);
     };
@@ -155,7 +217,9 @@ export default function Calendar() {
             end_time: form.end || null,
             all_day: form.allDay,
             extended_props: {
-                color: form.color ?? "#7E37F9"
+                color: form.color ?? "#7E37F9",
+                location: form.location,
+                remind_morning: form.remind_morning
             }
         };
 
@@ -171,15 +235,22 @@ export default function Calendar() {
             body: JSON.stringify(payload),
         });
 
-        const saved = await resp.json(); // ✅ 여기서만!
+        const saved = await resp.json();
 
         setIsSaving(false);
 
-        // ✅ UI 바로 반영
-        setEvents(prev => [...prev, mapApiEventToFC(saved)]);
+        // UI 바로 반영
+        if (form.id) {
+            // 수정인 경우
+            setEvents(prev => prev.map(ev =>
+                ev.id === form.id ? mapApiEventToFC(saved) : ev
+            ));
+        } else {
+            // 새로 추가인 경우
+            setEvents(prev => [...prev, mapApiEventToFC(saved)]);
+        }
 
         closeEditor();
-        refresh();
     };
 
     const onDelete = async () => {
@@ -189,21 +260,12 @@ export default function Calendar() {
             headers: getAuthHeaders(),
             credentials: "include",
         });
-        refresh();
+
+        // 즉시 UI에서 제거
+        setEvents(prev => prev.filter(ev => ev.id !== form.id));
         closeEditor();
     };
-    const LILAC = {
-        50:  "#f5f3ff",
-        100: "#ede9fe",
-        200: "#ddd6fe",
-        300: "#c4b5fd",
-        400: "#a78bfa",
-        500: "#8b5cf6",
-        600: "#7c3aed",
-        700: "#6d28d9",
-        800: "#5b21b6",
-        900: "#4c1d95",
-    };
+
     const onEventDrop = async (info: any) => {
         const e = info.event;
         try {
@@ -221,9 +283,10 @@ export default function Calendar() {
             });
         } catch (err) {
             console.error("이벤트 이동 실패", err);
-            info.revert(); // 실패 시 원위치
+            info.revert();
         }
     };
+
     const onEventResize = async (info: any) => {
         const e = info.event;
         try {
@@ -241,25 +304,9 @@ export default function Calendar() {
             });
         } catch (err) {
             console.error("이벤트 기간 변경 실패", err);
-            info.revert(); // 실패 시 원래 위치로 되돌리기
+            info.revert();
         }
     };
-
-
-
-
-    const groupedEvents = React.useMemo(() => {
-        const groups: Record<string, EventInput[]> = {};
-
-        events.forEach(ev => {
-            const d = new Date(ev.start as string);
-            const key = d.getDate(); // ✅ 숫자 Day 기반
-            if (!groups[key]) groups[key] = [];
-            groups[key].push(ev);
-        });
-
-        return groups;
-    }, [events]);
 
 
     return (
@@ -269,19 +316,20 @@ export default function Calendar() {
                 plugins={[dayGridPlugin, interactionPlugin]}
                 initialView="dayGridMonth"
                 height="auto"
-                editable={true} // 이벤트 직접 이동가능
-                eventDrop={onEventDrop}   // 드래그 후 drop 처리
-                eventResize={onEventResize} // 기간 조정 가능
+                editable={true}
+                eventDrop={onEventDrop}
+                eventResize={onEventResize}
                 selectable={true}
-                selectMirror={true}    // ✅ 선택 영역 셀 활성화
+                selectMirror={true}
                 unselectAuto={true}
                 events={events}
                 dateClick={onDateClick}
                 select={onSelect}
                 eventClick={onEventClick}
                 themeSystem="standard"
-                datesSet={onDatesSet}
+                datesSet={handleDatesSet}
             />
+
             {/* 📌 Editor */}
             {showEditor && form && (
                 <div className="relative mt-4 w-full flex justify-center">
@@ -294,7 +342,6 @@ export default function Calendar() {
                  p-4 w-[280px] border border-gray-200 space-y-3"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        {/* 날짜 표시 */}
                         <p className="text-sm font-bold text-gray-700 text-center">
                             {new Date(form.start).getDate()}일
                         </p>
@@ -314,45 +361,45 @@ export default function Calendar() {
                                 onChange={(e) => setForm({ ...form, location: e.target.value })}
                             />
 
-                            <label className="flex items-center gap-2">
-                                <input
-                                    type="checkbox"
-                                    checked={form.allDay}
-                                    onChange={(e) => setForm({ ...form, allDay: e.target.checked })}
-                                />
-                                <span>하루종일</span>
-                            </label>
+                            {/*<label className="flex items-center gap-2">*/}
+                            {/*    <input*/}
+                            {/*        type="checkbox"*/}
+                            {/*        checked={form.allDay}*/}
+                            {/*        onChange={(e) => setForm({ ...form, allDay: e.target.checked })}*/}
+                            {/*    />*/}
+                            {/*    <span>하루종일</span>*/}
+                            {/*</label>*/}
 
-                            <AnimatePresence>
-                                {!form.allDay && (
-                                    <motion.div
-                                        initial={{ opacity: 0, y: -4 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: -4 }}
-                                        transition={{ duration: 0.2 }}
-                                        className="grid grid-cols-2 gap-2"
-                                    >
-                                        <div>
-                                            <label>시작</label>
-                                            <input
-                                                type="datetime-local"
-                                                className="border rounded-md px-2 py-1 w-full"
-                                                value={form.start ? form.start.slice(0, 16) : ""}
-                                                onChange={(e) => setForm({ ...form, start: e.target.value })}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label>종료</label>
-                                            <input
-                                                type="datetime-local"
-                                                className="border rounded-md px-2 py-1 w-full"
-                                                value={form.end ? form.end.slice(0, 16) : ""}
-                                                onChange={(e) => setForm({ ...form, end: e.target.value })}
-                                            />
-                                        </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
+                            {/*<AnimatePresence>*/}
+                            {/*    {!form.allDay && (*/}
+                            {/*        <motion.div*/}
+                            {/*            initial={{ opacity: 0, y: -4 }}*/}
+                            {/*            animate={{ opacity: 1, y: 0 }}*/}
+                            {/*            exit={{ opacity: 0, y: -4 }}*/}
+                            {/*            transition={{ duration: 0.2 }}*/}
+                            {/*            className="grid grid-cols-2 gap-2"*/}
+                            {/*        >*/}
+                            {/*            <div>*/}
+                            {/*                <label>시작</label>*/}
+                            {/*                <input*/}
+                            {/*                    type="datetime-local"*/}
+                            {/*                    className="border rounded-md px-2 py-1 w-full"*/}
+                            {/*                    value={form.start ? form.start.slice(0, 16) : ""}*/}
+                            {/*                    onChange={(e) => setForm({ ...form, start: e.target.value })}*/}
+                            {/*                />*/}
+                            {/*            </div>*/}
+                            {/*            <div>*/}
+                            {/*                <label>종료</label>*/}
+                            {/*                <input*/}
+                            {/*                    type="datetime-local"*/}
+                            {/*                    className="border rounded-md px-2 py-1 w-full"*/}
+                            {/*                    value={form.end ? form.end.slice(0, 16) : ""}*/}
+                            {/*                    onChange={(e) => setForm({ ...form, end: e.target.value })}*/}
+                            {/*                />*/}
+                            {/*            </div>*/}
+                            {/*        </motion.div>*/}
+                            {/*    )}*/}
+                            {/*</AnimatePresence>*/}
 
                             <label className="flex items-center gap-2">
                                 <input
@@ -399,7 +446,7 @@ export default function Calendar() {
                 </div>
             )}
 
-            {/* ✅ 일정 리스트 (날짜별 그룹) */}
+            {/* 일정 리스트 (날짜별 그룹) */}
             <div className="mt-6 space-y-4 px-2">
                 <h3 className="text-sm font-semibold text-gray-800">📅 일정</h3>
 
@@ -429,17 +476,12 @@ export default function Calendar() {
                     ))}
             </div>
 
-
-
-
-
             {/* FullCalendar CSS override */}
             <style>{`
         .fc { font-size: 13px; }
         .fc-scrollgrid { border: none; }
         .fc .fc-daygrid-day-number { font-size: 12px; padding: 4px; }
         
-        /* 🔹 이벤트 일정 pill style */
         .fc .fc-event {
           background-color: var(--event-color) !important;
           border: none !important;
@@ -447,87 +489,81 @@ export default function Calendar() {
           border-radius: 6px;
           font-size: 11px;
         }        
-        /* 🔹 오늘 날짜 하이라이트 */
+        
         .fc .fc-daygrid-day.fc-day-today {
           background: rgba(126, 55, 249, 0.12);
           border-radius: 12px;
           border: 1px solid #7E37F9;
         }
         
-        /* 🔹 요일 텍스트 색상 */
         .fc .fc-daygrid-day.fc-day-sun .fc-daygrid-day-number {
-          color: #ef4444; /* red-500 */
+          color: #ef4444;
         }
         .fc .fc-daygrid-day.fc-day-sat .fc-daygrid-day-number {
-          color: #3b82f6; /* blue-500 */
+          color: #3b82f6;
         }
-       /* ✅ FullCalendar Header Buttons (Simple Style) */
-/* 🔹 prev/next 화살표만 보이게 */
-.fc .fc-button {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  padding: 0 !important;
-}
+        
+        .fc .fc-button {
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+          padding: 0 !important;
+        }
 
-/* 🔹 버튼 안쪽 아이콘 색상 */
-.fc .fc-button .fc-icon {
-  color: #7E37F9 !important;
-  font-size: 18px;
-  font-weight: bold;
-}
+        .fc .fc-button .fc-icon {
+          color: #7E37F9 !important;
+          font-size: 18px;
+          font-weight: bold;
+        }
 
-/* 🔹 hover: 살짝 강조 */
-.fc .fc-button:hover .fc-icon {
-  color: #5d11e6 !important;
-  transform: scale(1.1);
-  transition: 0.15s ease;
-}
+        .fc .fc-button:hover .fc-icon {
+          color: #5d11e6 !important;
+          transform: scale(1.1);
+          transition: 0.15s ease;
+        }
 
-/* 🔹 Today 버튼도 디자인 맞추기 */
-.fc .fc-today-button {
-  background: #E3D2FF !important;
-  color: #7E37F9 !important;
-  border-radius: 16px !important;
-  padding: 4px 12px !important;
-  border: none !important;
-  box-shadow: none !important;
-  font-size: 12px !important;
-  font-weight: 600;
-}
-.fc .fc-today-button:hover {
-  background: #d4bfff !important;
-}
-.fc-event.custom-event {
-  border-left: 4px solid var(--fc-event-border-color, #7E37F9) !important;
-  border-radius: 8px !important;
-  padding: 2px 6px !important;
-  font-weight: 500;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-  transition: all 0.15s ease;
-}
-.fc-event.custom-event:hover {
-  transform: scale(1.02);
-  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
-}
+        .fc .fc-today-button {
+          background: #E3D2FF !important;
+          color: #7E37F9 !important;
+          border-radius: 16px !important;
+          padding: 4px 12px !important;
+          border: none !important;
+          box-shadow: none !important;
+          font-size: 12px !important;
+          font-weight: 600;
+        }
+        .fc .fc-today-button:hover {
+          background: #d4bfff !important;
+        }
+        .fc-event.custom-event {
+          border-left: 4px solid var(--fc-event-border-color, #7E37F9) !important;
+          border-radius: 8px !important;
+          padding: 2px 6px !important;
+          font-weight: 500;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+          transition: all 0.15s ease;
+        }
+        .fc-event.custom-event:hover {
+          transform: scale(1.02);
+          box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+        }
 
-        /* 🔹 월 이동 시 페이드 애니메이션 */
         .fc-view-harness-active {
           transition: opacity 0.35s ease-in-out;
         }
-/* ✅ 뷰 전환 페이드 인 애니메이션 정상 작동 */
-.fc-view-harness {
-  position: relative;
-}
+        
+        .fc-view-harness {
+          position: relative;
+        }
 
-.fc .fc-view-harness-active .fc-daygrid {
-  animation: fadeIn 0.35s ease-in-out;
-}
+        .fc .fc-view-harness-active .fc-daygrid {
+          animation: fadeIn 0.35s ease-in-out;
+        }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
       `}</style>
         </div>
     );

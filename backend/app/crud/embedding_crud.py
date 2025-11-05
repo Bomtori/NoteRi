@@ -1,13 +1,11 @@
-"""
-backend/app/crud/embedding_crud.py
-벡터 저장 및 유사도 검색 (pgvector 바인딩 버전)
-"""
+# backend/app/crud/embedding_crud.py
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy import text, bindparam
 from typing import List, Dict, Any, Optional
 import numpy as np
-from pgvector.sqlalchemy import Vector   # ✅ 추가
+from pgvector.sqlalchemy import Vector
 
 from backend.app import model as m
 
@@ -16,13 +14,10 @@ def save_embeddings(
     db: Session,
     session_id: int,
     user_id: int,
-    chunks: List[tuple],  # [(text, index), ...]
+    chunks: List[tuple],
     embeddings: List[np.ndarray],
     metadata: Optional[Dict[str, Any]] = None
 ) -> List[m.RecordingEmbedding]:
-    """
-    텍스트 청크와 벡터를 DB에 저장
-    """
     saved_embeddings: List[m.RecordingEmbedding] = []
 
     meta = metadata or {}
@@ -46,10 +41,14 @@ def search_similar_chunks(
     user_id: int,
     query_embedding: np.ndarray,
     top_k: int = 5,
-    similarity_threshold: float = 0.6
+    similarity_threshold: float = 0.5,
+    board_id: Optional[int] = None,
+    session_id: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """
     유사도 검색 (pgvector 코사인 유사도)
+    - 보드 소유자이거나 공유받은 보드 데이터까지 검색
+    - 선택적으로 board_id, session_id로 스코프 제한 가능
     """
     sql = text("""
         SELECT
@@ -61,16 +60,22 @@ def search_similar_chunks(
             fs.title
         FROM recording_embeddings re
         JOIN recording_sessions rs ON re.recording_session_id = rs.id
+        JOIN boards b              ON rs.board_id = b.id
+        LEFT JOIN board_shares bs  ON b.id = bs.board_id
         LEFT JOIN final_summaries fs ON re.recording_session_id = fs.recording_session_id
-        WHERE re.user_id = :user_id
-          AND (1 - (re.embedding <=> :qv)) > :threshold
-        ORDER BY re.embedding <=> :qv
+        WHERE (b.owner_id = :user_id OR bs.user_id = :user_id)
+          AND (1 - (re.embedding <=> :qv)) >= :threshold
+          AND (:board_id   IS NULL OR b.id = :board_id)
+          AND (:session_id IS NULL OR rs.id = :session_id)
+        ORDER BY re.embedding <=> :qv ASC
         LIMIT :top_k
     """).bindparams(
-        bindparam("qv", type_=Vector(768)),   # ✅ 핵심: Vector 타입 바인딩
+        bindparam("qv", type_=Vector(768)),
         bindparam("user_id"),
         bindparam("threshold"),
         bindparam("top_k"),
+        bindparam("board_id"),
+        bindparam("session_id"),
     )
 
     rows = db.execute(
@@ -80,6 +85,8 @@ def search_similar_chunks(
             "user_id": int(user_id),
             "threshold": float(similarity_threshold),
             "top_k": int(top_k),
+            "board_id": int(board_id) if board_id is not None else None,
+            "session_id": int(session_id) if session_id is not None else None,
         }
     ).fetchall()
 
@@ -97,9 +104,6 @@ def search_similar_chunks(
 
 
 def delete_embeddings_by_session(db: Session, session_id: int) -> int:
-    """
-    특정 세션의 모든 임베딩 삭제
-    """
     deleted = db.query(m.RecordingEmbedding).filter(
         m.RecordingEmbedding.recording_session_id == session_id
     ).delete(synchronize_session=False)
@@ -107,9 +111,6 @@ def delete_embeddings_by_session(db: Session, session_id: int) -> int:
 
 
 def get_embedding_stats(db: Session, user_id: int) -> Dict[str, Any]:
-    """
-    사용자의 임베딩 통계
-    """
     sql = text("""
         SELECT
             COUNT(*) AS total_chunks,
@@ -125,10 +126,17 @@ def get_embedding_stats(db: Session, user_id: int) -> Dict[str, Any]:
 
 
 def check_session_has_embeddings(db: Session, session_id: int) -> bool:
-    """
-    세션에 임베딩이 있는지 확인
-    """
     count = db.query(m.RecordingEmbedding).filter(
         m.RecordingEmbedding.recording_session_id == session_id
     ).count()
     return count > 0
+
+
+def get_text_chunks_by_session(db: Session, *, session_id: int) -> List[str]:
+    # ✅ 컬럼명 수정: recording_session_id
+    rows = db.execute(
+        select(m.RecordingEmbedding.text_chunk)
+        .where(m.RecordingEmbedding.recording_session_id == session_id)
+        .order_by(m.RecordingEmbedding.id.asc())
+    ).all()
+    return [r[0] for r in rows if r and r[0]]

@@ -1,7 +1,9 @@
 from __future__ import annotations
 from typing import List, Optional, Dict, Any
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
+from backend.app import model
 
 from backend.app.model import FinalSummary, RecordingSession
 
@@ -77,3 +79,11 @@ def update_rating(
     db.commit()
     db.refresh(obj)
     return obj
+
+def get_final_summary_by_session(db: Session, *, session_id: int):
+    return db.execute(
+        select(model.FinalSummary)
+        .where(model.FinalSummary.session_id == session_id)
+        .order_by(model.FinalSummary.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()

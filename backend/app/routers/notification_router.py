@@ -24,7 +24,7 @@ def _row_to_dict(n: Notification) -> dict:
     "created_at": n.created_at,
     }
 
-@router.get("/", response_model=list[dict], summary="알림 가져오기")
+@router.get("", response_model=list[dict], summary="알림 가져오기")
 def list_notifications(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),

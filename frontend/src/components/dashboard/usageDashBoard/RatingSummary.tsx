@@ -11,11 +11,11 @@ export type RatingSummary = {
 };
 
 export const RATING_COLORS: Record<1 | 2 | 3 | 4 | 5, string> = {
-  1: "#ef4444", // 빨강
-  2: "#f97316", // 주황
-  3: "#f59e0b", // 노랑
-  4: "#22c55e", // 초록
-  5: "#2563eb", // 파랑
+  1: "#EDE9FE", // 매우 연한 보라
+  2: "#DCD0FF",
+  3: "#C5AFFF",
+  4: "#9E77FF",
+  5: "#7E37F9", // 메인 보라
 };
 
 export function ensureSummary(input: {
@@ -27,14 +27,11 @@ export function ensureSummary(input: {
   const raw = input.counts;
 
   if (Array.isArray(raw)) {
-    // [5,4,5,...]
     if (raw.length && typeof raw[0] === "number") {
       (raw as number[]).forEach((s) => {
         if (s >= 1 && s <= 5) counts[s as 1 | 2 | 3 | 4 | 5] += 1;
       });
-    }
-    // [{score:5,count:10}, ...]
-    else if (raw.length && typeof raw[0] === "object") {
+    } else if (raw.length && typeof raw[0] === "object") {
       (raw as any[]).forEach((r) => {
         const s = Number((r as any)?.score);
         const c = Number((r as any)?.count ?? 0);
@@ -42,7 +39,6 @@ export function ensureSummary(input: {
       });
     }
   } else if (raw && typeof raw === "object") {
-    // { "1": 10, "2": 5, ... } 형태
     Object.entries(raw as Record<string, any>).forEach(([k, v]) => {
       const s = Number(k);
       const c = Number(v ?? 0);
@@ -87,6 +83,8 @@ type Props = {
   params?: Record<string, any>;
   /** 개발 중 임시 데이터 사용 */
   useMock?: boolean;
+  /** 외곽 Card를 바깥에서 감쌀 때 내용만 렌더 */
+  frameless?: boolean;            // ✅ 추가
 };
 
 const API_BASE_URL =
@@ -106,6 +104,7 @@ export default function RatingSummaryCard({
   endpoint = "/summary/final/ratings",
   params,
   useMock = false,
+  frameless = false,              // ✅ 추가
 }: Props) {
   const [summary, setSummary] = useState<RatingSummary | null>(useMock ? MOCK : null);
   const [loading, setLoading] = useState(!useMock);
@@ -134,10 +133,6 @@ export default function RatingSummaryCard({
         if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
         const payload = text ? JSON.parse(text) : { counts: {} };
 
-        // 다양한 백엔드 스키마 허용:
-        // - 바로 { counts, total?, average? }
-        // - { items: { counts, ... } }
-        // - { data: { counts, ... } }
         const target =
           (payload?.items && typeof payload.items === "object" ? payload.items :
            payload?.data  && typeof payload.data  === "object" ? payload.data  :
@@ -162,8 +157,11 @@ export default function RatingSummaryCard({
   const fmtAvg = (n?: number) =>
     typeof n === "number" && Number.isFinite(n) ? n.toFixed(2) : "0.00";
 
+  // ✅ frameless일 때는 외곽 스타일 제거(바깥에서 DASH_CARD로 감싸기)
+  const wrapper = frameless ? "" : "p-4 bg-card rounded-2xl shadow";
+
   return (
-    <div className={`p-4 bg-card rounded-2xl shadow ${className}`}>
+    <div className={`${wrapper} ${className} min-w-0 h-full flex flex-col`}>
       <div className="mb-3 flex items-end justify-between">
         <div>
           <h3 className="text-sm font-medium text-muted-foreground">전체 게시글 평가 요약</h3>
@@ -182,7 +180,7 @@ export default function RatingSummaryCard({
       )}
 
       {!loading && !err && summary && (
-        <div className="min-h-[220px] min-w-0">
+        <div className="flex-1 min-h-0 min-w-0">
           <NivoBar
             data={barData}
             height={height}

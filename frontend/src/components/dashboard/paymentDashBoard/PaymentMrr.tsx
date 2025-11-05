@@ -1,6 +1,9 @@
 /* filename: src/test/components/paymentDashBoard/PaymentMrr.tsx */
 import React, { useEffect, useMemo, useState } from "react";
 import MrrComboChart from "../cards/MrrComboChart";
+import {Card} from "../../ui/card";
+import {cn} from "../../../lib/utils";
+import {DASH_CARD} from "../cards/cardStyles";
 
 type MrrItem = {
   month: string;
@@ -80,7 +83,7 @@ const PaymentMrr: React.FC<Props> = ({ months = 6, className = "" }) => {
   );
 
   return (
-    <div className={`w-full p-4 bg-card rounded-2xl shadow ${className}`}>
+    <Card className={cn(DASH_CARD, className)}>
       <div className="mb-2 flex items-end justify-between">
         <div>
           <h3 className="text-sm font-medium text-muted-foreground">
@@ -102,7 +105,7 @@ const PaymentMrr: React.FC<Props> = ({ months = 6, className = "" }) => {
       {!loading && !error && chartData.length === 0 && (
         <div className="text-sm text-muted-foreground">데이터 없음</div>
       )}
-    </div>
+    </Card>
   );
 };
 

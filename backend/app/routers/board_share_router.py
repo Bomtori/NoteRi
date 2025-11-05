@@ -60,7 +60,7 @@ def list_board_members(
     return members
 
 # 목록 (오너만 조회 가능)
-@router.get("/", response_model=list[ShareResponse])
+@router.get("/", response_model=list[ShareResponse], summary="공유받은 보드 조회")
 def list_board_shares(
     board_id: int,
     db: Session = Depends(get_db),
@@ -77,7 +77,7 @@ def list_board_shares(
     return [_to_resp(s, include_user=True) for s in shares]
 
 # 추가/업서트 (이메일로)
-@router.post("/", response_model=ShareResponse)
+@router.post("/", response_model=ShareResponse, summary="공유받은 멤버 추가")
 def add_share_by_email(
     board_id: int,
     payload: ShareCreateByEmail,
@@ -97,7 +97,7 @@ def add_share_by_email(
     return _to_resp(s, include_user=True)
 
 # 역할 변경 (user_id로)
-@router.patch("/{target_user_id}", response_model=ShareResponse)
+@router.patch("/{target_user_id}", response_model=ShareResponse, summary="공유받은 멤버 권한 변경")
 def update_share(
     board_id: int,
     target_user_id: int,
@@ -116,7 +116,7 @@ def update_share(
     return _to_resp(s, include_user=True)
 
 # 공유 해제 (user_id로)
-@router.delete("/{target_user_id}")
+@router.delete("/{target_user_id}", summary="공유 해제")
 def remove_share(
     board_id: int,
     target_user_id: int,

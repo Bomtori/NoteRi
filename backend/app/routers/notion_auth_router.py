@@ -27,7 +27,7 @@ def notion_headers(token: str):
         "Content-Type": "application/json",
         "Notion-Version": NOTION_VERSION,
     }
-@router.get("/status")
+@router.get("/status", summary="노션 상태 가져오기")
 def notion_status(auth: Optional[NotionAuth] = Depends(crud.get_user_notion_auth)):
     """
     현재 로그인 사용자의 노션 연동 상태 조회
@@ -40,7 +40,7 @@ def notion_status(auth: Optional[NotionAuth] = Depends(crud.get_user_notion_auth
     }
 
 
-@router.get("/login")
+@router.get("/login", summary="노션 로그인")
 def notion_login(current_user: User = Depends(get_current_user)):
     """
     사용자를 Notion OAuth 동의화면으로 리다이렉트.
@@ -61,7 +61,7 @@ def notion_login(current_user: User = Depends(get_current_user)):
     logger.info(f"CLIENT_ID={CLIENT_ID}, REDIRECT_URI={REDIRECT_URI}")
     return {"url": url}
 
-@router.get("/callback", include_in_schema=False)
+@router.get("/callback", include_in_schema=False, summary="노션 콜백")
 def notion_callback(code: str, state: str, db: Session = Depends(get_db)):
     """
     Notion OAuth 콜백. code 교환 → 토큰 저장
@@ -171,17 +171,18 @@ def upload_to_notion(
     return {"id": page["id"], "url": page["url"]}
 
 
-   
+
+
 
 @router.get("/databases")
 def list_notion_databases(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    token: Optional[str] = Depends(crud.get_user_notion_token),
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+        token: Optional[str] = Depends(crud.get_user_notion_token),
 ):
     if not token:
         raise HTTPException(status_code=400, detail="Notion 계정이 연결되지 않았습니다.")
-    
+
     try:
         # ✅ 데이터베이스만 검색
         r = requests.post(
@@ -190,7 +191,6 @@ def list_notion_databases(
             json={"filter": {"value": "database", "property": "object"}},
             timeout=10,
         )
-
         logger.info(f"🧭 Notion search status={r.status_code}")
         logger.info(f"🧭 Notion search response: {r.text}")
 
@@ -201,7 +201,6 @@ def list_notion_databases(
 
         data = r.json()
         results = []
-
         for d in data.get("results", []):
             if d["object"] != "database":
                 continue
@@ -222,3 +221,27 @@ def list_notion_databases(
     except requests.exceptions.RequestException as e:
         logger.error(f"❌ Notion API 요청 실패: {e}")
         raise HTTPException(status_code=500, detail=f"Notion API 요청 실패: {e}")
+
+@router.delete("/disconnect", status_code=status.HTTP_204_NO_CONTENT, summary="노션 연동 해제")
+def disconnect_notion(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    노션 연동 해제:
+    - 로컬 DB에서 해당 사용자의 NotionAuth 레코드를 삭제(또는 access_token을 무효화)
+    - Notion API에 별도의 토큰 revoke 엔드포인트는 없으므로(공식 제공 없음),
+      사용자가 Notion > Settings & members > Connections에서 수동 해제할 수 있게 안내 권장.
+    """
+    auth: Optional[NotionAuth] = (
+        db.query(NotionAuth).filter(NotionAuth.user_id == current_user.id).first()
+    )
+
+    if not auth:
+        # 이미 해제된 상태
+        return
+
+    # 필요 시 완전 삭제 대신 토큰만 무효화(빈 문자열)로 남기는 방식도 가능
+    db.delete(auth)
+    db.commit()
+    return

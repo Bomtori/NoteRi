@@ -68,7 +68,7 @@ export default function RechartsDonut({
               }))}
               dataKey="value"
               nameKey="name"
-              innerRadius="60%"
+              innerRadius="30%"
               outerRadius="70%"
               paddingAngle={1.5}
               cornerRadius={4}

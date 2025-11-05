@@ -25,7 +25,7 @@ class ChatIn(BaseModel):
     temperature: float = 0.3
     max_output_tokens: int = 256
 
-@router.post("/chat")
+@router.post("/chat", summary="채팅 입력")
 def chat(inb: ChatIn, background_tasks: BackgroundTasks, db: Session = Depends(get_db), user=Depends(get_current_user)):
     # 1) 호출
     t0 = time.monotonic()
@@ -71,7 +71,7 @@ def chat(inb: ChatIn, background_tasks: BackgroundTasks, db: Session = Depends(g
 
 # 채팅 불러오기
 
-@router.get("", response_model=ChatListResponse)
+@router.get("", response_model=ChatListResponse, summary="채팅 목록 가져오기")
 def list_history(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),  # 없으면 user_id: int = Query(...)
@@ -147,7 +147,7 @@ def list_history(
     return ChatListResponse(items=items, next_cursor=next_cursor_val, total_count=total_count)
 
 
-@router.get("/{item_id}", response_model=ChatItem)
+@router.get("/{item_id}", response_model=ChatItem, summary="특정 채팅 정보")
 def get_history_item(
     item_id: int,
     db: Session = Depends(get_db),

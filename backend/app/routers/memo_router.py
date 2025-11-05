@@ -11,7 +11,7 @@ router = APIRouter(prefix="/boards/{board_id}/memos", tags=["memos"])
 
 
 # # ✅ Read all
-@router.get("/", response_model=list[schemas.MemoResponse])
+@router.get("/", response_model=list[schemas.MemoResponse], summary="메모 가져오기")
 def read_board_memo(
     board_id: int,
     db: Session = Depends(get_db),
@@ -24,7 +24,7 @@ def read_board_memo(
 
 
 # ✅ Read one
-@router.get("/{memo_id}", response_model=schemas.MemoResponse)
+@router.get("/{memo_id}", response_model=schemas.MemoResponse, summary="특정 메모 읽기")
 def read_memo(board_id: int, memo_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     memo = crud.get_memo(db, memo_id)
     if not memo or memo.board_id != board_id:
@@ -33,7 +33,7 @@ def read_memo(board_id: int, memo_id: int, db: Session = Depends(get_db), curren
 
 
 # ✅ Update (PATCH - 부분 업데이트)
-@router.patch("/{memo_id}", response_model=schemas.MemoResponse)
+@router.patch("/{memo_id}", response_model=schemas.MemoResponse, summary="메모 업데이트")
 def update_memo(
     board_id: int,
     memo_id: int,
@@ -57,7 +57,7 @@ def update_memo(
 
 
 # ✅ Delete
-@router.delete("/{memo_id}", response_model=schemas.MemoResponse)
+@router.delete("/{memo_id}", response_model=schemas.MemoResponse, summary="메모 삭제")
 def delete_memo(
     board_id: int,
     memo_id: int,

@@ -5,6 +5,8 @@ import StatCard from "../cards/StatCard";
 type Props = {
   range?: string;
 };
+const CARD =
+  "bg-white rounded-2xl shadow-sm transition-all duration-200 hover:-translate-y-0.1 hover:shadow-lg";
 
 const API_BASE_URL =
   (import.meta as any).env?.VITE_API_BASE ??
@@ -66,11 +68,13 @@ const UserAway: React.FC<Props> = ({ range }) => {
 
   return (
     <div className="w-full">
+
       <StatCard
         title="이탈 유저 (최근 6개월 미접속자)"
         value={value}
         caption={caption}
         hideTrend
+        className={CARD}
       />
     </div>
   );

@@ -2,6 +2,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../components/ui/card";
 import DateButtons from "../cards/DateButtons";
+import AdminToggleTabs from "../../../components/admin/AdminToggleTabs";
+import { DASH_CARD } from "../cards/cardStyles";
 
 /** 기본 API 베이스는 8000 포트 */
 const API_BASE_URL =
@@ -143,15 +145,27 @@ const TotalPaymentByDate: React.FC = () => {
     range === "today" ? "전일" : range === "7d" ? "전주" : range === "month" ? "전월" : "전년";
 
   return (
-    <Card className="bg-card text-card-foreground">
+    <Card className={DASH_CARD}>
+      <div className="flex justify-end mb-3">
+        {/*<DateButtons range={range} onRangeChange={setRange} />*/}
+        <AdminToggleTabs
+            size="sm"
+            layoutId="total-payment-range"
+            tabs={[
+              { id: "today", label: "오늘" },
+              { id: "7d",    label: "최근 7일" },
+              { id: "month", label: "최근 1개월" },
+              { id: "year",  label: "최근 1년" },
+            ]}
+            active={range}
+            onChange={(id) => setRange(id as typeof range)}
+          />
+      </div>
+
       <CardHeader className="p-5 pb-2">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-sm text-muted-foreground">{title}</CardTitle>
           <GrowthBadge rate={growthRate} label={badgeLabel} />
-        </div>
-
-        <div className="flex justify-end mb-3">
-          <DateButtons range={range} onRangeChange={setRange} />
         </div>
 
         <div className="text-2xl font-semibold mt-2">

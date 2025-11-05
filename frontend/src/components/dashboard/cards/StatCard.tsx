@@ -1,7 +1,8 @@
 import { TrendingUp, TrendingDown } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { cn } from "@/lib/utils"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../../components/ui/card"
+import { Badge } from "../../../components/ui/badge"
+import { cn } from "../../../lib/utils"
+import { DASH_CARD } from "../cards/cardStyles";
 
 type Trend = "up" | "down"
 
@@ -15,6 +16,7 @@ export default function StatCard({
   className,
   actions,              // 제목 아래 버튼 영역
   hideTrend = false,
+  center = false,
 }: {
   title: string
   value: string | number
@@ -25,12 +27,13 @@ export default function StatCard({
   className?: string
   actions?: React.ReactNode
   hideTrend?: boolean
+  center?: boolean
 }) {
   const isUp = trend === "up"
   const Icon = isUp ? TrendingUp : TrendingDown
 
   return (
-    <Card className={cn("w-full hover:shadow-md transition", className)}>
+    <Card className={cn(DASH_CARD, "w-full h-full", className)}>
       <CardHeader className="space-y-2">
         {/* 1) 제목과 뱃지 한 줄 */}
         <div className="flex items-center justify-between gap-2">
@@ -51,13 +54,18 @@ export default function StatCard({
         {actions && <div className="shrink-0">{actions}</div>}
       </CardHeader>
 
-      <CardContent>
+       <CardContent
+        className={cn(
+          "flex flex-col h-full",
+          center && "items-center justify-center text-center py-8" // ✅ 가운데 정렬
+        )}
+      >
         {/* 3) 값 — 한 줄 고정 */}
         <div className="text-3xl font-semibold tracking-tight whitespace-nowrap">
           {value}
         </div>
 
-        <div className="mt-3 space-y-0.5">
+        <div className="mt-3 space-y-0.5 mt-auto">
           {highlight && (
             <div className="text-sm font-medium flex items-center gap-1">
               {highlight} <span className="text-muted-foreground">↗</span>

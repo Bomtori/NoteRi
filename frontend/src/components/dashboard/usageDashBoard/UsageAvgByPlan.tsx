@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import NivoBar from "../cards/NivoBar";
 
+type PlanMeta = {
+  name: string;
+  display_name?: string;
+  color?: string;
+};
+
 type PlanStat = {
   plan: string;
   avg_used_minutes?: number;
@@ -14,40 +20,83 @@ type ChartDatum = {
   users?: number;
 };
 
-const PLAN_COLORS: Record<string, string> = {
-  free: "#A1A1AA",       // gray
-  pro: "#7E36F9",        // purple
-  enterprise: "#FACC15", // yellow
+/** 퍼플 톤 기본 팔레트 (fallback) */
+const FALLBACK_COLORS: Record<string, string> = {
+  free: "#9E77FF",
+  pro: "#B68CFF",
+  enterprise: "#7E37F9", // ← 오타 수정 (#7E36F9 → #7E37F9)
 };
 
-/** 기본 API 베이스는 8000 포트 */
+/** 베이스 URL */
 const API_BASE_URL =
+  (import.meta as any).env?.VITE_API_URL ??
   (import.meta as any).env?.VITE_API_BASE ??
   (import.meta as any).env?.VITE_API_BASE_URL ??
   "http://127.0.0.1:8000";
 
 export default function UsageAvgByPlan({
-  className = "p-4 bg-card rounded-xl shadow-sm",
+  className = "",
   height = 280,
+  frameless = false, // ✅ 추가
 }: {
   className?: string;
   height?: number;
+  frameless?: boolean; // ✅ 추가
 }) {
   const [plans, setPlans] = useState<PlanStat[]>([]);
+  const [planMeta, setPlanMeta] = useState<PlanMeta[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // 데이터 로드
+  const buildInit = (): RequestInit => {
+    const headers: Record<string, string> = { Accept: "application/json" };
+    const token = localStorage.getItem("access_token");
+    if (token) headers.Authorization = `Bearer ${token}`;
+    return { credentials: "include", headers };
+  };
+
+  // 1) 플랜 메타
+  useEffect(() => {
+    const ac = new AbortController();
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/plans`, {
+          signal: ac.signal,
+          ...buildInit(),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        const rows: any[] = Array.isArray(json?.plans) ? json.plans : Array.isArray(json) ? json : [];
+        setPlanMeta(
+          rows
+            .filter((p) => p && p.name)
+            .map((p) => ({
+              name: String(p.name).toLowerCase(),
+              display_name: p.display_name ?? undefined,
+              color: p.color ?? undefined,
+            }))
+        );
+      } catch {
+        setPlanMeta([]);
+      }
+    })();
+    return () => ac.abort();
+  }, []);
+
+  // 2) 평균 사용량
   useEffect(() => {
     const ac = new AbortController();
     (async () => {
       try {
         setLoading(true);
         setError(null);
-        const res = await fetch(`${API_BASE_URL}/recordings/usage/avg`, { signal: ac.signal });
+        const res = await fetch(`${API_BASE_URL}/recordings/usage/avg`, {
+          signal: ac.signal,
+          ...buildInit(),
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
-        const rows: PlanStat[] = Array.isArray(json?.plans) ? json.plans : [];
+        const rows: PlanStat[] = Array.isArray(json?.plans) ? json.plans : Array.isArray(json) ? json : [];
         setPlans(rows);
       } catch (e: any) {
         if (e?.name !== "AbortError") setError("불러오기 실패");
@@ -58,58 +107,77 @@ export default function UsageAvgByPlan({
     return () => ac.abort();
   }, []);
 
-  // 차트 데이터 변환
+  // 3) 색상 맵 (DB color > fallback)
+  const colorMap: Record<string, string> = useMemo(() => {
+    const m: Record<string, string> = { ...FALLBACK_COLORS };
+    for (const pm of planMeta) {
+      const key = pm.name.toLowerCase();
+      if (pm.color) m[key] = pm.color;
+    }
+    return m;
+  }, [planMeta]);
+
+  // 4) 차트 데이터 (누락 플랜 0으로 채움, 값 내림차순)
   const chartData: ChartDatum[] = useMemo(() => {
-    const rows = Array.isArray(plans) ? plans : [];
-    return rows
-      .slice()
-      .sort(
-        (a, b) =>
-          (Number(b?.avg_used_minutes ?? 0) || 0) -
-          (Number(a?.avg_used_minutes ?? 0) || 0)
-      )
-      .map((p) => {
-        const id = String(p.plan ?? "").toUpperCase();
-        const key = String(p.plan ?? "").toLowerCase();
-        return {
-          id,
-          value: Number(p.avg_used_minutes ?? 0) || 0,
-          color: PLAN_COLORS[key] || "hsl(var(--primary))",
-          users: Number(p.sample_size ?? 0) || 0,
-        };
-      });
-  }, [plans]);
+    const usageByPlan = new Map<string, PlanStat>();
+    for (const r of plans) {
+      const key = String(r.plan || "").toLowerCase();
+      if (key) usageByPlan.set(key, r);
+    }
+
+    const planOrder: string[] =
+      planMeta.length > 0
+        ? planMeta.map((p) => p.name)
+        : usageByPlan.size > 0
+        ? Array.from(usageByPlan.keys())
+        : Object.keys(FALLBACK_COLORS);
+
+    const filled: ChartDatum[] = planOrder.map((key) => {
+      const stat = usageByPlan.get(key);
+      const meta = planMeta.find((p) => p.name === key);
+      const label = (meta?.display_name || key).toUpperCase();
+      return {
+        id: label,
+        value: Number(stat?.avg_used_minutes ?? 0) || 0,
+        color: colorMap[key] || "hsl(var(--primary))",
+        users: Number(stat?.sample_size ?? 0) || 0,
+      };
+    });
+
+    return filled.slice().sort((a, b) => (b.value || 0) - (a.value || 0));
+  }, [plans, planMeta, colorMap]);
 
   const totalSamples = useMemo(
-    () =>
-      Array.isArray(plans)
-        ? plans.reduce((s, p) => s + (Number(p?.sample_size ?? 0) || 0), 0)
-        : 0,
+    () => (Array.isArray(plans) ? plans.reduce((s, p) => s + (Number(p?.sample_size ?? 0) || 0), 0) : 0),
     [plans]
   );
 
+  // ✅ frameless일 땐 외곽 Card 스타일을 만들지 않음 (부모에서 DASH_CARD로 감싸기용)
+  const wrapperClass = frameless ? "" : "p-4 bg-card rounded-xl shadow-sm";
+
   return (
-    <div className={`w-full ${className}`}>
+    <div className={`w-full min-w-0 h-full flex flex-col ${wrapperClass} ${className}`}>
       <div className="mb-2 flex items-end justify-between">
         <div>
-          <h3 className="text-sm font-medium text-muted-foreground">
-            플랜별 평균 사용시간 (분)
-          </h3>
-          <p className="text-xs text-muted-foreground/80">
-            표본 {totalSamples.toLocaleString()}명 기준
-          </p>
+          <h3 className="text-sm font-medium text-muted-foreground">플랜별 평균 사용시간 (분)</h3>
+          <p className="text-xs text-muted-foreground/80">표본 {totalSamples.toLocaleString()}명 기준</p>
         </div>
       </div>
 
       {loading && <div>로딩…</div>}
       {error && <div className="text-destructive">에러: {error}</div>}
 
-      {!loading && !error && chartData.length > 0 && (
-        <NivoBar data={chartData} height={height} showUserCount />
-      )}
+      {!loading && !error && (
+        <>
+          {/* 차트 컨테이너: 그리드/카드에서 안 터지도록 */}
+          <div className="flex-1 min-h-0">
+            <NivoBar data={chartData} height={height} showUserCount />
+          </div>
 
-      {!loading && !error && chartData.length === 0 && (
-        <div className="text-sm text-muted-foreground">데이터 없음</div>
+          {chartData.every((d) => d.value === 0) && (
+            <div className="mt-2 text-sm text-muted-foreground">데이터 없음 (플랜은 DB 기준으로 0 표시)</div>
+          )}
+        </>
       )}
     </div>
   );

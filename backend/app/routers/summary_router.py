@@ -30,7 +30,7 @@ def _assert_session_access(db: Session, session_id: int, user: User):
         raise HTTPException(status_code=403, detail="No permission for this session")
 
 
-@router.get("/{summary_id}", response_model=SummaryResponse)
+@router.get("/{summary_id}", response_model=SummaryResponse, summary="특정 요약 조회")
 def read_summary(
     summary_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
@@ -46,7 +46,7 @@ def read_summary(
 
 @router.get(
     "/sessions/{session_id}",
-    response_model=SummaryListResponse,
+    response_model=SummaryListResponse, summary="특정 세션에 속한 요약 조회"
 )
 def list_summaries_by_session(
     session_id: int = Path(..., ge=1),
@@ -62,7 +62,7 @@ def list_summaries_by_session(
 
 @router.get(
     "/boards/{board_id}",
-    response_model=SummaryListResponse,
+    response_model=SummaryListResponse, summary="특정 보드에 속한 요약 조회"
 )
 def list_summaries_by_board(
     board_id: int = Path(..., ge=1),
@@ -81,7 +81,7 @@ def list_summaries_by_board(
     items = summary_crud.list_by_board(db, board_id, summary_type=summary_type, order=order)
     return {"summaries": items}
 
-@router.patch("/{summary_id}", response_model=SummaryResponse)
+@router.patch("/{summary_id}", response_model=SummaryResponse, summary="요약 수정")
 def update_summary(
     summary_id: int = Path(..., ge=1),
     payload: SummaryUpdate = ...,

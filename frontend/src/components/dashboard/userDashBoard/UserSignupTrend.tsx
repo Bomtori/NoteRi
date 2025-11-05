@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
-import DateButtons from "../../dashboard/cards/DateButtons";
+// import DateButtons from "../../dashboard/cards/DateButtons";
 import { normalizeToXY } from "../../dashboard/utils/normalizeToXY";
 import ShadcnAreaChart from "../../dashboard/cards/ShadcnAreaChart";
+import AdminToggleTabs from "../../../components/admin/AdminToggleTabs"; // 경로 맞게
 
 type UiRange = "7d" | "5w" | "6m" | "5y";
 type XY = { x: string; y: number };
@@ -30,15 +31,11 @@ export default function UserSignupTrend() {
 
   const endpoint = useMemo(() => {
     switch (uiRange) {
-      case "5w":
-        return "/users/count/signup/last-5-weeks";
-      case "6m":
-        return "/users/count/signup/last-6-months";
-      case "5y":
-        return "/users/count/signup/last-5-years";
+      case "5w": return "/users/count/signup/last-5-weeks";
+      case "6m": return "/users/count/signup/last-6-months";
+      case "5y": return "/users/count/signup/last-5-years";
       case "7d":
-      default:
-        return "/users/count/signup/last-7-days";
+      default:   return "/users/count/signup/last-7-days";
     }
   }, [uiRange]);
 
@@ -70,22 +67,26 @@ export default function UserSignupTrend() {
   return (
     <div className="space-y-3">
       <div className="flex justify-end">
-        <DateButtons<UiRange> range={uiRange} onRangeChange={setUiRange} options={trendOptions} />
+        <AdminToggleTabs
+          size="sm"
+          layoutId="signup-trend-tabs"
+          className="bg-muted/60" // 필요 없으면 제거
+          tabs={trendOptions.map(o => ({ id: o.value, label: o.label }))}
+          active={uiRange}
+          onChange={(id) => setUiRange(id as UiRange)}
+        />
       </div>
 
       <ShadcnAreaChart
         title={
-          uiRange === "6m"
-            ? "최근 6개월 가입자"
-            : uiRange === "5y"
-            ? "최근 5년 가입자"
-            : uiRange === "5w"
-            ? "최근 5주 가입자"
-            : "최근 7일 가입자"
+          uiRange === "6m" ? "최근 6개월 가입자"
+          : uiRange === "5y" ? "최근 5년 가입자"
+          : uiRange === "5w" ? "최근 5주 가입자"
+          : "최근 7일 가입자"
         }
         data={series}
         xKey="x"
-        series={[{ key: "y", name: "가입자", color: "#7E36F9" }]} // 안전한 단일 시리즈
+        series={[{ key: "y", name: "가입자", color: "#7E36F9" }]}
         height={260}
         showGrid
       />

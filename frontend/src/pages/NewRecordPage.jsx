@@ -16,7 +16,6 @@ import TemplateModal from "../components/recording/TemplateModal";
 
 export default function NewRecordPage() {
     const navigate = useNavigate();
-    // const dispatch = useDispatch();
     const { folders } = useSelector((state) => state.folder);
 
     // 상태
@@ -48,12 +47,10 @@ export default function NewRecordPage() {
             u.hash = "";
             return u.toString();
         } catch {
-            // fallback
             return "ws://localhost:8000/ws/stt";
         }
     }
 
-    // .env에서 주입되면 그걸 우선 사용
     const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
     const WS_URL = import.meta.env.VITE_WS_URL || toWsUrl(API_BASE);
 
@@ -64,23 +61,19 @@ export default function NewRecordPage() {
         onData: (msg) => {
             console.log("📩 WebSocket 메시지:", msg);
 
-            // 실시간 STT
             if (msg.realtime) {
                 setLiveText(msg.realtime);
             }
 
-            // 후처리 완료 문장
             if (msg.append) {
                 const cleanText = msg.append.replace(/^•\s*/, "");
                 setLiveLines((prev) => [...prev, cleanText]);
                 setAllHistory((prev) => [...prev, cleanText]);
             }
 
-            // 1분 요약
             if (msg.summary) {
                 console.log("📝 1분 요약 원본:", msg.summary);
 
-                // 요약을 bullet point 배열로 파싱
                 const bullets = msg.summary
                     .split(/\n+/)
                     .map(line => line.trim())
@@ -93,9 +86,8 @@ export default function NewRecordPage() {
                     ...prev,
                     {
                         id: Date.now(),
-                        bullets: bullets, // 🍒
+                        bullets: bullets,
                     },
-                    // { id: Date.now(), summary: msg.summary },
                 ]);
                 setLiveLines([]);
             }
@@ -106,7 +98,6 @@ export default function NewRecordPage() {
         },
     });
 
-    // 날짜 문자열
     const dateStr = new Date().toLocaleString("ko-KR", {
         month: "2-digit",
         day: "2-digit",
@@ -122,9 +113,8 @@ export default function NewRecordPage() {
 
             if (!id) {
                 const res = await apiClient.post("/boards", { title, description: "" });
-                console.log(" /boards 응답:", res.status, res.data);
+                console.log("✅ /boards 응답:", res.status, res.data);
 
-                // 응답 모양에 따라 안전하게 id 추출
                 id =
                     res?.data?.id ??
                     res?.data?.board?.id ??
@@ -138,39 +128,59 @@ export default function NewRecordPage() {
                 }
 
                 setBoardId(id);
-
-                // 다음 틱까지 양보해서 훅 내부 ref도 최신값으로 맞출 여지 주기
                 await new Promise((r) => setTimeout(r, 0));
             }
 
-            // 반드시 id를 넘겨서 호출 (훅이 최신값을 확실히 사용)
             await startRecording(id);
 
             setIsRecording(true);
             setRecordingStopped(false);
         } catch (err) {
-            console.error("녹음 시작 실패:", err);
+            console.error("❌ 녹음 시작 실패:", err);
             showToast(err?.message || "녹음을 시작할 수 없습니다.");
         }
     };
 
-    // 🍒녹음 종료
+    // 녹음종료
     const handleStopRecording = async () => {
+        console.log("🛑 녹음 종료 시작...");
+
         try {
+            // stopRecording 호출
             const result = await stopRecording();
+            console.log("🛑 stopRecording 결과:", result, "타입:", typeof result);
+
             setIsRecording(false);
             setRecordingStopped(true);
 
-            console.log("🛑 녹음 종료:", result);
-
-            if (!result || !result.sid) {
-                console.error("❌ sid가 없습니다");
-                showToast("녹음 정보를 가져올 수 없습니다.");
+            // result가 null/undefined인지 체크
+            if (!result) {
+                console.error("❌ stopRecording이 null/undefined를 반환했습니다");
+                showToast("녹음 종료 결과를 받지 못했습니다.");
                 return;
             }
 
-            const { sid, boardId: recordedBoardId } = result;
-            const targetBoardId = recordedBoardId || boardId;
+            // 🍒 result가 숫자(sid)인지, 객체인지 판별
+            let sid;
+            let targetBoardId;
+
+            if (typeof result === 'number' || typeof result === 'string') {
+                // result가 직접 sid인 경우
+                sid = String(result);  // 문자열로 변환
+                targetBoardId = boardId; // 컴포넌트 state의 boardId 사용
+                console.log("✅ sid 직접 반환:", sid);
+            } else if (typeof result === 'object') {
+                // result가 객체인 경우
+                sid = String(result.sid || result.session_id || result.sessionId);
+                targetBoardId = result.boardId || result.board_id || boardId;
+                console.log("✅ 객체에서 sid 추출:", sid);
+            }
+
+            if (!sid || sid === 'null' || sid === 'undefined') {
+                console.error("❌ sid를 찾을 수 없습니다. result:", result);
+                showToast("녹음 세션 정보를 가져올 수 없습니다.");
+                return;
+            }
 
             if (!targetBoardId) {
                 console.error("❌ boardId를 찾을 수 없습니다");
@@ -178,92 +188,101 @@ export default function NewRecordPage() {
                 return;
             }
 
+            console.log("✅ sid:", sid, "boardId:", targetBoardId);
+
             const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
             let sessionId = null;
             let tries = 0;
 
             console.log("⏳ 세션 ID 매핑 대기 중... sid:", sid, "boardId:", targetBoardId);
 
-        // 1단계: 세션 ID 매핑 대기 (최대 15초, 5회 × 3초)
-        while (tries++ < 5) {
-            try {
-                const res = await apiClient.get(`/sessions/by-sid/${sid}`);
-                console.log(`[${tries}] by-sid 응답:`, res.status, res.data);
+            // 1단계: 세션 ID 매핑 대기 (최대 15초, 5회 × 3초)
+            while (tries++ < 5) {
+                try {
+                    const res = await apiClient.get(`/sessions/by-sid/${sid}`);
+                    console.log(`[${tries}] by-sid 응답:`, res.status, res.data);
 
-                if (res.status === 200 && (res.data?.session_id || res.data?.id)) {
-                    sessionId = res.data.session_id || res.data.id;
-                    console.log("세션 매핑 완료 sessionId:", sessionId);
-                    break;
+                    if (res.status === 200 && (res.data?.session_id || res.data?.id)) {
+                        sessionId = res.data.session_id || res.data.id;
+                        console.log("✅ 세션 매핑 완료 sessionId:", sessionId);
+                        break;
+                    }
+                } catch (err) {
+                    const status = err.response?.status;
+                    if (status === 202) {
+                        console.log(`[${tries}] pending, 재시도...`);
+                    } else {
+                        console.warn(`[${tries}] by-sid 오류:`, status);
+                    }
+                }
+                await sleep(3000);
+            }
+
+            // 세션 매핑 실패 처리
+            if (!sessionId) {
+                console.warn("⚠️ 세션 매핑 실패 → 요약 생성 불가");
+                showToast("녹음은 저장되었으나, 요약 생성에 실패했습니다.");
+                return;
+            }
+
+            // 사용량 차감 (audio_id 기반)
+            try {
+                const sessionRes = await apiClient.get(`/sessions/${sessionId}`);
+                const audioId = sessionRes.data?.audio_id;
+
+                if (audioId) {
+                    console.log("💳 사용량 차감 API 호출 - audio_id:", audioId);
+                    const usageRes = await apiClient.post(`/recordings/usage/use/${audioId}`);
+                    console.log("✅ 사용량 차감 완료:", usageRes.data);
+                    showToast(`사용량 차감: ${Math.floor(usageRes.data.used_seconds / 60)}분 사용`);
+                } else {
+                    console.warn("⚠️ audio_id 없음 → 사용량 차감 스킵");
                 }
             } catch (err) {
-                const status = err.response?.status;
-                if (status === 202) {
-                    console.log(`[${tries}] pending, 재시도...`);
-                } else {
-                    console.warn(`[${tries}] by-sid 오류:`, status);
+                console.error("❌ 사용량 차감 실패:", err);
+                if (err.response?.status === 400) {
+                    showToast("사용량이 부족합니다.");
                 }
             }
-            await sleep(3000);
-        }
 
-        // 세션 매핑 실패 → 사용량 차감 & 요약 생성 스킵
-        if (!sessionId) {
-            console.warn("세션 매핑 실패 → 요약 생성 불가");
-            showToast("녹음은 저장되었으나, 요약 생성에 실패했습니다.");
-            return;
-        }
+            // 2단계: 전체 요약 생성 대기 (최대 30초, 30회 × 1초)
+            console.log("⏳ 전체 요약 생성 대기 중... sessionId:", sessionId);
+            tries = 0;
+            while (tries++ < 30) {
+                try {
+                    const res = await apiClient.get(`/sessions/final-summaries/by-session/${sessionId}`);
+                    console.log(`[${tries}] final-summary 응답:`, res.status, res.data);
 
-        // 사용량 차감 (audio_id 기반)
-        try {
-            const sessionRes = await apiClient.get(`/sessions/${sessionId}`);
-            const audioId = sessionRes.data?.audio_id;
-
-            if (audioId) {
-                console.log("사용량 차감 API 호출 - audio_id:", audioId);
-                const usageRes = await apiClient.post(`/recordings/usage/use/${audioId}`);
-                console.log("사용량 차감 완료:", usageRes.data);
-                showToast(`사용량 차감: ${Math.floor(usageRes.data.used_seconds / 60)}분 사용`);
-            } else {
-                console.warn("audio_id 없음 → 사용량 차감 스킵");
-            }
-        } catch (err) {
-            console.error("사용량 차감 실패:", err);
-            if (err.response?.status === 400) {
-                showToast("사용량이 부족합니다.");
-            }
-        }
-
-        // 2단계: 전체 요약 생성 대기 (최대 30초, 30회 × 1초)
-        console.log("전체 요약 생성 대기 중... sessionId:", sessionId);
-        tries = 0;
-        while (tries++ < 30) {
-            try {
-                const res = await apiClient.get(`/sessions/final-summaries/by-session/${sessionId}`);
-                console.log(`[${tries}] final-summary 응답:`, res.status, res.data);
-
-                if (res.status === 200 && res.data) {
-                    setFinalSummary(res.data);
-                    console.log("전체 요약 로드 완료:", res.data);
-                    setActiveTab("summary");
-                    showToast("전체 요약이 생성되었습니다.");
-                    return;
+                    if (res.status === 200 && res.data) {
+                        setFinalSummary(res.data);
+                        console.log("✅ 전체 요약 로드 완료:", res.data);
+                        setActiveTab("summary");
+                        showToast("전체 요약이 생성되었습니다.");
+                        return;
+                    }
+                } catch (err) {
+                    const status = err.response?.status;
+                    if (status === 404) {
+                        console.log(`[${tries}] 아직 생성 중... 재시도`);
+                    } else {
+                        console.warn(`[${tries}] final-summary 오류:`, status);
+                    }
                 }
-            } catch (err) {
-                const status = err.response?.status;
-                if (status === 404) {
-                    console.log(`[${tries}] 아직 생성 중... 재시도`);
-                } else {
-                    console.warn(`[${tries}] final-summary 오류:`, status);
-                }
+                await sleep(1000);
             }
-            await sleep(1000);
-        }
 
             console.warn("⚠️ 전체 요약 생성 시간 초과");
             showToast("전체 요약 생성에 시간이 걸리고 있습니다.");
+
         } catch (err) {
             console.error("❌ 녹음 종료 처리 실패:", err);
+            console.error("에러 상세:", {
+                message: err.message,
+                stack: err.stack,
+                response: err.response?.data
+            });
             showToast("녹음 종료 중 오류가 발생했습니다.");
+            setIsRecording(false);
         }
     };
 
@@ -298,9 +317,9 @@ export default function NewRecordPage() {
             { id: "summary", label: "전체 요약" },
         ]
         : [
-              { id: "record", label: "회의기록" },
-              { id: "script", label: "스크립트" },
-          ];
+            { id: "record", label: "회의기록" },
+            { id: "script", label: "스크립트" },
+        ];
 
     return (
         <motion.div

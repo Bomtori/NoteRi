@@ -64,10 +64,19 @@ export default function RecordDetailPage() {
             setFinalSummaries(data.final_summaries || []);
 
             // ✅ 1분 요약 (summaries)
+            // const summariesData = (data.summaries || []).map((s) => ({
+            //     paragraph: s.content || "",
+            //     summary: s.content || "",
+            // }));
+            // setSummaries(summariesData);
             const summariesData = (data.summaries || []).map((s) => ({
-                paragraph: s.content || "",
-                summary: s.content || "",
-            }));
+                  id: s.id,
+                  summary_type: s.summary_type,
+                  summary: s.content,
+                  interval_start_at: s.interval_start_at,
+                  interval_end_at: s.interval_end_at,
+                  created_at: s.created_at,
+                }));
             setSummaries(summariesData);
 
             // ✅ 스크립트 변환 (recording_results)
@@ -351,8 +360,10 @@ export default function RecordDetailPage() {
                                 {activeTab === "script" && (
                                     <RecordSection
                                         activeTab="script"
-                                        allHistory={refinedScript.map((s) => s.text)}
-                                        recordingState="finished"
+                                        allHistory={refinedScript}
+                                        summaries={summaries}
+                                        // recordingState="finished"
+                                        recordingState={noSession ? "idle" : "recording"} // ✅ 실제 녹음 중 아님 → false
                                     />
                                 )}
 

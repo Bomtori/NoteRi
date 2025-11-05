@@ -50,31 +50,63 @@ def get_my_subscription(
 ):
     from sqlalchemy.orm import joinedload
     from sqlalchemy import desc
+    from datetime import date, datetime, timezone
 
-    print("✅ current_user.id =", current_user.id)
+    today = datetime.now(timezone.utc).date()
+    now_dt = datetime.now(timezone.utc)
+
+    print(f"✅ current_user.id={current_user.id}, today={today}")
 
     sub = (
         db.query(Subscription)
           .options(joinedload(Subscription.plan))
           .filter(Subscription.user_id == current_user.id)
-          .order_by(desc(Subscription.updated_at))   # ✅ 가장 최근 업데이트된 순으로 정렬
+          .order_by(desc(Subscription.updated_at))
           .first()
     )
 
-    if not sub:
-        raise HTTPException(status_code=404, detail="Subscription not found")
+    def is_active(s) -> bool:
+        if not s or not s.start_date:
+            return False
+        # end_date가 None이면 무기한으로 간주
+        if s.end_date is None:
+            return s.start_date <= today
+        return s.start_date <= today < s.end_date
 
-    print(f"🎯 최신 구독 ID={sub.id}, plan_name={sub.plan.name if sub.plan else 'unknown'}")
+    if sub and is_active(sub):
+        plan_name = sub.plan.name if getattr(sub, "plan", None) else "unknown"
+        print(f"🎯 활성 구독 ID={sub.id}, plan={plan_name}")
+        return {
+            "id": sub.id,
+            "user_id": sub.user_id,
+            "plan_id": sub.plan_id,
+            "plan_name": plan_name,
+            "start_date": sub.start_date,           # required
+            "end_date": sub.end_date,               # optional
+            "updated_at": sub.updated_at,           # optional
+            "is_active": True,
+        }
+
+    # 🔁 free 폴백 (응답 스키마 맞추기: start_date는 필수이므로 today로 설정)
+    free_plan = (
+        db.query(Plan)
+          .filter(Plan.name.ilike("free"))
+          .first()
+    )
+    plan_name = free_plan.name if free_plan else "free"
+    plan_id = free_plan.id if free_plan else None
+
+    print("⚠️ 유효한 구독 없음 → free 플랜 폴백 (start_date=today 로 채움)")
 
     return {
-        "id": sub.id,
-        "user_id": sub.user_id,
-        "plan_id": sub.plan_id,           # ✅ 추가
-        "plan_name": sub.plan.name if sub.plan else "unknown",
-        "start_date": sub.start_date,
-        "end_date": sub.end_date,
-        "updated_at": sub.updated_at,
-        "is_active": sub.is_active,
+        "id": 0,                         # 가상 ID
+        "user_id": current_user.id,
+        "plan_id": plan_id,              # Optional[int]
+        "plan_name": plan_name,          # str
+        "start_date": today,             # ✅ 필수 필드: None 금지
+        "end_date": None,                # Optional[date]
+        "updated_at": now_dt,            # Optional[datetime]
+        "is_active": False,
     }
 
 # 내 구독 수정 (플랜 변경 또는 활성/비활성)

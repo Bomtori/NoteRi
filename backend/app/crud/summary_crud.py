@@ -1,8 +1,10 @@
 from __future__ import annotations
 from typing import List, Optional
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, desc
 from backend.app.model import Summary, RecordingSession, Board
+from backend.app import model
 
 def get(db: Session, summary_id: int) -> Optional[Summary]:
     return db.query(Summary).get(summary_id)
@@ -69,3 +71,10 @@ def update(
     db.commit()
     db.refresh(obj)
     return obj
+
+def get_summaries_by_session(db: Session, *, session_id: int):
+    return db.execute(
+        select(model.Summary)
+        .where(model.Summary.session_id == session_id)
+        .order_by(model.Summary.id.asc())
+    ).scalars().all()

@@ -19,6 +19,7 @@ class UserResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     plan_name: Optional[str] = None
+    plan_id: Optional[int] = None
 
     class Config:
         orm_mode = True

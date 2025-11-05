@@ -16,7 +16,7 @@ class SubscriptionResponse(BaseModel):
     end_date: Optional[date]
     updated_at: Optional[datetime]   # ✅ datetime으로
     is_active: bool
-    plan_id: int
+    plan_id: Optional[int] = None
     model_config = {"from_attributes": True}
 
 class PlanUserCount(BaseModel):

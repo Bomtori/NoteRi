@@ -163,7 +163,10 @@ export default function useRecording({ WS_URL, boardId, onData, onStartError }) 
     }
     wsRef.current = null;
 
-    return sidRef.current;
+    return {
+    sid: sidRef.current,
+    boardId: boardIdRef.current,
+    };
   };
 
   return {

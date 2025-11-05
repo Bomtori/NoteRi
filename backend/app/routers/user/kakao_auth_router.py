@@ -36,6 +36,12 @@ oauth.register(
     client_kwargs={"scope": "profile_nickname account_email profile_image"},
 )
 
+@router.get("/session-warmup", summary="OAuth 세션 웜업")
+async def session_warmup(request: Request):
+    # Starlette SessionMiddleware가 request.session 접근 시 세션 쿠키를 준비
+    _ = request.session
+    # 필요시 nonce 같은 것도 미리 넣을 수 있음: request.session["warm"] = True
+    return JSONResponse({"ok": True})
 
 # ✅ 로그인 시작
 @router.get("/login", summary="카카오 로그인")

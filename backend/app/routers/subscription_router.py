@@ -48,34 +48,35 @@ def get_my_subscription(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from sqlalchemy.orm import joinedload
+    from sqlalchemy import desc
 
-    today = date.today()
     print("✅ current_user.id =", current_user.id)
 
     sub = (
         db.query(Subscription)
           .options(joinedload(Subscription.plan))
-          .filter(
-              Subscription.user_id == current_user.id,
-              Subscription.is_active == True,
-              Subscription.end_date >= today
-          )
-          .order_by(Subscription.start_date.desc().nullslast())
+          .filter(Subscription.user_id == current_user.id)
+          .order_by(desc(Subscription.updated_at))   # ✅ 가장 최근 업데이트된 순으로 정렬
           .first()
     )
 
     if not sub:
-        raise HTTPException(status_code=404, detail="Active subscription not found")
+        raise HTTPException(status_code=404, detail="Subscription not found")
 
-    return SubscriptionResponse(
-        id=sub.id,
-        user_id=sub.user_id,
-        plan_name=sub.plan.name if sub.plan else "unknown",
-        start_date=sub.start_date,
-        end_date=sub.end_date,
-        updated_at=sub.updated_at,
-        is_active=sub.is_active,
-    )
+    print(f"🎯 최신 구독 ID={sub.id}, plan_name={sub.plan.name if sub.plan else 'unknown'}")
+
+    return {
+        "id": sub.id,
+        "user_id": sub.user_id,
+        "plan_id": sub.plan_id,           # ✅ 추가
+        "plan_name": sub.plan.name if sub.plan else "unknown",
+        "start_date": sub.start_date,
+        "end_date": sub.end_date,
+        "updated_at": sub.updated_at,
+        "is_active": sub.is_active,
+    }
+
 # 내 구독 수정 (플랜 변경 또는 활성/비활성)
 @router.patch("/me", response_model=SubscriptionResponse)
 def update_my_subscription(

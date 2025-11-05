@@ -7,6 +7,7 @@ import os
 import logging
 from typing import Dict
 from dotenv import load_dotenv
+import asyncio  # ← 추가: keep-alive 태스크용
 
 # ============================================
 # ⚙️ FastAPI / Starlette
@@ -17,12 +18,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.websockets import WebSocketState, WebSocketDisconnect
 
+
 # ============================================
 # 🧠 Services (STT, Diarization)
 # ============================================
 from backend.services.stt_pipeline import STTPipeline
 from backend.app.routers.sessions_router import router as sessions_router
 from backend.app.routers import rag_router
+from datetime import datetime
+from backend.app.util.session_repo import ensure_session_saved
 
 # ============================================
 # 🗓 Scheduler & DB 초기화
@@ -155,6 +159,19 @@ async def websocket_endpoint(websocket: WebSocket):
         # 4) 세션 시작 (현재 시그니처 유지: begin_session(websocket))
         await pipeline.begin_session(websocket)
         session_id = pipeline.sid
+        # 🔐 세션 "선 생성": FK 보장을 위해, 어떤 저장/요약 로직보다 먼저 DB에 기록
+        #   - board_id/user_id는 위에서 파싱한 값 사용
+        #   - started_at은 현재 UTC 시각으로 기록 (테이블이 naive timestamp 이므로 utcnow() 사용)
+        try:
+            if session_id is not None and board_id is not None and user_id is not None:
+                ensure_session_saved(
+                    sid=int(session_id),
+                    board_id=int(board_id),
+                    user_id=int(user_id),
+                    started_at=datetime.utcnow(),
+                )
+        except Exception as e:
+            logger.warning(f"ensure_session_saved failed sid={session_id}: {e}")
 
         # 활성 세션에 등록
         if session_id:
@@ -185,28 +202,7 @@ async def websocket_endpoint(websocket: WebSocket):
     finally:
         try:
             # === 종료 시 순서 ===
-
-            # A. 최종 요약 전송 (WS가 아직 연결 중일 때만)
-            try:
-                if websocket.application_state == WebSocketState.CONNECTED:
-                    await pipeline.flush_final_summary()
-                    logger.info(f"✅ Final summary flushed: sid={session_id}")
-            except Exception as e:
-                logger.warning(f"⚠️ flush_final_summary failed: {e}")
-
-            # B. 원본 오디오 저장
-            try:
-                result = await pipeline.save_raw_audio_async()
-                if result:
-                    filepath = result["filepath"]
-                    duration = result["duration"]
-                    logger.info(f"🎵 Audio saved: {filepath} ({duration:.2f}s)")
-                else:
-                    logger.warning("⚠️ No audio data to save")
-            except Exception as e:
-                logger.warning(f"⚠️ save_raw_audio failed: {e}")
-
-            # C. 세션 종료
+            # ✅ 세션 종료 (파이널라이즈/플러시/저장/인제스트 모두 파이프라인에서 1회 처리)
             try:
                 # WebSocket이 이미 끊긴 경우 ws를 None으로 설정
                 if websocket.application_state != WebSocketState.CONNECTED:
@@ -352,6 +348,19 @@ async def startup_event():
     
     logger.info("🎉 Application startup completed")
 
+    # =============================================
+    # 🔥 서버 절대 꺼지지 않게 무한 태스크 추가
+    # =============================================
+    async def _keep_server_alive():
+        """이 태스크가 살아있으면 이벤트 루프 종료 안 됨 → 서버 안 꺼짐"""
+        while True:
+            logger.info("❤️ 서버 살아있음... (절대 안 꺼짐)")
+            await asyncio.sleep(30)  # 30초마다 로그 (부하 거의 없음)
+
+    # 백그라운드에서 실행
+    asyncio.create_task(_keep_server_alive())
+    logger.info("🛡️ Keep-alive 태스크 시작됨 → 서버 영원히 유지")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -364,6 +373,20 @@ async def shutdown_event():
         
         for sid, pipeline in list(active_sessions.items()):
             try:
+                # 🔐 FK 보장을 위해 종료 직전에도 방어적으로 세션 선생성
+                try:
+                    from datetime import datetime
+                    from backend.app.util.session_repo import ensure_session_saved
+                    if getattr(pipeline, "board_id", None) is not None and getattr(pipeline, "user_id", None) is not None:
+                        ensure_session_saved(
+                            sid=int(sid),
+                            board_id=int(pipeline.board_id),
+                            user_id=int(pipeline.user_id),
+                            started_at=pipeline.session_start_ts or datetime.utcnow(),
+                        )
+                except Exception as e:
+                    logger.warning(f"[shutdown] ensure_session_saved failed sid={sid}: {e}")
+
                 await pipeline.end_session(run_diarization=False)
                 logger.info(f"✅ Session closed: {sid}")
             except Exception as e:

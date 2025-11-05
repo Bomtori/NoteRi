@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from backend.app.db import SessionLocal
@@ -28,6 +28,26 @@ def _ms_to_dt(ms: Optional[int]) -> Optional[datetime]:
         return datetime.fromtimestamp(int(ms) / 1000.0, tz=timezone.utc)
     except Exception:
         return None
+    
+def _ms_rel_or_abs_to_dt(ms: Optional[int], base: Optional[datetime]) -> Optional[datetime]:
+    """
+    ms가 '상대 ms'(세션 시작 기준)인지 '절대 epoch ms'인지 구분해 datetime으로 변환.
+    - 보수적 기준: 1e12(≈ 2001-09-09) 이상이면 '절대 ms'로 간주
+    - 그 외에는 '상대 ms'로 보고 base + delta 적용
+    """
+    if ms is None:
+        return None
+    try:
+        ms_int = int(ms)
+    except Exception:
+        return None
+    # 절대 ms로 보이는 경우
+    if ms_int >= 10**12:
+        return _ms_to_dt(ms_int)
+    # 상대 ms인 경우 (base가 있어야 함)
+    if base is None:
+        return None
+    return base + timedelta(milliseconds=ms_int)
 
 def _b2s(v: Any) -> Any:
     if isinstance(v, bytes):
@@ -177,9 +197,12 @@ async def ingest_session_to_db(*, sid: str, prefix: str) -> int:
                     if speaker_label and hasattr(models.RecordingResult, "speaker_label"):
                         row_payload["speaker_label"] = speaker_label
                     if hasattr(models.RecordingResult, "started_at"):
-                        row_payload["started_at"] = _ms_to_dt(ts_start_ms)
+                        # ✅ 상대 ms(세션 시작 기준) → 절대 시각 보정
+                        row_payload["started_at"] = _ms_rel_or_abs_to_dt(ts_start_ms, dt_started)
                     if hasattr(models.RecordingResult, "ended_at"):
-                        row_payload["ended_at"] = _ms_to_dt(ts_end_ms)
+                        # ✅ 상대 ms(세션 시작 기준) → 절대 시각 보정
+                        row_payload["ended_at"] = _ms_rel_or_abs_to_dt(ts_end_ms, dt_started)
+ 
 
                     batch_results.append(models.RecordingResult(**row_payload))
 
@@ -221,9 +244,9 @@ async def ingest_session_to_db(*, sid: str, prefix: str) -> int:
                     if hasattr(summary_model, "content"):
                         row_payload["content"] = summary_text
                     if hasattr(summary_model, "interval_start_at"):
-                        row_payload["interval_start_at"] = _ms_to_dt(st_ms)
+                        row_payload["interval_start_at"] = _ms_rel_or_abs_to_dt(st_ms, dt_started)
                     if hasattr(summary_model, "interval_end_at"):
-                        row_payload["interval_end_at"] = _ms_to_dt(en_ms)
+                        row_payload["interval_end_at"] = _ms_rel_or_abs_to_dt(en_ms, dt_started)
                     if hasattr(summary_model, "model") and model_name:
                         row_payload["model"] = model_name
                     if hasattr(summary_model, "tokens_input") and tokens_in is not None:

@@ -15,6 +15,7 @@ interface PlanModalProps {
     plans: PlanOption[];
     onClose: () => void;
     onSelectPlan: (plan: PlanOption) => void;
+    onCancelSubscription?: () => void;
 }
 
 export default function PlanChangeModal({
@@ -22,6 +23,7 @@ export default function PlanChangeModal({
                                             plans,
                                             onClose,
                                             onSelectPlan,
+                                            onCancelSubscription,
                                         }: PlanModalProps) {
     const formatKrw = (v: number) =>
         v === 0 ? "₩0" : `₩${Math.round(v).toLocaleString()}`;
@@ -59,6 +61,7 @@ export default function PlanChangeModal({
                             plan.name.toLowerCase() === currentPlan.toLowerCase();
                         const isEnterprise =
                             plan.name.toLowerCase() === "enterprise";
+                        const isPro = plan.name.toLowerCase() === "pro";
 
                         return (
                             <div
@@ -70,6 +73,12 @@ export default function PlanChangeModal({
                                         : "border-gray-200 hover:border-[#C19EF8] hover:shadow-[0_10px_25px_rgba(126,55,249,0.12)]",
                                 ].join(" ")}
                             >
+
+                                {isPro && (
+                                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#8C52FF] to-[#C19EF8] text-white text-xs font-semibold px-3 py-1 rounded-full shadow-md">
+                                        Best
+                                    </div>
+                                )}
                                 <div>
                                     <h3 className="text-xl font-extrabold text-[#7E37F9] mb-2">
                                         {plan.name.toUpperCase()}
@@ -120,6 +129,17 @@ export default function PlanChangeModal({
                             </div>
                         );
                     })}
+                    {/* ✅ 구독 해지 버튼 추가 섹션 */}
+                    {currentPlan.toLowerCase() !== "free" && onCancelSubscription && (
+                        <div className="flex justify-start pt-6">
+                            <button
+                                onClick={onCancelSubscription}
+                                className="px-5 py-2 text-sm rounded-md border border-red-400 text-red-500 hover:bg-red-50 transition"
+                            >
+                                구독 해지
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

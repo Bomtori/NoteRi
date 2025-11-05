@@ -106,38 +106,87 @@ function ProgressBar({ used, total, mode = "remaining" }: ProgressBarProps) {
 //  결제내역 섹션
 // =======================
 function BillingSection({ billings }: { billings: Billing[] }) {
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 5; // 페이지당 항목 수
+    const totalPages = Math.ceil(billings.length / itemsPerPage);
+
+    const startIdx = (currentPage - 1) * itemsPerPage;
+    const currentItems = billings.slice(startIdx, startIdx + itemsPerPage);
+
+    const handlePageChange = (page: number) => {
+        if (page >= 1 && page <= totalPages) {
+            setCurrentPage(page);
+        }
+    };
+
     return (
         <section className="bg-white rounded-2xl p-6 shadow-sm">
             <h2 className="text-lg font-semibold mb-3">결제 내역</h2>
+
             {billings.length === 0 ? (
                 <p className="text-gray-400 text-sm">결제 내역이 없습니다.</p>
             ) : (
-                <table className="w-full text-sm text-left border-t border-gray-100">
-                    <thead>
-                    <tr className="text-gray-500 border-b border-gray-100">
-                        <th className="py-2">결제일</th>
-                        <th>플랜</th>
-                        <th>금액</th>
-                        <th>결제수단</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {billings.map((b) => (
-                        <tr key={b.id} className="border-b border-gray-100">
-                            <td className="py-2 text-gray-600">
-                                {new Date(b.date).toLocaleDateString("ko-KR")}
-                            </td>
-                            <td>{b.planName}</td>
-                            <td>₩{b.amount.toLocaleString()}</td>
-                            <td className="text-gray-500">{b.method}</td>
+                <>
+                    <table className="w-full text-sm text-left border-t border-gray-100">
+                        <thead>
+                        <tr className="text-gray-500 border-b border-gray-100">
+                            <th className="py-2">결제일</th>
+                            <th>플랜</th>
+                            <th>금액</th>
+                            <th>결제수단</th>
                         </tr>
-                    ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                        {/* ✅ currentItems 로 변경 */}
+                        {currentItems.map((b) => (
+                            <tr key={b.id} className="border-b border-gray-100">
+                                <td className="py-2 text-gray-600">
+                                    {new Date(b.date).toLocaleDateString("ko-KR")}
+                                </td>
+                                <td>{b.planName}</td>
+                                <td>₩{b.amount.toLocaleString()}</td>
+                                <td className="text-gray-500">{b.method}</td>
+                            </tr>
+                        ))}
+                        </tbody>
+                    </table>
+
+                    {/* ✅ 페이지네이션 UI */}
+                    <div className="flex justify-center items-center gap-3 mt-4">
+                        <button
+                            onClick={() => handlePageChange(currentPage - 1)}
+                            disabled={currentPage === 1}
+                            className={`px-3 py-1 text-sm rounded-md border ${
+                                currentPage === 1
+                                    ? "text-gray-400 border-gray-200 cursor-not-allowed"
+                                    : "text-[#7E37F9] border-[#7E37F9] hover:bg-[#F3EFFF]"
+                            }`}
+                        >
+                            이전
+                        </button>
+
+                        <span className="text-sm text-gray-500">
+              {currentPage} / {totalPages}
+            </span>
+
+                        <button
+                            onClick={() => handlePageChange(currentPage + 1)}
+                            disabled={currentPage === totalPages}
+                            className={`px-3 py-1 text-sm rounded-md border ${
+                                currentPage === totalPages
+                                    ? "text-gray-400 border-gray-200 cursor-not-allowed"
+                                    : "text-[#7E37F9] border-[#7E37F9] hover:bg-[#F3EFFF]"
+                            }`}
+                        >
+                            다음
+                        </button>
+                    </div>
+                </>
             )}
         </section>
     );
 }
+
 
 // =======================
 //  노션 연동 섹션
@@ -212,12 +261,13 @@ export default function UserPage() {
     useEffect(() => {
         async function fetchUser() {
             try {
-                const [userRes, paymentsRes, usageRes, subRes, notiRes] = await Promise.all([
+                const [userRes, paymentsRes, usageRes, subRes, notiRes, planRes] = await Promise.all([
                     apiClient.get(`${API_BASE_URL}/users/me`),
                     apiClient.get(`${API_BASE_URL}/payments/me`),
                     apiClient.get(`${API_BASE_URL}/recordings/usage`),
                     apiClient.get(`${API_BASE_URL}/subscriptions/me`),
                     apiClient.get(`${API_BASE_URL}/notifications`),
+                    apiClient.get(`${API_BASE_URL}/plans/me`)
                 ]);
 
                 // 노션 연동 상태 확인
@@ -232,42 +282,32 @@ export default function UserPage() {
                 const data = userRes.data;
                 const usage = usageRes.data;
                 const subscription = subRes.data;
-                const endDate = subscription?.end_date || null;
                 const usedMinutes = Math.floor((usage.used_seconds ?? 0) / 60);
-
+                const planId = subscription?.plan_id;
+                console.log("subscription: ", subscription)
+                let planData = null;
+                if (planId) {
+                    try {
+                        const planDetailRes = await apiClient.get(`${API_BASE_URL}/plans/${planId}`);
+                        console.log("planDetailRes: ",planDetailRes)
+                        planData = planDetailRes.data;
+                    } catch (err) {
+                        console.error("플랜 상세 불러오기 실패:", err);
+                    }
+                }
+                const endDate = subscription?.end_date || null;
                 // 구독 만료 체크 (핵심 수정)
                 const isExpired = endDate && new Date(endDate) < new Date();
                 const effectivePlanName = isExpired ? "free" : (data.plan_name || "free");
-
-                console.log("🔍 구독 상태:", {
-                    planName: data.plan_name,
-                    endDate,
-                    isExpired,
-                    effectivePlanName
-                });
-
+                console.log("planData: ",planData)
                 // 플랜 정보 설정
-                const plan: Plan =
-                    data.plan_name === "pro"
-                        ? {
-                            name: "pro",
-                            price: 10000,
-                            allocated_minutes: usage.allocated_minutes ?? 500,
-                            description: "PRO 플랜 (30일 500분)",
-                        }
-                        : data.plan_name === "enterprise"
-                            ? {
-                                name: "enterprise",
-                                price: 30000,
-                                allocated_minutes: usage.allocated_minutes ?? 999999,
-                                description: "엔터프라이즈 (무제한)",
-                            }
-                            : {
-                                name: "free",
-                                price: 0,
-                                allocated_minutes: usage.allocated_minutes ?? 300,
-                                description: "무료 플랜 (평생 300분)",
-                            };
+                const plan: Plan = {
+                    name: planData?.name || subscription?.plan_name || "free",
+                    price: planData?.price ?? 0,
+                    allocated_minutes: Math.floor((planData?.allocated_seconds ?? 0) / 60),
+                    description: planData?.description ?? "",
+                    end_date: endDate,
+                };
 
                 // 결제 내역 가공
                 const billings: Billing[] = paymentsRes.data
@@ -311,6 +351,7 @@ export default function UserPage() {
     }, [showModal]);
 
     // 결제연동
+    // 결제연동
     const handleSelectPlan = async (selectedPlan: PlanOption) => {
         console.log("선택된 플랜:", selectedPlan);
 
@@ -353,21 +394,39 @@ export default function UserPage() {
         }
     };
 
+
     // 구독 해지 핸들러 추가
     const handleCancelSubscription = async () => {
-        if (!confirm("구독을 정말 해지하시겠습니까?\n다음 결제일까지는 서비스를 이용할 수 있습니다.")) {
+        if (!confirm("현재 구독을 취소하고 무료 플랜으로 전환하시겠습니까?")) {
             return;
         }
 
         try {
-            await apiClient.patch(`${API_BASE_URL}/subscriptions/me/cancel`);
-            showToast("구독이 해지되었습니다. 다음 결제일까지 서비스를 이용할 수 있습니다.");
+            // 🔹 /subscriptions/me 로 PATCH 요청
+            await apiClient.patch(`${API_BASE_URL}/subscriptions/me`, {
+                plan_name: "free", // 플랜을 free로 변경
+            });
 
-            // 사용자 정보 다시 불러오기
-            window.location.reload();
+            showToast("무료 플랜으로 전환되었습니다.");
+            const planRes = await apiClient.get(`${API_BASE_URL}/plans/me`);
+
+            // UI 즉시 반영 (새로고침 없이)
+            setUser((prev) =>
+                prev
+                    ? {
+                        ...prev,
+                        plan: {
+                            ...prev.plan,
+                            name: planRes.data.name,
+                            price: planRes.data.price,
+                            allocated_minutes: planRes.data.allocated_seconds / 60,
+                            description: planRes.data.description,
+                        },                    }
+                    : prev
+            );
         } catch (err) {
-            console.error("구독 해지 실패:", err);
-            showToast("구독 해지에 실패했습니다. 다시 시도해주세요.");
+            console.error("구독 취소(무료 전환) 실패:", err);
+            showToast("구독 취소에 실패했습니다. 다시 시도해주세요.");
         }
     };
 
@@ -504,21 +563,22 @@ export default function UserPage() {
                             >
                                 플랜 변경
                             </button>
-                            {/* ✅ 구독 해지 버튼 추가 */}
-                            {user.plan.name !== "free" && (
-                                <button
-                                    onClick={handleCancelSubscription}
-                                    className="px-4 py-1.5 text-sm rounded-md border border-red-400 text-red-500 hover:bg-red-50 transition"
-                                >
-                                    구독 해지
-                                </button>
-                            )}
+                            {/*/!* ✅ 구독 해지 버튼 추가 *!/*/}
+                            {/*{user.plan.name !== "free" && (*/}
+                            {/*    <button*/}
+                            {/*        onClick={handleCancelSubscription}*/}
+                            {/*        className="px-4 py-1.5 text-sm rounded-md border border-red-400 text-red-500 hover:bg-red-50 transition"*/}
+                            {/*    >*/}
+                            {/*        구독 해지*/}
+                            {/*    </button>*/}
+                            {/*)}*/}
                             {showModal && (
                                 <PlanChangeModal
                                     currentPlan={user.plan.name}
                                     plans={availablePlans} // ✅ AdminSettingsPage에서 관리하는 plans 그대로 API로 가져온 값
                                     onClose={() => setShowModal(false)}
                                     onSelectPlan={handleSelectPlan}
+                                    onCancelSubscription={handleCancelSubscription}
                                 />
                             )}
                         </div>
@@ -530,7 +590,52 @@ export default function UserPage() {
                         <p className="text-xs text-gray-400 mt-1">
                             남은 시간: {remaining.toLocaleString()}분
                         </p>
+
                     </section>
+                    {/* 노션 연동 섹션 */}
+                    <NotionIntegration
+                        connected={user.notion_connected}
+                        onConnect={async () => {
+                            const token = localStorage.getItem("access_token");
+                            if (!token) return alert("로그인이 필요합니다.");
+
+                            await fetch(`${API_BASE_URL}/healthz`, {
+                                headers: { "ngrok-skip-browser-warning": "1" },
+                                cache: "no-store",
+                            }).catch(() => {
+                                /* 무시해도 됨 */
+                            });
+
+                            const res = await fetch(`${API_BASE_URL}/notion/login`, {
+                                headers: { Authorization: `Bearer ${token}` },
+                            });
+
+                            if (!res.ok) {
+                                const text = await res.text();
+                                return alert(`노션 URL 요청 실패: ${res.status} ${text}`);
+                            }
+
+                            const { url } = await res.json();
+                            window.location.href = url;
+                        }}
+                        onDisconnect={async () => {
+                            const token = localStorage.getItem("access_token");
+                            if (!token) return alert("로그인이 필요합니다.");
+
+                            const res = await fetch(`${API_BASE_URL}/notion/disconnect`, {
+                                method: "DELETE",
+                                headers: { Authorization: `Bearer ${token}` },
+                            });
+
+                            if (!res.ok) {
+                                const text = await res.text();
+                                return alert(`연동 해제 실패: ${res.status} ${text}`);
+                            }
+
+                            alert("노션 연동이 해제되었습니다.");
+                            setUser((u) => (u ? { ...u, notion_connected: false } : u));
+                        }}
+                    />
                 </div>
 
                 {/* 오른쪽: 결제 내역 + 알림 + 노션 */}
@@ -589,50 +694,7 @@ export default function UserPage() {
                         )}
                     </section>
 
-                    {/* 노션 연동 섹션 */}
-                    <NotionIntegration
-                        connected={user.notion_connected}
-                        onConnect={async () => {
-                            const token = localStorage.getItem("access_token");
-                            if (!token) return alert("로그인이 필요합니다.");
 
-                            await fetch(`${API_BASE_URL}/healthz`, {
-                                headers: { "ngrok-skip-browser-warning": "1" },
-                                cache: "no-store",
-                            }).catch(() => {
-                                /* 무시해도 됨 */
-                            });
-
-                            const res = await fetch(`${API_BASE_URL}/notion/login`, {
-                                headers: { Authorization: `Bearer ${token}` },
-                            });
-
-                            if (!res.ok) {
-                                const text = await res.text();
-                                return alert(`노션 URL 요청 실패: ${res.status} ${text}`);
-                            }
-
-                            const { url } = await res.json();
-                            window.location.href = url;
-                        }}
-                        onDisconnect={async () => {
-                            const token = localStorage.getItem("access_token");
-                            if (!token) return alert("로그인이 필요합니다.");
-
-                            const res = await fetch(`${API_BASE_URL}/notion/disconnect`, {
-                                method: "DELETE",
-                                headers: { Authorization: `Bearer ${token}` },
-                            });
-
-                            if (!res.ok) {
-                                const text = await res.text();
-                                return alert(`연동 해제 실패: ${res.status} ${text}`);
-                            }
-
-                            alert("노션 연동이 해제되었습니다.");
-                            setUser((u) => (u ? { ...u, notion_connected: false } : u));
-                        }}
-                    />
                 </div>
             </div>
 

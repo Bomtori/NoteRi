@@ -4,19 +4,59 @@ import { FaLink, FaUserPlus, FaLock, FaUnlock, FaTimes, FaUsers } from "react-ic
 import { useToast } from "../../hooks/useToast";
 import apiClient from "../../api/apiClient";
 
-export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
+export default function RecordShareModal({  isOpen,
+                                             onClose,
+                                             boardId = null,
+                                             boardTitle = "",
+                                             summaries = [],
+                                             refinedScript = [],
+                                             memo = null, }) {
     const ref = useRef(null);
     const [activeTab, setActiveTab] = useState("link");
     const [inviteEmail, setInviteEmail] = useState("");
     const [invited, setInvited] = useState([]);  // 로컬 추가만 (아직 저장 안됨)
-    const [sharedUsers, setSharedUsers] = useState([]);  // ✅ 실제 공유된 사용자 목록
+    const [sharedUsers, setSharedUsers] = useState([]);  // 실제 공유된 사용자 목록
     const [pin, setPin] = useState("");
     const [hasPassword, setHasPassword] = useState(false);
     const { showToast } = useToast();
-
+    const [selectedType, setSelectedType] = useState("");
     const baseUrl = `${window.location.origin}/record/${boardId || ""}`;
     const shareUrl = hasPassword ? `${baseUrl}?protected=true` : baseUrl;
+    const [databases, setDatabases] = useState([]);
+    const [selectedDB, setSelectedDB] = useState("");
+    const [notionStatus, setNotionStatus] = useState({
+        connected: false,
+        workspace_name: null,
+    });
+    useEffect(() => {
+        if (activeTab !== "notion") return;
+        (async () => {
+            try {
+                const res = await apiClient.get("/notion/databases");
+                setDatabases(res.data || []);
+            } catch (err) {
+                console.error("노션 DB 목록 불러오기 실패:", err);
+                showToast("❌ 노션 DB 목록을 가져오지 못했습니다.");
+            }
+        })();
+    }, [activeTab]);
 
+    useEffect(() => {
+        if (activeTab !== "notion") return;
+        (async () => {
+            try {
+                const token = localStorage.getItem("access_token");
+                if (!token) return;
+                const res = await apiClient.get("/notion/status", {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                setNotionStatus(res.data);
+            } catch (err) {
+                console.error("노션 상태 확인 실패:", err);
+                setNotionStatus({ connected: false });
+            }
+        })();
+    }, [activeTab]);
     useEffect(() => {
         const handleClickOutside = (e) => {
             if (ref.current && !ref.current.contains(e.target)) onClose();
@@ -25,7 +65,7 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, [onClose]);
 
-    // ✅ 비밀번호 상태 확인
+    // 비밀번호 상태 확인
     useEffect(() => {
         if (!boardId) return;
         (async () => {
@@ -62,7 +102,7 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
         })();
     }, [boardId, activeTab, invited]);  // invited 변경 시에도 갱신
 
-    // ✅ 비밀번호 설정
+    // 비밀번호 설정
     const handleSetPassword = async () => {
         if (pin.length !== 4) {
             showToast("⚠️ 4자리 숫자를 입력해주세요.");
@@ -78,7 +118,7 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
         }
     };
 
-    // ✅ 비밀번호 해제
+    // 비밀번호 해제
     const handleClearPassword = async () => {
         try {
             await apiClient.patch(`/boards/${boardId}`, { password: null });
@@ -91,7 +131,7 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
         }
     };
 
-    // ✅ 초대 버튼
+    // 초대 버튼
     const handleInvite = async () => {
         if (inviteEmail.trim() === "") {
             showToast("⚠️ 이메일을 입력해주세요!");
@@ -106,7 +146,7 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
 
             setInvited((prev) => [...prev, inviteEmail]);
             setInviteEmail("");
-            showToast("✅ 팀원에게 공유되었습니다!");
+            showToast("팀원에게 공유되었습니다!");
         } catch (err) {
             const status = err.response?.status;
             const detail = err.response?.data?.detail;
@@ -121,7 +161,7 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
         }
     };
 
-    // ✅ 권한 변경
+    // 권한 변경
     const handleChangeRole = async (targetUserId, newRole) => {
         try {
             await apiClient.patch(`/boards/${boardId}/shares/${targetUserId}`, {
@@ -138,7 +178,7 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
         }
     };
 
-    // ✅ 공유 해제
+    // 공유 해제
     const handleRemoveShare = async (targetUserId, userEmail) => {
         if (!confirm(`${userEmail}님과의 공유를 해제하시겠습니까?`)) return;
 
@@ -174,7 +214,7 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
                     >
                         {/* 탭 */}
                         <div className="relative flex bg-gray-100 rounded-full p-1 mb-5">
-                            {["link", "invite"].map((tab) => (
+                            {["link", "invite", "notion"].map((tab) => (
                                 <button
                                     key={tab}
                                     onClick={() => setActiveTab(tab)}
@@ -193,7 +233,9 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
                                     )}
                                     <span className="relative z-10 flex items-center gap-1">
                                         {tab === "link" ? <FaLink /> : <FaUserPlus />}
-                                        {tab === "link" ? "링크 공유" : "팀원 초대"}
+                                        {tab === "link" ? "링크 공유" : tab === "invite"
+                                            ? "팀원 초대"
+                                            : "노션 공유"}
                                     </span>
                                 </button>
                             ))}
@@ -270,7 +312,7 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
                                             )}
                                         </div>
                                     </motion.div>
-                                ) : (
+                                ) : activeTab === "invite" ? (
                                     <motion.div
                                         key="invite"
                                         layout
@@ -279,7 +321,7 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
                                         exit={{ opacity: 0, y: -10 }}
                                         transition={{ duration: 0.25, ease: "easeInOut" }}
                                         className="space-y-3"
-                                    >
+                                        >
                                         <p className="text-sm text-gray-600">초대할 팀원의 이메일을 입력하세요.</p>
 
                                         {/* 이메일 입력 */}
@@ -304,7 +346,7 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
                                             </button>
                                         </div>
 
-                                        {/* ✅ 공유 중인 멤버 목록 */}
+                                        {/* 공유 중인 멤버 목록 */}
                                         <div className="mt-4 border-t pt-4">
                                             <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
                                                 <FaUsers />
@@ -350,6 +392,163 @@ export default function RecordShareModal({ isOpen, onClose, boardId = null }) {
                                                     ))}
                                                 </ul>
                                             )}
+                                        </div>
+                                    </motion.div>
+                                ): (
+                                    // 노션 공유 탭
+                                    <motion.div
+                                        key="notion"
+                                        layout
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -10 }}
+                                        transition={{ duration: 0.25, ease: "easeInOut" }}
+                                        className="space-y-4"
+                                    >
+                                        <p className="text-sm text-gray-600">
+                                            노션 계정을 연동하고 회의록을 업로드하세요.
+                                        </p>
+                                        <div className="flex items-center justify-between bg-gray-50 border rounded-lg px-3 py-2">
+                                            {notionStatus.connected ? (
+                                                <span className="text-sm text-green-600">
+      {notionStatus.workspace_name || "노션 계정"}과 연결됨
+    </span>
+                                            ) : (
+                                                <span className="text-sm text-gray-500">
+      ❌ 노션이 연결되어 있지 않습니다.
+    </span>
+                                            )}
+                                            <button
+                                                onClick={async () => {
+                                                    const token = localStorage.getItem("access_token");
+                                                    if (!token) return showToast("로그인이 필요합니다.");
+
+                                                    try {
+                                                        const res = await apiClient.get("/notion/status", {
+                                                            headers: { Authorization: `Bearer ${token}` },
+                                                        });
+
+                                                        if (res.data.connected) {
+                                                            showToast(`${res.data.workspace_name}과 연결되어 있습니다.`);
+                                                        } else {
+                                                            const loginRes = await apiClient.get("/notion/login", {
+                                                                headers: { Authorization: `Bearer ${token}` },
+                                                            });
+                                                            if (loginRes.data.url) window.location.href = loginRes.data.url;
+                                                        }
+                                                    } catch (err) {
+                                                        console.error("노션 연결 실패:", err);
+                                                        showToast("❌ 노션 연동 중 오류가 발생했습니다.");
+                                                    }
+                                                }}
+                                                className={`px-3 py-1 text-xs rounded-lg ${
+                                                    notionStatus.connected
+                                                        ? "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                                                        : "bg-[#7E37F9] text-white hover:bg-[#692ed9]"
+                                                }`}
+                                            >
+                                                {notionStatus.connected ? "연결 확인" : "계정 연결"}
+                                            </button>
+                                        </div>
+
+                                        {/* 노션으로 내보내기 */}
+                                        <div className="border-t mt-6 pt-4">
+                                            <p className="text-sm font-medium text-gray-700 mb-3">
+                                                이 회의록을 노션으로 공유하기
+                                            </p>
+
+                                            {/* 라디오 선택 */}
+                                            <div className="flex gap-4 mb-3">
+                                                {["회의기록", "스크립트", "전체요약"].map((opt) => (
+                                                    <label key={opt} className="flex items-center gap-2 text-sm text-gray-600">
+                                                        <input
+                                                            type="radio"
+                                                            name="notionType"
+                                                            value={opt}
+                                                            checked={selectedType === opt}
+                                                            onChange={(e) => setSelectedType(e.target.value)}
+                                                            className="accent-[#7E37F9]"
+                                                        />
+                                                        {opt}
+                                                    </label>
+                                                ))}
+                                            </div>
+                                            <div className="mt-4">
+                                                <p className="text-sm font-medium text-gray-700 mb-2">
+                                                    업로드할 노션 데이터베이스 선택
+                                                </p>
+                                                <select
+                                                    value={selectedDB}
+                                                    onChange={(e) => setSelectedDB(e.target.value)}
+                                                    className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-[#7E37F9]"
+                                                >
+                                                    <option value="">-- 데이터베이스 선택 --</option>
+                                                    {databases.map((db) => (
+                                                        <option key={db.id} value={db.id}>
+                                                            {db.title}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        if (!selectedType) {
+                                                            showToast("⚠️ 공유할 항목을 선택해주세요.");
+                                                            return;
+                                                        }
+                                                        if (!selectedDB) {
+                                                            showToast("⚠️ 업로드할 노션 DB를 선택해주세요.");
+                                                            return;
+                                                        }
+
+                                                        // 선택한 항목에 따라 content 생성
+                                                        let content = "";
+                                                        if (selectedType === "회의기록") {
+                                                            content = summaries
+                                                                .map((s, i) => `${i + 1}. ${s.paragraph}\n요약: ${s.summary}\n`)
+                                                                .join("\n");
+                                                        } else if (selectedType === "스크립트") {
+                                                            content = refinedScript
+                                                                .map((s) => `[${s.speaker_label}] ${s.text}`)
+                                                                .join("\n");
+                                                        } else if (selectedType === "전체요약") {
+                                                            content = memo?.content || summaries.map((s) => s.summary).join("\n");
+                                                        }
+
+                                                        const { data } = await apiClient.post(
+                                                            "/notion/upload",
+                                                            {
+                                                                title: boardTitle,
+                                                                content,
+                                                                parent_id: selectedDB,
+                                                                parent_type: "database",
+                                                            },
+                                                            {
+                                                                transformRequest: [
+                                                                    (data) =>
+                                                                        JSON.stringify({
+                                                                            title: data.title,
+                                                                            content: data.content,
+                                                                            parent_id: data.parent_id,
+                                                                            parent_type: data.parent_type,
+                                                                        }),
+                                                                ],
+                                                                headers: { "Content-Type": "application/json" },
+                                                            }
+                                                        );
+
+                                                        showToast("노션 업로드 완료!");
+                                                        window.open(data.url, "_blank");
+                                                    } catch (err) {
+                                                        console.error("노션 업로드 실패:", err);
+                                                        showToast("❌ 노션 업로드 중 오류가 발생했습니다.");
+                                                    }
+                                                }}
+                                                className="w-full mt-4 bg-[#7E37F9] text-white text-sm font-medium py-2 rounded-lg hover:bg-[#692ed9] transition"
+                                            >
+                                                노션으로 업로드
+                                            </button>
                                         </div>
                                     </motion.div>
                                 )}

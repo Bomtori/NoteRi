@@ -34,6 +34,8 @@ type FormState = {
 
 export default function Calendar() {
     const calRef = useRef<FullCalendar | null>(null);
+    const [monthWindow, setMonthWindow] = useState<{ start: Date; end: Date } | null>(null);
+
     const [events, setEvents] = useState<EventInput[]>([]);
     const [viewRange, setViewRange] = useState<{ start: Date; end: Date } | null>(
         null
@@ -94,9 +96,14 @@ export default function Calendar() {
             start: ev.start,
             end: ev.end,
             allDay: ev.allDay,
-            backgroundColor: `${color}22`,
+            // backgroundColor: `${color}55`,
+            // borderColor: color,
+            // textColor: "#111111",
+            eventBackgroundColor: color,   // ✅ FullCalendar 전용 키
+            eventBorderColor: color,       // ✅ 경계선 색
+            backgroundColor: color,        // ✅ fallback
             borderColor: color,
-            textColor: "#111111",
+            textColor: "#111111",             // ✅ 대비 높이기
             classNames: ["custom-event"],
             extendedProps: { ...ev.extendedProps, color },
         };
@@ -117,11 +124,42 @@ export default function Calendar() {
     const refresh = () => viewRange && fetchEvents(viewRange.start, viewRange.end);
 
     // 달이 바뀔 때마다 호출
+    // const handleDatesSet = (arg: DatesSetArg) => {
+    //     const start = arg.start.toISOString();
+    //     const end = arg.end.toISOString();
+    //     setCurrentRange({ start, end });
+    // };
     const handleDatesSet = (arg: DatesSetArg) => {
         const start = arg.start.toISOString();
         const end = arg.end.toISOString();
+
         setCurrentRange({ start, end });
+
+        // dayGridMonth에서 '현재 달'의 1일 ~ 다음달 1일(exclusive)
+        const monthStart = arg.view.currentStart; // ex) 2025-11-01T00:00:00
+        const monthEnd   = arg.view.currentEnd;   // ex) 2025-12-01T00:00:00
+        setMonthWindow({ start: monthStart, end: monthEnd });
     };
+
+    const groupedEvents = React.useMemo(() => {
+        const groups: Record<string, EventInput[]> = {};
+        if (!monthWindow) return groups;
+
+        const { start: monthStart, end: monthEnd } = monthWindow;
+
+        events.forEach(ev => {
+            const d = new Date(ev.start as string);
+
+            // ✅ '보이는 달' 범위 밖이면 스킵 (currentStart ≤ d < currentEnd)
+            if (d < monthStart || d >= monthEnd) return;
+
+            const key = d.getDate().toString(); // 1~31
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(ev);
+        });
+
+        return groups;
+    }, [events, monthWindow]);
 
     const onSelect = (sel: any) => {
         if (!sel.jsEvent) return;
@@ -270,18 +308,6 @@ export default function Calendar() {
         }
     };
 
-    const groupedEvents = React.useMemo(() => {
-        const groups: Record<string, EventInput[]> = {};
-
-        events.forEach(ev => {
-            const d = new Date(ev.start as string);
-            const key = d.getDate();
-            if (!groups[key]) groups[key] = [];
-            groups[key].push(ev);
-        });
-
-        return groups;
-    }, [events]);
 
     return (
         <div className="w-full bg-white">
@@ -335,45 +361,45 @@ export default function Calendar() {
                                 onChange={(e) => setForm({ ...form, location: e.target.value })}
                             />
 
-                            <label className="flex items-center gap-2">
-                                <input
-                                    type="checkbox"
-                                    checked={form.allDay}
-                                    onChange={(e) => setForm({ ...form, allDay: e.target.checked })}
-                                />
-                                <span>하루종일</span>
-                            </label>
+                            {/*<label className="flex items-center gap-2">*/}
+                            {/*    <input*/}
+                            {/*        type="checkbox"*/}
+                            {/*        checked={form.allDay}*/}
+                            {/*        onChange={(e) => setForm({ ...form, allDay: e.target.checked })}*/}
+                            {/*    />*/}
+                            {/*    <span>하루종일</span>*/}
+                            {/*</label>*/}
 
-                            <AnimatePresence>
-                                {!form.allDay && (
-                                    <motion.div
-                                        initial={{ opacity: 0, y: -4 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: -4 }}
-                                        transition={{ duration: 0.2 }}
-                                        className="grid grid-cols-2 gap-2"
-                                    >
-                                        <div>
-                                            <label>시작</label>
-                                            <input
-                                                type="datetime-local"
-                                                className="border rounded-md px-2 py-1 w-full"
-                                                value={form.start ? form.start.slice(0, 16) : ""}
-                                                onChange={(e) => setForm({ ...form, start: e.target.value })}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label>종료</label>
-                                            <input
-                                                type="datetime-local"
-                                                className="border rounded-md px-2 py-1 w-full"
-                                                value={form.end ? form.end.slice(0, 16) : ""}
-                                                onChange={(e) => setForm({ ...form, end: e.target.value })}
-                                            />
-                                        </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
+                            {/*<AnimatePresence>*/}
+                            {/*    {!form.allDay && (*/}
+                            {/*        <motion.div*/}
+                            {/*            initial={{ opacity: 0, y: -4 }}*/}
+                            {/*            animate={{ opacity: 1, y: 0 }}*/}
+                            {/*            exit={{ opacity: 0, y: -4 }}*/}
+                            {/*            transition={{ duration: 0.2 }}*/}
+                            {/*            className="grid grid-cols-2 gap-2"*/}
+                            {/*        >*/}
+                            {/*            <div>*/}
+                            {/*                <label>시작</label>*/}
+                            {/*                <input*/}
+                            {/*                    type="datetime-local"*/}
+                            {/*                    className="border rounded-md px-2 py-1 w-full"*/}
+                            {/*                    value={form.start ? form.start.slice(0, 16) : ""}*/}
+                            {/*                    onChange={(e) => setForm({ ...form, start: e.target.value })}*/}
+                            {/*                />*/}
+                            {/*            </div>*/}
+                            {/*            <div>*/}
+                            {/*                <label>종료</label>*/}
+                            {/*                <input*/}
+                            {/*                    type="datetime-local"*/}
+                            {/*                    className="border rounded-md px-2 py-1 w-full"*/}
+                            {/*                    value={form.end ? form.end.slice(0, 16) : ""}*/}
+                            {/*                    onChange={(e) => setForm({ ...form, end: e.target.value })}*/}
+                            {/*                />*/}
+                            {/*            </div>*/}
+                            {/*        </motion.div>*/}
+                            {/*    )}*/}
+                            {/*</AnimatePresence>*/}
 
                             <label className="flex items-center gap-2">
                                 <input

@@ -357,29 +357,7 @@ export default function RecordListPage() {
 
                 {gptTab === "gpt" && (
                     <div className="flex flex-col h-full">
-                        {/* 질문 입력 영역 */}
-                        <div className="mb-4">
-                            <textarea
-                                value={ragQuestion}
-                                onChange={(e) => setRagQuestion(e.target.value)}
-                                onKeyPress={handleKeyPress}
-                                placeholder="모든 녹음에서 검색할 질문을 입력하세요...&#10;예: 프론트엔드 디자인 언제 완료래?"
-                                className="w-full h-24 p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-[#7E37F9] focus:outline-none text-sm"
-                                disabled={ragLoading}
-                            />
-                            <div className="flex justify-between items-center mt-2">
-                                <span className="text-xs text-gray-400">
-                                    Enter로 제출 | Shift+Enter로 줄바꿈
-                                </span>
-                                <button
-                                    onClick={handleRagSubmit}
-                                    disabled={ragLoading || !ragQuestion.trim()}
-                                    className="px-4 py-2 bg-[#7E37F9] text-white rounded-lg text-sm font-medium hover:bg-[#6B2DD6] disabled:bg-gray-300 disabled:cursor-not-allowed transition"
-                                >
-                                    {ragLoading ? "검색 중..." : "질문하기"}
-                                </button>
-                            </div>
-                        </div>
+
 
                         {/* 에러 메시지 */}
                         {ragError && (
@@ -455,6 +433,26 @@ export default function RecordListPage() {
                                     </p>
                                 </div>
                             )}
+                        </div>
+                        {/* 질문 입력 영역 */}
+                        <div className="mb-4">
+                            <textarea
+                                value={ragQuestion}
+                                onChange={(e) => setRagQuestion(e.target.value)}
+                                onKeyPress={handleKeyPress}
+                                placeholder="모든 녹음에서 검색할 질문을 입력하세요...&#10;예: 프론트엔드 디자인 언제 완료래?"
+                                className="w-full h-24 p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-[#7E37F9] focus:outline-none text-sm"
+                                disabled={ragLoading}
+                            />
+                            <div className="flex justify-between items-center mt-2">
+                                <button
+                                    onClick={handleRagSubmit}
+                                    disabled={ragLoading || !ragQuestion.trim()}
+                                    className="px-4 py-2 bg-[#7E37F9] text-white rounded-lg text-sm font-medium hover:bg-[#6B2DD6] disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+                                >
+                                    {ragLoading ? "검색 중..." : "질문하기"}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}

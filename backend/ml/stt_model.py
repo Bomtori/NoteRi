@@ -6,13 +6,18 @@ import wave
 
 class STTModel:
     
-    def __init__(self, model_size="medium", device="cuda",
-                 chunk_seconds=3.0, overlap_seconds=1.0, sample_rate=16000):
-        print(f"🚀 FastWhisper {model_size} 모델 로딩 중... (device={device})")
+    def __init__(
+            self, 
+            model_size="medium", 
+            device="cuda",
+            chunk_seconds=3.0, 
+            overlap_seconds=1.0, 
+            sample_rate=16000):
+        print(f"FastWhisper {model_size} 모델 로딩 중... (device={device})")
         self.model = WhisperModel(
             model_size,
             device=device,
-            compute_type="float16"  # GPU 최적화
+            compute_type="float16"
         )
         print("✅ CUDA 모델 로딩 완료!")
 
@@ -44,7 +49,7 @@ class STTModel:
             temperature=0.2,
             vad_filter=False,
             condition_on_previous_text=True,
-            word_timestamps=True,   # ✅ 꼭 켤 것
+            word_timestamps=True,
             patience=1.2,
             compression_ratio_threshold=2.4,
             no_speech_threshold=0.6

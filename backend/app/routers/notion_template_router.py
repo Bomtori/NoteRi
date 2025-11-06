@@ -1,35 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from typing import Literal
-
+from typing import Optional, Literal
 
 from backend.app.db import SessionLocal
+from backend.app.deps.auth import get_current_user
 from backend.services.notion_template import build_notion_markdown, TemplateType
-from backend.app.deps.auth import get_current_user # 기존 프로젝트의 인증 의존성에 맞춰 조정
+from backend.app.model import RecordingSession, Board, BoardShare
+from backend.app.routers.notion_auth_router import upload_to_notion
 import httpx
-
+import os
 
 router = APIRouter(prefix="/notion", tags=["notion-template"])
 
-
-
-
-class RenderRequest(BaseModel):
-    session_id: int
-    template: TemplateType = Field(description="script | minutes | final")
-
-
-
-
-class UploadRequest(RenderRequest):
-    parent_id: str = Field(description="Notion parent database/page id")
-    parent_type: Literal["database", "page"] = "database"
-    page_title: str | None = None
-
-
-
-
+# ---------- 공용 DB 의존성 ----------
 async def get_db():
     db = SessionLocal()
     try:
@@ -37,43 +21,144 @@ async def get_db():
     finally:
         db.close()
 
+# ---------- 요청 스키마 ----------
+class RenderRequest(BaseModel):
+    session_id: Optional[int] = None
+    board_id: Optional[int] = None
+    # 프론트의 라디오 “회의기록/스크립트/전체요약”과 TemplateType 매핑
+    ui_type: Literal["회의기록", "스크립트", "전체요약"] = Field(default="회의기록")
 
+class UploadRequest(RenderRequest):
+    parent_id: str = Field(description="Notion parent database/page id")
+    parent_type: Literal["database", "page"] = "database"
+    page_title: Optional[str] = None
+    # 미리보기에서 받은 content를 그대로 업로드하고 싶을 때 사용 (없으면 서버가 다시 생성)
+    content_override: Optional[str] = None
 
+# ---------- 유틸: 접근 가능 세션 resolve ----------
+def resolve_session_or_404(db: Session, user_id: int, session_id: Optional[int], board_id: Optional[int]) -> RecordingSession:
+    """
+    1) session_id가 오면: 해당 세션이 현재 사용자에게 소유/공유 되었는지 검사 후 반환
+    2) session_id가 없고 board_id만 오면: 해당 보드의 최신 세션 1개 반환
+    """
+    if session_id:
+        # 해당 session이 유저에게 접근 가능한지 (boards.owner_id == user_id or shares 포함)
+        q = (
+            db.query(RecordingSession)
+            .join(Board, RecordingSession.board_id == Board.id)
+            .outerjoin(BoardShare, Board.id == BoardShare.board_id)
+            .filter(RecordingSession.id == session_id)
+            .filter((Board.owner_id == user_id) | (BoardShare.user_id == user_id))
+        )
+        rs = q.first()
+        if not rs:
+            raise HTTPException(status_code=404, detail="session not found or no permission")
+        return rs
 
+    if board_id:
+        q = (
+            db.query(RecordingSession)
+            .join(Board, RecordingSession.board_id == Board.id)
+            .outerjoin(BoardShare, Board.id == BoardShare.board_id)
+            .filter(Board.id == board_id)
+            .filter((Board.owner_id == user_id) | (BoardShare.user_id == user_id))
+            .order_by(RecordingSession.started_at.desc())
+        )
+        rs = q.first()
+        if not rs:
+            raise HTTPException(status_code=404, detail="no sessions found for this board or no permission")
+        return rs
+
+    raise HTTPException(status_code=400, detail="session_id or board_id is required")
+
+# ---------- UI 타입 → 템플릿 타입 매핑 ----------
+def map_ui_to_template(ui_type: str) -> TemplateType:
+    # TemplateType = Literal["script", "minutes", "final"] 라고 가정
+    if ui_type == "회의기록":
+        return "minutes"
+    if ui_type == "스크립트":
+        return "script"
+    if ui_type == "전체요약":
+        return "final"
+    return "minutes"
+
+# ---------- Qwen(또는 Ollama)로 Markdown 다듬기 (선택) ----------
+async def polish_with_llm(markdown: str) -> str:
+    # 선택 기능: .env에서 OLLAMA_BASE_URL/OLLAMA_MODEL 설정되면 Qwen으로 다듬기
+    base = os.getenv("OLLAMA_BASE_URL")
+    model = os.getenv("OLLAMA_MODEL")
+    if not base or not model:
+        return markdown  # 설정 없으면 그대로 반환
+
+    prompt = f"""다음 회의록 Markdown을 더 읽기 좋게 정리해줘.
+- 제목과 소제목을 구조화하고
+- bullet/numbering을 명확화
+- 중요 포인트는 굵게 표시
+- 표가 필요하면 Markdown 표로
+
+[원본]
+{markdown}
+"""
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            r = await client.post(f"{base}/api/generate", json={
+                "model": model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {"temperature": 0.2, "num_ctx": 4096}
+            })
+            r.raise_for_status()
+            return (r.json().get("response") or "").strip() or markdown
+    except Exception:
+        return markdown
+
+# ---------- 미리보기: 노션 업로드 전 Markdown/JSON 생성 ----------
 @router.post("/render")
 async def render_for_notion(req: RenderRequest, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    """세션에서 소스 데이터를 읽어 Markdown 템플릿(본문)만 생성해서 반환."""
-    try:
-        doc = await build_notion_markdown(db, session_id=req.session_id, template=req.template)
-        return {"ok": True, **doc}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"render failed: {e}")
+    rs = resolve_session_or_404(db, user_id=user.id, session_id=req.session_id, board_id=req.board_id)
+    template: TemplateType = map_ui_to_template(req.ui_type)
 
+    # services/notion_template.py 안의 핵심 함수 (이미 제공됨)
+    # 반환 예: {"title": "...", "content": "...(markdown)...", "raw": {...}}
+    doc = await build_notion_markdown(db, session_id=rs.id, template=template)
 
+    # 선택: Qwen으로 Markdown 다듬기
+    polished = await polish_with_llm(doc["content"])
 
+    return {
+        "ok": True,
+        "session_id": rs.id,
+        "board_id": rs.board_id,
+        "title": doc.get("title") or "회의 템플릿",
+        "content_markdown": polished,
+        "content_markdown_raw": doc["content"],  # LLM 적용 전 원본
+        "content_json": doc.get("raw")          # 블록/메타 등 필요 시
+    }
 
+# ---------- 업로드: 바로 노션으로 ----------
 @router.post("/upload_template")
 async def upload_template(req: UploadRequest, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    """
-    템플릿을 서버에서 즉시 업로드까지 수행.
-    - 이미 프로젝트에 /notion/upload 가 있다면 그 엔드포인트로 프록시 호출하여 일관성 유지.
-    """
-    doc = await build_notion_markdown(db, session_id=req.session_id, template=req.template)
-    title = req.page_title or doc.get("title") or "회의 템플릿"
+    rs = resolve_session_or_404(db, user_id=user.id, session_id=req.session_id, board_id=req.board_id)
+    template: TemplateType = map_ui_to_template(req.ui_type)
 
+    if req.content_override:
+        title = req.page_title or "회의 템플릿"
+        content = req.content_override
+    else:
+        doc = await build_notion_markdown(db, session_id=rs.id, template=template)
+        title = req.page_title or (doc.get("title") or "회의 템플릿")
+        content = await polish_with_llm(doc["content"])
 
-    # 프로젝트의 기존 업로드 라우트를 내부 HTTP로 재사용 (권장)
+    # 이미 존재하는 /notion/upload 엔드포인트를 프록시 호출 (프로젝트 일관성 유지)
     payload = {
         "title": title,
-        "content": doc["content"],
+        "content": content,
         "parent_id": req.parent_id,
         "parent_type": req.parent_type,
     }
-
     async with httpx.AsyncClient(timeout=60) as client:
-        # 같은 FastAPI 앱의 라우터를 직접 호출하려면, 별도 서비스 함수로 분리하는 편이 더 깔끔하다.
-        # 여기서는 기존 프론트가 사용하는 /notion/upload 에 위임한다고 가정한다.
         r = await client.post("http://localhost:8000/notion/upload", json=payload)
         r.raise_for_status()
         data = r.json()
-    return {"ok": True, "title": title, "url": data.get("url"), "meta": doc.get("raw")}
+
+    return {"ok": True, "url": data.get("url"), "title": title}

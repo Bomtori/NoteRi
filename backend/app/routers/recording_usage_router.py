@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from datetime import date
 from backend.app.db import get_db
 from backend.app.deps.auth import get_current_user
-from backend.app.model import User
+from backend.app.model import User, AudioData
 from backend.app.schemas.recording_usage_schema import RecordingUseRequest, RecordingUseResponse
 from backend.app.util.errors import NotReadyError, AlreadyDebitedError, UsageExceededError
 from backend.app.crud import recording_usage_crud
@@ -13,20 +13,37 @@ import logging
 router = APIRouter(prefix="/recordings/usage", tags=["recordings"])
 logger = logging.getLogger("recordings")
 
-@router.post("/use/{audio_id}", response_model=RecordingUseResponse, summary="사용량 소모")
-def use_by_audio_owner(
-    audio_id: int = Path(..., ge=1),
+
+@router.post("/use-by-board/{board_id}", response_model=RecordingUseResponse, summary="보드 기준 사용량 차감")
+def use_by_board_id(
+    board_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    from backend.app.model import AudioData
+
+    audio = (
+        db.query(AudioData)
+        .filter(AudioData.board_id == board_id)
+        .order_by(AudioData.created_at.desc())
+        .first()
+    )
+    if not audio:
+        raise HTTPException(status_code=404, detail="이 보드에는 AudioData가 없습니다.")
+
     try:
-        usage = recording_usage_crud.use_seconds_from_audio_owner(db, audio_id)
+        usage = recording_usage_crud.use_seconds_from_audio_owner(db, audio.id)
     except recording_usage_crud.NotReadyError as e:
-        # 아직 duration 없음 / 오디오가 생성되지 않음 등
         raise HTTPException(status_code=409, detail=str(e))
     except recording_usage_crud.AlreadyDebitedError as e:
-        # 이미 차감된 경우도 200으로 idempotent하게 돌려줘도 됨 (아래 3번 참고)
-        raise HTTPException(status_code=200, detail=str(e))
+        # 이미 차감된 경우 200 OK로 응답
+        return RecordingUseResponse(
+            user_id=current_user.id,
+            used_seconds=int(usage.used_seconds or 0),
+            remaining_seconds="unchanged",
+            allocated_seconds=None if usage.allocated_seconds is None else int(usage.allocated_seconds),
+            period_end=usage.period_end,
+        )
     except recording_usage_crud.UsageExceededError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except ValueError as e:
@@ -37,6 +54,7 @@ def use_by_audio_owner(
         if usage.allocated_seconds is None
         else max(int(usage.allocated_seconds) - int(usage.used_seconds or 0), 0)
     )
+
     return RecordingUseResponse(
         user_id=usage.user_id,
         used_seconds=int(usage.used_seconds or 0),
@@ -44,7 +62,6 @@ def use_by_audio_owner(
         allocated_seconds=None if usage.allocated_seconds is None else int(usage.allocated_seconds),
         period_end=usage.period_end,
     )
-
 @router.get("/", response_model=RecordingUseResponse, summary="사용량 조회")
 def get_current_usage(
     db: Session = Depends(get_db),

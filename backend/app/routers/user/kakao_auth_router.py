@@ -101,6 +101,14 @@ async def kakao_callback(request: Request, db: Session = Depends(get_db)):
             f"&email={quote(email)}&try_provider={provider}",
             status_code=302,
         )
+    except HTTPException as e:
+        if e.status_code == 403 and isinstance(e.detail, dict) and e.detail.get("error") == "banned_account":
+            reason = quote(e.detail.get("reason", "관리자 조치"))
+            until = quote(e.detail.get("until", "영구"))
+            return RedirectResponse(
+                f"{FRONTEND_URL}/auth/callback?error=banned_account&reason={reason}&until={until}&email={quote(email or '')}",
+                status_code=302,
+            )
     except Exception:
         return RedirectResponse(
             f"{FRONTEND_URL}/auth/callback?error=internal_error",

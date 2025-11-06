@@ -11,7 +11,7 @@ from backend.app.util.auth import create_access_token, create_refresh_token
 def assert_login_allowed(db_user: User, db: Session | None = None) -> None:
     """
     로그인 직전에 호출해서 밴 유저 차단.
-    - active ban: 403 차단
+    - active ban: 403 차단 + 상세 정보 전달
     - expired ban: 즉시 해제( db 세션이 있으면 DB 반영 ), 없으면 통과만 시킴
     """
     now = datetime.now(UTC)
@@ -28,8 +28,15 @@ def assert_login_allowed(db_user: User, db: Session | None = None) -> None:
             db.commit()
         return
 
-    # 영구밴 또는 아직 유효한 밴이면 차단
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Banned account")
+    # 영구밴 또는 아직 유효한 밴이면 차단 (상세정보 포함)
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "error": "banned_account",
+            "reason": db_user.banned_reason or "관리자 조치",
+            "until": db_user.banned_until.isoformat() if db_user.banned_until else "영구",
+        },
+    )
 
 def _ensure_free_plan(db: Session) -> Plan:
     free = db.query(Plan).filter(Plan.name == PlanType.free.value).first()

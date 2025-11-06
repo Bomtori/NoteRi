@@ -58,6 +58,15 @@ export default function AuthCallbackPage() {
         navigate("/login", { replace: true });
         return;
       }
+      if (error === "banned_account") {
+        const reason = params.get("reason") || "관리자 조치";
+        const until = params.get("until") || "영구";
+        console.warn("🚫 밴 계정 로그인 시도:", { emailParam, reason, until });
+
+        alert(`🚫 차단된 계정입니다.\n사유: ${decodeURIComponent(reason)}\n해제일: ${decodeURIComponent(until)}`);
+        navigate("/login", { replace: true });
+        return;
+      }
 
       if (error) {
         console.error("❌ 알 수 없는 에러:", error);

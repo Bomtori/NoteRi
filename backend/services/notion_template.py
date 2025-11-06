@@ -10,7 +10,7 @@ from backend.app.crud.embedding_crud import get_text_chunks_by_session # (sessio
 from backend.app.crud.summary_crud import get_summaries_by_session # (session_id) -> List[model.Summary]
 from backend.app.crud.final_summary_crud import get_final_summary_by_session # (session_id) -> model.FinalSummary | None
 from backend.app.util.llm_client import ollama_summarize_json
-
+from backend.app.crud.final_summary_crud import get_final_summary_by_session
 
 
 

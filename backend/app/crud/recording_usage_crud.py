@@ -70,77 +70,58 @@ def create_or_update_usage(db: Session, user_id: int, subscription: Subscription
     return new_usage
 
 
-def use_seconds_from_audio_owner(db: Session, audio_id: int):
-    # SQLAlchemy 2.x 권장: Session.get
-    audio_row = db.get(AudioData, audio_id)
-    if not audio_row:
-        # 아예 생성 전
-        raise NotReadyError("AudioData가 아직 생성되지 않았습니다. 처리 완료 후 재시도하세요.")
-    # duration 채워지기 전(처리 중)
-    if audio_row.duration is None or int(audio_row.duration) <= 0:
-        raise NotReadyError("AudioData.duration이 아직 확정되지 않았습니다.")
+def use_seconds_from_audio_owner(db: Session, audio_id: int) -> RecordingUsage:
+    """
+    AudioData를 기반으로 RecordingUsage 사용량(seconds)을 차감한다.
+    debited_at 없이 단순 차감만 수행한다.
+    """
 
-    # 이미 차감된 경우
-    if audio_row.debited_at is not None:
-        raise AlreadyDebitedError("이미 차감 처리된 Audio 입니다.")
+    # 1️⃣ AudioData 조회
+    audio = db.query(AudioData).filter(AudioData.id == audio_id).first()
+    if not audio:
+        raise ValueError(f"AudioData {audio_id} not found")
 
-    # 보드 owner 확인
-    owner_id = db.query(Board.owner_id).filter(Board.id == audio_row.board_id).scalar()
-    if owner_id is None:
-        raise ValueError("Board owner를 찾을 수 없습니다.")
+    # 2️⃣ duration 검증
+    if not audio.duration or audio.duration <= 0:
+        raise NotReadyError(f"AudioData {audio_id} has no duration yet")
 
-    # 최신 활성 usage 잠금
+    # 3️⃣ board 기반 user_id 찾기
+    board = db.query(Board).filter(Board.id == audio.board_id).first()
+    if not board:
+        raise ValueError(f"Board not found for AudioData {audio_id}")
+    user_id = board.owner_id
+
+    # 4️⃣ 활성 RecordingUsage 찾기 (현재 구독 기간 내)
     usage = (
         db.query(RecordingUsage)
         .filter(
-            RecordingUsage.user_id == owner_id,
-            (RecordingUsage.period_end == None) | (RecordingUsage.period_end >= date.today()),
+            RecordingUsage.user_id == user_id,
+            (RecordingUsage.period_end == None)
+            | (RecordingUsage.period_end >= date.today()),
         )
         .order_by(RecordingUsage.created_at.desc())
-        .with_for_update()
         .first()
     )
     if not usage:
-        raise ValueError("No active recording usage found for board owner")
+        raise ValueError(f"No active RecordingUsage found for user {user_id}")
 
-    seconds = int(audio_row.duration)
+    # 5️⃣ 사용량 계산
+    used_now = int(usage.used_seconds or 0)
+    add_seconds = int(audio.duration)
+    total_used = used_now + add_seconds
 
-    # 무제한 플랜: debited_at만 찍고 반환
-    if usage.allocated_seconds is None:
-        audio_row.debited_at = func.now()
-        db.commit()
-        db.refresh(usage)
-        return usage
+    if usage.allocated_seconds and total_used > usage.allocated_seconds:
+        raise UsageExceededError("사용량이 초과되었습니다.")
 
-    before_used = int(usage.used_seconds or 0)
-    after_used = before_used + seconds
-    if after_used > int(usage.allocated_seconds):
-        raise UsageExceededError("Recording seconds exceeded plan limit")
+    usage.used_seconds = total_used
 
-    usage.used_seconds = after_used
-    log = RecordingUsageLog(
-        usage_id=usage.id,
-        user_id=owner_id,
-        board_id=audio_row.board_id,
-        audio_id=audio_id,
-        seconds=seconds,
-        before_used=before_used,
-        after_used=after_used,
-        reason="audio_duration",
-    )
-    db.add(log)
-    audio_row.debited_at = func.now()
-
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        # (3번의 유니크 인덱스가 있을 때만 명확히 중복 차감 탐지)
-        raise AlreadyDebitedError("이미 차감 처리된 Audio 입니다.")
-
+    # 6️⃣ 저장
+    db.add(usage)
+    db.commit()
     db.refresh(usage)
-    return usage
 
+    print(f"💳 사용량 차감 완료: user_id={user_id}, +{add_seconds}s, total={total_used}s")
+    return usage
 
 # ===== 집계/통계도 전부 '초' 기준 =====
 

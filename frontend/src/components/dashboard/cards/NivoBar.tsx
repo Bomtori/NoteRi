@@ -33,19 +33,24 @@ export default function NivoBar({
   // 1) 안전한 기본값
   const _keys = Array.isArray(keys) && keys.length > 0 ? keys : ["value"];
   const _indexBy = typeof indexBy === "string" && indexBy ? indexBy : "id";
-  const _rows: Row[] = Array.isArray(data) ? data : [];
+const _rows: Row[] = Array.isArray(data)
+  ? data.filter((d): d is Row => !!d && typeof d === "object")
+  : [];
 
   // 2) 행 보정: indexBy 없으면 채우고, 모든 key는 숫자(없으면 0)
-  const normalized = _rows.map((r, i) => {
-    const base = _indexBy in r ? r : { ...r, [_indexBy]: r.id ?? String(i) };
-    const withNums: Row = { ...base };
-    for (const k of _keys) {
-      const raw = (base as any)[k];
-      const n = typeof raw === "number" && Number.isFinite(raw) ? raw : Number(raw);
-      withNums[k] = Number.isFinite(n) ? n : 0;
-    }
-    return withNums;
-  });
+ const normalized = _rows.map((r, i) => {
+  const base = _indexBy in r ? r : { ...r, [_indexBy]: r.id ?? String(i) };
+  const withNums: Row = { ...base };
+  for (const k of _keys) {
+    const raw = (base as any)[k];
+    const n = typeof raw === "number" && Number.isFinite(raw) ? raw : Number(raw);
+    withNums[k] = Number.isFinite(n) ? n : 0;
+  }
+  // ✅ color 보정 추가
+  if (!withNums.color || typeof withNums.color !== "string")
+    withNums.color = "#7E37F9";
+  return withNums;
+});
 
   // 3) 완전 비어있으면 안전한 플레이스홀더 1개
   const safeData =

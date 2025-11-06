@@ -80,10 +80,19 @@ def update_rating(
     db.refresh(obj)
     return obj
 
-def get_final_summary_by_session(db: Session, *, session_id: int):
-    return db.execute(
-        select(model.FinalSummary)
-        .where(model.FinalSummary.session_id == session_id)
-        .order_by(model.FinalSummary.id.desc())
+def get_final_summary_by_session(db, session_id: int):
+    FS = model.FinalSummary
+    # session_id가 없으면 recording_session_id를 사용
+    col = getattr(FS, "session_id", None) or getattr(FS, "recording_session_id", None)
+    if col is None:
+        raise RuntimeError(
+            "FinalSummary 모델에 session_id / recording_session_id 컬럼이 없습니다."
+        )
+
+    stmt = (
+        select(FS)
+        .where(col == session_id)
+        .order_by(FS.id.desc())
         .limit(1)
-    ).scalar_one_or_none()
+    )
+    return db.execute(stmt).scalars().first()

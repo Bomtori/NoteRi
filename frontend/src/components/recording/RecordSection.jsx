@@ -1,4 +1,5 @@
 import { motion, AnimatePresence } from "framer-motion";
+import FinalSummarySection from "./FinalSummarySection";
 
 const splitSummaryLines = (text = "") => {
     // 1 줄바꿈 정규화
@@ -11,6 +12,8 @@ const splitSummaryLines = (text = "") => {
         .map(s => s.trim())
         .filter(Boolean);
 };
+
+
 const formatTime = (isoString) => {
     const date = new Date(isoString);
     // const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -30,8 +33,6 @@ export default function RecordSection({
                                           allHistory = [],
                                           finalSummary = null,
                                       }) {
-    console.log("🟣 summaries:", summaries);
-    console.log("🟣 allHistory:", allHistory);
     const isRecording = recordingState === "recording";
     const words = liveText ? liveText.split(" ") : [];
 
@@ -263,6 +264,14 @@ export default function RecordSection({
             </div>
         );
     }
+    if (activeTab === "summary") {
+    return (
+        <FinalSummarySection
+            finalSummaries={finalSummary ? [finalSummary] : []}
+        />
+    );
+}
+    
 
 
     return null;

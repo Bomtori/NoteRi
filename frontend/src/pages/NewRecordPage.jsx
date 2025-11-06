@@ -54,6 +54,24 @@ export default function NewRecordPage() {
     const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
     const WS_URL = import.meta.env.VITE_WS_URL || toWsUrl(API_BASE);
 
+   async function fetchFinalSummary(sessionId, retryCount = 10) {
+  for (let i = 0; i < retryCount; i++) {
+    try {
+      const res = await apiClient.get(`/sessions/final-summaries/by-session/${sessionId}`);
+      return res.data;
+    } catch (err) {
+      if (err.response?.status === 404) {
+        console.log(`⏳ 아직 생성 중... 재시도 (${i + 1}/${retryCount})`);
+        await new Promise(r => setTimeout(r, 1500)); // 1.5초 후 재시도
+      } else {
+        console.error("❌ final-summary 요청 실패:", err);
+        throw err;
+      }
+    }
+  }
+  throw new Error("최대 재시도 후에도 final-summary를 찾을 수 없습니다.");
+}
+
     // useRecording hook
     const { recordingState, startRecording, stopRecording } = useRecording({
         WS_URL,
@@ -227,47 +245,31 @@ export default function NewRecordPage() {
 
             // 사용량 차감 (audio_id 기반)
             try {
-                const sessionRes = await apiClient.get(`/sessions/${sessionId}`);
-                const audioId = sessionRes.data?.audio_id;
-
-                if (audioId) {
-                    console.log("💳 사용량 차감 API 호출 - audio_id:", audioId);
-                    const usageRes = await apiClient.post(`/recordings/usage/use/${audioId}`);
-                    console.log("✅ 사용량 차감 완료:", usageRes.data);
-                    showToast(`사용량 차감: ${Math.floor(usageRes.data.used_seconds / 60)}분 사용`);
-                } else {
-                    console.warn("⚠️ audio_id 없음 → 사용량 차감 스킵");
-                }
-            } catch (err) {
+                console.log("💳 사용량 차감 API 호출 - board_id:", targetBoardId);
+                const usageRes = await apiClient.post(`/recordings/usage/use-by-board/${targetBoardId}`);
+                console.log("✅ 사용량 차감 완료:", usageRes.data);
+                showToast(`사용량 차감: ${Math.floor(usageRes.data.used_seconds / 60)}분 사용`);
+                } catch (err) {
                 console.error("❌ 사용량 차감 실패:", err);
                 if (err.response?.status === 400) {
                     showToast("사용량이 부족합니다.");
                 }
-            }
+                }
 
             // 2단계: 전체 요약 생성 대기 (최대 30초, 30회 × 1초)
             console.log("⏳ 전체 요약 생성 대기 중... sessionId:", sessionId);
             tries = 0;
             while (tries++ < 30) {
                 try {
-                    const res = await apiClient.get(`/sessions/final-summaries/by-session/${sessionId}`);
-                    console.log(`[${tries}] final-summary 응답:`, res.status, res.data);
-
-                    if (res.status === 200 && res.data) {
-                        setFinalSummary(res.data);
-                        console.log("✅ 전체 요약 로드 완료:", res.data);
-                        setActiveTab("summary");
-                        showToast("전체 요약이 생성되었습니다.");
-                        return;
+                    const summary = await fetchFinalSummary(sessionId);
+                    setFinalSummary(summary);
+                    setActiveTab("summary");
+                    showToast("전체 요약이 생성되었습니다 ✅");
+                    console.log("✅ 전체 요약 로드 완료:", summary);
+                    } catch (err) {
+                    console.warn("⚠️ 전체 요약 생성 시간 초과:", err.message);
+                    showToast("전체 요약 생성에 시간이 걸리고 있습니다.");
                     }
-                } catch (err) {
-                    const status = err.response?.status;
-                    if (status === 404) {
-                        console.log(`[${tries}] 아직 생성 중... 재시도`);
-                    } else {
-                        console.warn(`[${tries}] final-summary 오류:`, status);
-                    }
-                }
                 await sleep(1000);
             }
 

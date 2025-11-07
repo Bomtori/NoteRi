@@ -2,9 +2,11 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import apiClient from "../../api/apiClient";
 import { API_BASE_URL } from "../../config";
 
+
 // ✅ 초기 상태 (하드코딩 제거)
 const initialState = {
     folders: [],
+    selectedFolder: null,
     status: "idle",
     error: null,
 };
@@ -105,7 +107,11 @@ export const deleteFolderAsync = createAsyncThunk(
 const folderSlice = createSlice({
     name: "folder",
     initialState,
-    reducers: {},
+    reducers: {
+        setSelectedFolder: (state, action) => {
+            state.selectedFolder = action.payload;
+        },
+    },
 
     extraReducers: (builder) => {
         builder
@@ -138,6 +144,9 @@ const folderSlice = createSlice({
             .addCase(deleteFolderAsync.fulfilled, (state, action) => {
                 const deleted = action.payload;
                 state.folders = state.folders.filter((f) => f.id !== deleted.id);
+                if (state.selectedFolder?.id === deleted.id) {
+                    state.selectedFolder = null;
+                }
             })
 
             // 🔹 폴더 색상 변경
@@ -148,4 +157,5 @@ const folderSlice = createSlice({
             });
     }, // ✅ extraReducers 닫힘
 }); // ✅ createSlice 닫힘
+export const { setSelectedFolder } = folderSlice.actions;
 export default folderSlice.reducer;

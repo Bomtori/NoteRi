@@ -299,12 +299,12 @@ export default function RecordListPage() {
                 )}
             </section>
 
-            {/* 오른쪽: GPT 분석 패널 */}
+            {/* 오른쪽: 기록검색 & 일정관리 패널 */}
             <aside className="w-[30%] bg-white rounded-2xl shadow-sm p-6 flex flex-col min-h-[700px]">
                 {/* 일정 미리보기 */}
                 <div className="mb-6 border-b border-gray-200 pb-3">
                     <div className="flex justify-between items-center mb-2">
-                        <h3 className="font-semibold text-gray-800">📅 다가오는 일정</h3>
+                        <h3 className="font-semibold text-gray-800">다가오는 일정</h3>
                         <button
                             onClick={() => setCalendarOpen(true)}
                             className="text-xs text-[#7E37F9] hover:underline"
@@ -352,7 +352,7 @@ export default function RecordListPage() {
                                     : "text-gray-500 hover:text-gray-700"
                             }`}
                         >
-                            {tab === "gpt" ? "GPT 분석" : "요약 메모"}
+                            {tab === "gpt" ? "기록검색" : "요약 메모"}
                         </button>
                     ))}
                 </div>
@@ -442,7 +442,7 @@ export default function RecordListPage() {
                                 value={ragQuestion}
                                 onChange={(e) => setRagQuestion(e.target.value)}
                                 onKeyPress={handleKeyPress}
-                                placeholder="모든 녹음에서 검색할 질문을 입력하세요...&#10;예: 프론트엔드 디자인 언제 완료래?"
+                                placeholder="모든 녹음에서 검색할 질문을 입력하세요! &#10;예: 프론트엔드 디자인 언제 완료래?"
                                 className="w-full h-24 p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-[#7E37F9] focus:outline-none text-sm"
                                 disabled={ragLoading}
                             />

@@ -10,9 +10,10 @@ export default function PricingSection({user}) {
     const { ref, isVisible } = useFadeInOnScroll(0.3);
     // 플랜
     const plans = [
-        { name: "Free", price: "₩0", desc: "개인 사용자용 기본 기능", features: ["실시간 STT 변환", "기록 저장 5건", "기본 요약 제공"] },
-        { name: "Pro", price: "₩9,900", desc: "팀 및 전문가용 확장 기능", features: ["화자 분리", "AI 템플릿 추천", "무제한 저장", "AI 분석"] },
-        { name: "Enterprise", price: "맞춤 견적", desc: "기업 전용 맞춤형 솔루션", features: ["보안 서버 저장", "팀 관리 콘솔", "API 연동"] },
+        { name: "Free", price: "₩0", desc: "개인 사용자용 기본 기능", features: ["월 300분 녹음 가능", "실시간 STT 변환", "기록 저장 5건", "기본 요약 제공"] },
+        { name: "Basic", price: "₩9,900", desc: " 가벼운 업무용", features: ["월 500분 녹음 가능", "보드 공유(읽기)", "Notion"] },
+        { name: "Pro", price: "₩9,900", desc: "팀 및 전문가용 확장 기능", features: ["월 1000분 사용 가능", "다양한 템플릿 제공", "베타 기능 제공"] },
+
     ];
 
     const handleStart = (plan) => {

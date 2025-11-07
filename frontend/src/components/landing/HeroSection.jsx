@@ -27,10 +27,10 @@ export default function HeroSection({ user }) {
     };
 
     return (
-        <section className="relative flex flex-col items-center justify-center text-center h-[90vh] overflow-hidden">
+        <section className="relative flex flex-col h-screen w-full items-center justify-center text-center h-[90vh] overflow-hidden">
             {/* 🎬 배경 영상 */}
             <video
-                className="absolute inset-0 w-full h-full object-cover"
+                className="absolute object-cover object-center inset-0 w-full h-full object-cover"
                 src="/assets/landing-bg-loop.mp4"
                 autoPlay
                 loop

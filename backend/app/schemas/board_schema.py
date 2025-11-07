@@ -108,3 +108,10 @@ class BoardListResponse(BaseModel):
 
 class BoardMove(BaseModel):
     folder_id: int
+
+class BoardPasswordVerify(BaseModel):
+        password: str = Field(
+        ...,
+        pattern=r"^\d{4}$",
+        description="4자리 숫자 비밀번호 (예: 1234)",
+    )

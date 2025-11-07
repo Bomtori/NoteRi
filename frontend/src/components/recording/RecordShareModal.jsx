@@ -58,7 +58,7 @@ export default function RecordShareModal({
         return "전체요약";
     };
 
-    // 1️⃣ 노션 DB 목록
+    // 노션 DB 목록
     useEffect(() => {
     if (activeTab !== "notion") return;
     if (databases.length > 0) return; // 이미 불러왔으면 재호출 안함
@@ -75,7 +75,7 @@ export default function RecordShareModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeTab]);
 
-    // 2️⃣ 노션 연결 상태
+    // 노션 연결 상태
     useEffect(() => {
     if (activeTab !== "notion") return;
     if (notionStatus.connected) return; // 이미 연결된 상태면 재요청 안함

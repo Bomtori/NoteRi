@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import React from "react";
 // import { ToastProvider } from "./hooks/useToast.js";
 import MainLayout from "./layouts/MainLayout";
 import AuthLayout from "./layouts/AuthLayout";
@@ -23,11 +24,36 @@ import SharedFolderPage from "@/pages/SharedFolderPage.jsx";
 
 import ChannelTalk from "./pages/ChannelTalk.js";
 
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-6 text-center text-red-500">
+          <h2>⚠️ 컴포넌트에서 오류가 발생했습니다.</h2>
+          <p>{String(this.state.error)}</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
     return (
         // <ToastProvider>
         <>
             <ChannelTalk />
+            <ErrorBoundary>
             <Router>
                 <Routes>
                     {/* 🔹 공개 라우트 (로그인 필요 없음) */}
@@ -63,8 +89,8 @@ export default function App() {
                         }
                     >
                         <Route path="/record" element={<RecordListPage />} />
-                        <Route path="/shared" element={<SharedFolderPage  />} />
                         <Route path="/folder/:id" element={<FolderListPage />} />
+                        <Route path="/shared" element={<SharedFolderPage  />} />
                         <Route path="/new" element={<NewRecordPage />} />
                         <Route path="/user" element={<UserPage />} />
                         <Route path="/payments/success" element={<PaymentSuccessPage />} />
@@ -85,6 +111,7 @@ export default function App() {
                     </Route>
                 </Routes>
             </Router>
+            </ErrorBoundary>
             </>
         // </ToastProvider>
 

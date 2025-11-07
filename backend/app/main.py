@@ -74,16 +74,18 @@ app.add_middleware(SessionMiddleware, secret_key=os.getenv("APP_SECRET_KEY"))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",      # 로컬 프론트엔드
-        "http://localhost:3000",      # 대체 포트
-        "http://1.236.171.160:5173",  # 외부 프론트엔드
-        "http://1.236.171.160:3000",  # 대체 포트
-        # 프로덕션 도메인 추가
-        # "https://yourdomain.com",
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://1.236.171.160:5173",
+        "http://1.236.171.160:3000",
+        "http://1.236.171.160.nip.io:8000",
+        "http://noteri-dev-static-files.s3-website.ap-northeast-2.amazonaws.com",
+        "https://dottily-habilimented-vernell.ngrok-free.dev",
+        "https://djwcvo3wrx68t.cloudfront.net",  # ✅ CloudFront 추가
     ],
     allow_credentials=True,
-    allow_methods=["*"],  # 모든 HTTP 메서드 허용
-    allow_headers=["*"],  # 모든 헤더 허용
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # static 디렉토리 마운트

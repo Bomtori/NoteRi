@@ -159,10 +159,10 @@ export default function RightPanel({ boardId, memoId, tabs = ["memo", "gpt"], on
 
   // 💡 추천 질문 리스트
   const quickQuestions = [
-    "오늘 회의 안건 알려줘",
-    "오늘 할 일 정리해줘",
-    "최근 회의 요약해줘",
-    "이번주 목표는 뭐야?",
+    "이 용어 뜻이 뭐야?",
+    "이 기술이 어떤 역할을 해?",
+    "회의 내용 중 모르는 단어 정리해줘.",
+    "이 개념이 실제로 어떻게 쓰여?",
   ];
 
   async function handleSendGPT(promptText) {
@@ -249,7 +249,7 @@ export default function RightPanel({ boardId, memoId, tabs = ["memo", "gpt"], on
                   />
                 )}
                 <span className="relative z-10">
-                  {key === "memo" ? "메모" : "GPT"}
+                  {key === "memo" ? "메모" : "테리"}
                 </span>
               </button>
             );

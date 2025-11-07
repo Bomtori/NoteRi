@@ -161,6 +161,7 @@ export default function RatingSummaryCard({
   const wrapper = frameless ? "" : "p-4 bg-card rounded-2xl shadow";
 
   return (
+    <>
     <div className={`${wrapper} ${className} min-w-0 h-full flex flex-col`}>
       <div className="mb-3 flex items-end justify-between">
         <div>
@@ -192,5 +193,6 @@ export default function RatingSummaryCard({
         </div>
       )}
     </div>
+    </>
   );
 }

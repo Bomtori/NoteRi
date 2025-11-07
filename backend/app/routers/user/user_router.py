@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Path, status, Query
+import os, jwt, time
+from fastapi import APIRouter, Depends, HTTPException, Path, status, Query, Response
 from datetime import datetime, timezone
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.orm import Session
@@ -11,7 +12,8 @@ from backend.app.schemas.user_schema import BanStatusResponse, BanUpdateRequest,
 from backend.app.util.authz import require_admin
 
 router = APIRouter(prefix="/users", tags=["Users"])
-
+GUEST_SECRET_KEY = os.getenv("GUEST_SECRET_KEY", "dev-guest-secret")
+JWT_ALG = "HS256"
 # 사용자 숫자 확인
 @router.get("/count", summary="총 가입자 수")
 def get_user_count(db: Session = Depends(get_db)):
@@ -172,3 +174,27 @@ def get_user_ban_info(
         banned_until=user.banned_until,
         remaining_seconds=remaining_seconds,
     )
+
+
+@router.post("/guest/init")
+def init_guest_token(response: Response):
+    """
+    페이지 진입 시 빈 게스트 토큰 발급 (board_id 미포함)
+    """
+    payload = {
+        "guest": True,
+        "iat": int(time.time()),
+        "exp": int(time.time()) + 60 * 60 * 6,  # 6시간 유효
+    }
+    token = jwt.encode(payload, GUEST_SECRET_KEY, algorithm=JWT_ALG)
+
+    # ✅ 쿠키로 심기
+    response.set_cookie(
+        key="guest_token",
+        value=GUEST_SECRET_KEY,
+        httponly=True,
+        samesite="none",    # ✅ cross-site 전송 허용
+        secure=True,        # ✅ https일 경우 필수 (로컬 테스트면 False)
+        path="/",           # ✅ 모든 경로에서 전송
+    )
+    return {"guest_token": token, "message": "Guest token issued"}

@@ -47,6 +47,17 @@ export default function RecordDetailPage() {
     const [pin, setPin] = useState("");                // 입력된 비밀번호
     const [isVerified, setIsVerified] = useState(false); // 검증 성공 여부
 
+    useEffect(() => {
+    // ✅ 로그인 안 되어 있으면 게스트 토큰 선발급
+    if (!user) {
+        apiClient.post("/users/guest/init")
+            .then(res => console.log("✅ 게스트 토큰 발급됨", res.data))
+            .catch(err => console.warn("🚫 게스트 토큰 발급 실패", err));
+    }
+
+    fetchBoard();
+}, [id]);
+
     // 🔹 회의 불러오기 (보호 여부 포함)
     const fetchBoard = async () => {
         try {
@@ -163,44 +174,6 @@ export default function RecordDetailPage() {
             showToast("폴더 이동 중 오류가 발생했습니다.");
         }
     };
-
-
-    // 🔹 녹음 결과 불러오기 (기존 유지)
-    // const fetchRecordingResults = async () => {
-    //     try {
-    //         const res = await apiClient.get(`/recording/result/${id}`);
-    //         const data = res.data;
-    //         const results = data.items || [];
-    //
-    //         if (!results.length) {
-    //             console.log("🔹 녹음 결과 없음 (session 미생성)");
-    //             setNoSession(true);
-    //             return;
-    //         }
-    //
-    //         const summariesData = results
-    //             .filter((r) => r.summary)
-    //             .map((r) => ({ paragraph: r.paragraph, summary: r.summary }));
-    //
-    //         const scriptData = results.map((r) => ({
-    //             start_time: r.start_time,
-    //             end_time: r.end_time,
-    //             text: r.text,
-    //             speaker_label: r.speaker_label,
-    //         }));
-    //
-    //         setSummaries(summariesData);
-    //         setRefinedScript(scriptData);
-    //         setSpeakers([...new Set(results.map((r) => r.speaker_label))].filter(Boolean));
-    //     } catch (err) {
-    //         if (err.response?.status === 404) {
-    //             console.warn("🔹 녹음 결과 없음 → 빈 회의로 처리");
-    //             setNoSession(true);
-    //         } else {
-    //             console.error("🔹 녹음 결과 불러오기 실패:", err);
-    //         }
-    //     }
-    // };
 
 
     // 🔹 비밀번호 검증 요청
@@ -336,7 +309,7 @@ export default function RecordDetailPage() {
                         {/* 🔹 탭에 따라 다른 섹션 렌더링 */}
                         {noSession ? (
                             <div className="flex flex-col items-center justify-center flex-1 text-gray-400">
-                                <p className="text-lg font-medium mb-1">🔹 녹음이 시작되지 않았습니다</p>
+                                <p className="text-lg font-medium mb-1"> 녹음이 시작되지 않았습니다</p>
                                 <p className="text-sm mb-4">
                                     이 회의에 대한 녹음을 시작하려면 아래 버튼을 눌러주세요.
                                 </p>
@@ -344,7 +317,7 @@ export default function RecordDetailPage() {
                                     onClick={() => navigate(`/new?boardId=${id}`)}
                                     className="mt-2 px-5 py-2.5 bg-[#7E37F9] text-white rounded-xl shadow hover:bg-[#6b2de4] transition-all"
                                 >
-                                    🎙️ 새 녹음 시작하기
+                                     새 녹음 시작하기
                                 </button>
                             </div>
                         ) : (
@@ -372,34 +345,10 @@ export default function RecordDetailPage() {
                                 )}
                             </>
                         )}
-                        {/*/!* 🔹 녹음 결과 없음 *!/*/}
-                        {/*{noSession ? (*/}
-                        {/*    <div className="flex flex-col items-center justify-center flex-1 text-gray-400">*/}
-                        {/*        <p className="text-lg font-medium mb-1">*/}
-                        {/*            🔹 녹음이 시작되지 않았습니다*/}
-                        {/*        </p>*/}
-                        {/*        <p className="text-sm mb-4">*/}
-                        {/*            이 회의에 대한 녹음을 시작하려면 아래 버튼을 눌러주세요.*/}
-                        {/*        </p>*/}
-                        {/*        <button*/}
-                        {/*            onClick={() => navigate(`/new?boardId=${id}`)}*/}
-                        {/*            className="mt-2 px-5 py-2.5 bg-[#7E37F9] text-white rounded-xl shadow hover:bg-[#6b2de4] transition-all"*/}
-                        {/*        >*/}
-                        {/*            🎙️ 새 녹음 시작하기*/}
-                        {/*        </button>*/}
-                        {/*    </div>*/}
-                        {/*) : (*/}
-                        {/*    <RecordSection*/}
-                        {/*        activeTab={activeTab}*/}
-                        {/*        summaries={summaries}*/}
-                        {/*        refinedScript={refinedScript}*/}
-                        {/*        speakers={speakers}*/}
-                        {/*        recordingState={"finished"}*/}
-                        {/*    />*/}
-                        {/*)}*/}
+                    
                     </main>
 
-                    {/* 🔹 오른쪽 패널 (메모 | GPT) */}
+                    {/* 🔹 오른쪽 패널 (메모 | 테리) */}
                     <AnimatePresence>
                         {isPanelVisible && (
                             <motion.aside

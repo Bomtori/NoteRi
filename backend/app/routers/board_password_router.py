@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 import jwt, time, json
 from backend.app.db import get_db
 from backend.app.deps.auth import get_current_user, get_current_user_optional
-from backend.app.model import User
+from backend.app.model import User, Board, BoardShare
 from backend.app.schemas import board_schema as schemas
 from backend.app.crud import board_password_crud as pw_crud
 
@@ -55,39 +55,25 @@ def clear_password(
 
 
 # ✅ 비밀번호 검증 (게스트/사용자 공통; 비로그인 허용)
-@router.post("/{board_id}/verify-password", summary="비밀번호 검증")
-def verify_password(
-    board_id: int,
-    body: BoardPasswordVerify,
-    db: Session = Depends(get_db),
-):
-    ok = pw_crud.verify_board_password(db, board_id, body.password)
-    if not ok:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid password")
+@router.post("/{board_id}/verify-password")
+def verify_password(board_id: int, body: schemas.BoardPasswordVerify, response: Response, db: Session = Depends(get_db)):
+    board = db.query(Board).filter(Board.id == board_id).first()
+    if not board or board.password != body.password:
+        raise HTTPException(status_code=403, detail="비밀번호 불일치")
 
-    # ✅ 게스트 토큰 발급 (30분 유효)
-    exp = int(time.time()) + 30 * 60
     payload = {
-        "sub": "guest",
         "guest": True,
         "board_id": board_id,
-        "exp": exp,
-        "scope": "board:read"
+        "iat": int(time.time()),
+        "exp": int(time.time()) + 60 * 60 * 6,  # 6시간
     }
-    token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
-
-    resp_data = {"ok": True, "exp": exp}
-    response = Response(content=json.dumps(resp_data), media_type="application/json")
-
-    # ✅ HttpOnly 쿠키로 세팅 (프론트엔드에서 자동 저장됨)
+    token = jwt.encode(payload, GUEST_SECRET_KEY, algorithm=JWT_ALG)
     response.set_cookie(
         key="guest_token",
         value=token,
         httponly=True,
+        max_age=60 * 60 * 6,
+        secure=False,
         samesite="lax",
-        secure=False,  # 운영 환경에서는 True로
-        max_age=30 * 60,
-        path="/",
     )
-
-    return response
+    return {"message": "인증 성공", "guest_token": token}

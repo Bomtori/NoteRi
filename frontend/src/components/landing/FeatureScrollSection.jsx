@@ -88,7 +88,14 @@ export default function FeatureScrollSection() {
                     loop
                     muted
                     playsInline
-                    className="w-[75%] rounded-2xl object-cover shadow-lg"
+                    className="
+                        w-[90%]               /* ✅ 영상 너비 확장 (기존 75%) */
+                        max-w-[800px]         /* ✅ 최대 크기 제한 */
+                        aspect-[16/10]        /* ✅ 비율 유지 (더 와이드하게) */
+                        rounded-3xl           /* ✅ 부드러운 모서리 */
+                        object-cover
+                        shadow-[0_20px_60px_rgba(0,0,0,0.15)] /* ✅ 더 강한 그림자 */
+                        "
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.8 }}

@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session,joinedload 
 from datetime import datetime, UTC
 from sqlalchemy import desc, Enum
 from datetime import date
 from backend.app.deps.auth import get_current_user
+from backend.app.deps.guest import get_principal
 from backend.app.model import User, Subscription, Plan
 from backend.app.db import get_db
 from backend.app.schemas import user_schema
@@ -16,9 +17,13 @@ router = APIRouter()
 # ✅ 사용자 정보 조회 (GET)
 @router.get("/users/me", response_model=user_schema.UserResponse, summary="사용자 본인 정보 조회")
 async def get_user_me(
+    request: Request,                        # ✅ 순서 제일 위
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    print("📦 headers:", request.headers)
+    print("📦 cookies:", request.cookies)
+
     # 1) 최신 구독 1건(활성 여부로 미리 거르지 않음: 가장 최신 상태 판단이 중요)
     latest_sub: Subscription | None = (
         db.query(Subscription)

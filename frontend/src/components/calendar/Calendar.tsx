@@ -99,11 +99,11 @@ export default function Calendar() {
             // backgroundColor: `${color}55`,
             // borderColor: color,
             // textColor: "#111111",
-            eventBackgroundColor: color,   // ✅ FullCalendar 전용 키
-            eventBorderColor: color,       // ✅ 경계선 색
-            backgroundColor: color,        // ✅ fallback
+            eventBackgroundColor: color,   
+            eventBorderColor: color,       
+            backgroundColor: color,        
             borderColor: color,
-            textColor: "#111111",             // ✅ 대비 높이기
+            textColor: "#111111",             
             classNames: ["custom-event"],
             extendedProps: { ...ev.extendedProps, color },
         };
@@ -150,7 +150,7 @@ export default function Calendar() {
         events.forEach(ev => {
             const d = new Date(ev.start as string);
 
-            // ✅ '보이는 달' 범위 밖이면 스킵 (currentStart ≤ d < currentEnd)
+            // (currentStart ≤ d < currentEnd)
             if (d < monthStart || d >= monthEnd) return;
 
             const key = d.getDate().toString(); // 1~31

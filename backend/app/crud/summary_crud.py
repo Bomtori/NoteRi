@@ -43,7 +43,6 @@ def list_by_board(
     summary_type: Optional[str] = None,
     order: str = "desc",
 ) -> List[Summary]:
-    # RecordingSession.board_id로 조인해서 해당 보드의 모든 요약
     q = (
         db.query(Summary)
         .join(RecordingSession, RecordingSession.id == Summary.recording_session_id)

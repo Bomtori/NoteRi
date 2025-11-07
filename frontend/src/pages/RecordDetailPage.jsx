@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import apiClient from "../api/apiClient";
@@ -387,7 +387,7 @@ export default function RecordDetailPage() {
                         memo={memo}
                     />
 
-                    {/* 🔹 템플릿 모달 */}
+                    {/* 템플릿 모달 */}
                     <TemplateModal
                         isOpen={showTemplateModal}
                         onClose={() => setShowTemplateModal(false)}

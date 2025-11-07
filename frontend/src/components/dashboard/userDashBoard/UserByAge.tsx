@@ -24,7 +24,7 @@ const PALETTE: string[] = [
 export default function UserByAge({ seed = 42, mode = "static" }: Props) {
   const data = useMemo(() => {
     if (mode === "static") {
-      // ✅ 고정 목업 데이터
+      // 고정 목업 데이터
       return [
         { id: "10대", value: 120, color: PALETTE[0] },
         { id: "20대", value: 420, color: PALETTE[1] },
@@ -34,7 +34,7 @@ export default function UserByAge({ seed = 42, mode = "static" }: Props) {
       ];
     }
 
-    // ✅ 랜덤 목업 데이터 (시드 기반)
+    // 랜덤 목업 데이터 (시드 기반)
     let x = seed;
     const rand = () => {
       // 간단한 LCG

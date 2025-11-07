@@ -37,9 +37,8 @@ def get_current_user(
 
     return user
 
-# 기존 get_current_user 재사용 가정
 def get_current_user_optional() -> Optional[User]:
     try:
-        return get_current_user()  # 토큰 없거나 유효하지 않으면 예외 → except에서 None
+        return get_current_user() 
     except Exception:
         return None

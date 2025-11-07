@@ -20,7 +20,6 @@ def _get_board_owned(db: Session, board_id: int, owner_id: int) -> Optional[mode
     return board
 
 def _find_user_by_email(db: Session, email: str) -> Optional[model.User]:
-    # 이메일 소문자 normalize
     e = email.strip().lower()
     return db.query(model.User).filter(model.User.email.ilike(e)).first()
 
@@ -36,21 +35,13 @@ def list_shares(db: Session, board_id: int, owner_id: int) -> List[model.BoardSh
     )
 
 def add_or_update_share_by_email(db: Session, board_id: int, owner_id: int, email: str, role: str):
-    """
-    이메일로 보드 공유 생성 or 업데이트
-    - 예외 발생 시 rollback 보장
-    - 기존 공유 시 role 업데이트
-    - 새 공유 시 알림(Notification) 생성
-    """
     try:
-        # 1️⃣ 대상 사용자 찾기
         user = db.query(User).filter(User.email == email).first()
         if not user:
             raise LookupError("해당 이메일의 사용자가 존재하지 않습니다.")
         if user.id == owner_id:
             raise ValueError("자기 자신에게는 공유할 수 없습니다.")
-
-        # 2️⃣ 기존 공유가 있으면 역할만 변경
+        
         share = (
             db.query(BoardShare)
             .filter(BoardShare.board_id == board_id, BoardShare.user_id == user.id)
@@ -62,19 +53,16 @@ def add_or_update_share_by_email(db: Session, board_id: int, owner_id: int, emai
             db.commit()
             db.refresh(share)
         else:
-            # 3️⃣ 새 공유 추가
             share = BoardShare(board_id=board_id, user_id=user.id, role=role)
             db.add(share)
             db.commit()
             db.refresh(share)
 
-        # 4️⃣ 알림 등록 (선택)
         board = db.query(Board).filter(Board.id == board_id).first()
         owner = db.query(User).filter(User.id == owner_id).first()
         if board and owner:
             notif = Notification(
                 user_id=user.id,
-                # title="새로운 회의가 공유되었습니다",
                 content=f"{owner.name or '누군가'}님이 '{board.title}'을(를) 공유했습니다.",
                 created_at=datetime.now(UTC),
             )
@@ -82,8 +70,7 @@ def add_or_update_share_by_email(db: Session, board_id: int, owner_id: int, emai
             db.commit()
 
         return share
-
-    # ✅ 예외 처리 (rollback 포함)
+    
     except LookupError as e:
         db.rollback()
         raise HTTPException(status_code=404, detail=str(e))
@@ -151,11 +138,6 @@ def remove_share(db: Session, board_id: int, owner_id: int, target_user_id: int)
         raise
 
 def get_board_members(db: Session, board_id: int):
-    """
-    이 보드에 참여 중인 모든 사용자(owner + 공유자들)를 반환.
-    owner는 role='owner'로 붙여서 맨 앞에 넣어줌.
-    """
-    # 1) 보드와 owner 정보
     board = (
         db.query(model.Board)
         .options(joinedload(model.Board.owner))
@@ -165,7 +147,7 @@ def get_board_members(db: Session, board_id: int):
     if not board:
         return None
 
-    owner_user = board.owner  # relationship("User", backref="boards_owned") 가 있다고 가정
+    owner_user = board.owner
     members = []
 
     if owner_user:
@@ -175,10 +157,8 @@ def get_board_members(db: Session, board_id: int):
             "nickname": owner_user.nickname,
             "picture": owner_user.picture,
             "role": "owner",
-            "shared_at": board.created_at,  # owner는 생성 시점부터
+            "shared_at": board.created_at,
         })
-
-    # 2) 공유받은 사용자들 (board_shares)
     shares = (
         db.query(model.BoardShare)
         .join(model.User, model.BoardShare.user_id == model.User.id)

@@ -16,22 +16,29 @@ function MemoEditor({ boardId, memoId, saveStatus, setSaveStatus }) {
   const saveTimeout = useRef(null);
 
   const editor = useEditor({
-    extensions: [
-      StarterKit,
-      TaskList,
-      TaskItem,
-      Image.configure({
-        HTMLAttributes: { class: "rounded-lg max-w-full mx-auto my-2" },
-      }),
-      Placeholder.configure({
-        placeholder: "회의 메모를 작성하세요... (체크박스, 이미지, 목록 등 지원)",
-      }),
-    ],
+  extensions: [
+    StarterKit,
+
+    // TaskItem 먼저 등록 (nested 옵션 켜기)
+    TaskItem.configure({
+      nested: true,
+    }),
+
+    // 그 다음에 TaskList 등록
+    TaskList,
+
+    Image.configure({
+      HTMLAttributes: { class: "rounded-lg max-w-full mx-auto my-2" },
+    }),
+    Placeholder.configure({
+      placeholder:
+        "회의 메모를 작성하세요... (체크박스, 이미지, 목록 등 지원)",
+    }),
+  ],
     autofocus: true,
     onUpdate: ({ editor }) => setContent(editor.getHTML()),
   });
-
-  // ✅ 초기 메모 불러오기
+  // 초기 메모 불러오기
   useEffect(() => {
     if (!boardId || !memoId) return;
     (async () => {
@@ -49,7 +56,7 @@ function MemoEditor({ boardId, memoId, saveStatus, setSaveStatus }) {
     })();
   }, [boardId, memoId, editor]);
 
-  // ✅ 자동 저장
+  // 자동 저장
   useEffect(() => {
     if (!boardId || !memoId) return;
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
@@ -138,17 +145,17 @@ function MemoEditor({ boardId, memoId, saveStatus, setSaveStatus }) {
         <span className="text-xs text-gray-400">{saveStatus}</span>
       </div>
 
-      <div className="flex-1 overflow-y-auto rounded-xl bg-white p-4 prose max-w-none">
+      <div className="flex-1 overflow-y-auto rounded-xl bg-white p-4 max-w-none tiptap-editor">
         <EditorContent
           editor={editor}
-          className="focus:outline-none [&_*]:outline-none"
+          className="tiptap focus:outline-none [&_*]:outline-none"
         />
       </div>
     </div>
   );
 }
 
-// 🧠 RightPanel (메모 + GPT)
+// RightPanel (메모 + GPT)
 export default function RightPanel({ boardId, memoId, tabs = ["memo", "gpt"], onClose, }) {
   const [activeTab, setActiveTab] = useState(tabs[0]);
   const [saveStatus, setSaveStatus] = useState("");
@@ -157,7 +164,7 @@ export default function RightPanel({ boardId, memoId, tabs = ["memo", "gpt"], on
   const [messages, setMessages] = useState([]);
   const chatContainerRef = useRef(null);
 
-  // 💡 추천 질문 리스트
+  // 추천 질문 리스트
   const quickQuestions = [
     "이 용어 뜻이 뭐야?",
     "이 기술이 어떤 역할을 해?",

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from backend.app.db import get_db
 from backend.app.model import User, NotionAuth
 from backend.app.deps.auth import get_current_user
-import backend.app.crud.notion_crud as crud  # save_user_notion_token, get_user_notion_token
+import backend.app.crud.notion_crud as crud
 import logging
 
 logger = logging.getLogger("uvicorn")
@@ -16,7 +16,7 @@ logger = logging.getLogger("uvicorn")
 router = APIRouter(prefix="/notion", tags=["Notion OAuth"])
 
 CLIENT_ID = os.getenv("NOTION_CLIENT_ID")
-REDIRECT_URI = os.getenv("NOTION_REDIRECT_URI")  # e.g. http://127.0.0.1:8001/notion/callback
+REDIRECT_URI = os.getenv("NOTION_REDIRECT_URI")
 CLIENT_SECRET = os.getenv("NOTION_CLIENT_SECRET")
 NOTION_VERSION = os.getenv("NOTION_VERSION", "2022-06-28")
 
@@ -27,25 +27,20 @@ def notion_headers(token: str):
         "Content-Type": "application/json",
         "Notion-Version": NOTION_VERSION,
     }
+
+# 노션 상태 가져오기
 @router.get("/status", summary="노션 상태 가져오기")
 def notion_status(auth: Optional[NotionAuth] = Depends(crud.get_user_notion_auth)):
-    """
-    현재 로그인 사용자의 노션 연동 상태 조회
-    - Authorization: Bearer <access_jwt> 필요
-    """
     return {
         "connected": bool(auth),
         "workspace_id": getattr(auth, "workspace_id", None),
         "workspace_name": getattr(auth, "workspace_name", None),
     }
 
-
+# 노션 동의화면 리다이렉트
 @router.get("/login", summary="노션 로그인")
 def notion_login(current_user: User = Depends(get_current_user)):
-    """
-    사용자를 Notion OAuth 동의화면으로 리다이렉트.
-    state에 user_id와 랜덤 시드를 포함. (실서비스에선 state 검증을 반드시 구현)
-    """
+
     state = f"{current_user.id}:{secrets.token_urlsafe(16)}"
     params = {
         "client_id": CLIENT_ID,
@@ -55,7 +50,6 @@ def notion_login(current_user: User = Depends(get_current_user)):
         "state": state,
     }
     url = "https://api.notion.com/v1/oauth/authorize?" + urllib.parse.urlencode(params)
-     # ✅ 로그로 전체 URL 찍기
     logger.info(f"✅ Notion 로그인 시도 by user {current_user.id}")
     logger.info(f"➡️ 리다이렉트 URL: {url}")
     logger.info(f"CLIENT_ID={CLIENT_ID}, REDIRECT_URI={REDIRECT_URI}")
@@ -63,10 +57,6 @@ def notion_login(current_user: User = Depends(get_current_user)):
 
 @router.get("/callback", include_in_schema=False, summary="노션 콜백")
 def notion_callback(code: str, state: str, db: Session = Depends(get_db)):
-    """
-    Notion OAuth 콜백. code 교환 → 토큰 저장
-    """
-    # 1) state 검증 (실서비스 필수)
     try:
         user_id_str, _ = state.split(":", 1)
         user_id = int(user_id_str)
@@ -96,17 +86,7 @@ def notion_callback(code: str, state: str, db: Session = Depends(get_db)):
     redirect_to = f"{frontend_url}/user?notion=connected"
     return RedirectResponse(url=redirect_to, status_code=302)
 
-@router.get("/status")
-def notion_status(auth: Optional[NotionAuth] = Depends(crud.get_user_notion_auth)):
-    """
-    현재 로그인 사용자의 노션 연동 상태 조회
-    - Authorization: Bearer <access_jwt> 필요
-    """
-    return {
-        "connected": bool(auth),
-        "workspace_id": getattr(auth, "workspace_id", None),
-        "workspace_name": getattr(auth, "workspace_name", None),
-    }
+
 
 @router.post("/upload")
 def upload_to_notion(
@@ -133,7 +113,7 @@ def upload_to_notion(
     title_prop = next(
         (key for key, val in db_data.get("properties", {}).items()
          if val.get("type") == "title"),
-        "Name"  # fallback
+        "Name" 
     )
     logger.info(f"✅ 감지된 Notion 타이틀 속성명: {title_prop}")
 
@@ -184,7 +164,7 @@ def list_notion_databases(
         raise HTTPException(status_code=400, detail="Notion 계정이 연결되지 않았습니다.")
 
     try:
-        # ✅ 데이터베이스만 검색
+        # 데이터베이스만 검색
         r = requests.post(
             "https://api.notion.com/v1/search",
             headers=notion_headers(token),
@@ -204,7 +184,7 @@ def list_notion_databases(
         for d in data.get("results", []):
             if d["object"] != "database":
                 continue
-            # ✅ title 안전하게 파싱
+            # title 안전하게 파싱
             title = (
                 d.get("title", [{}])[0].get("plain_text", "제목 없음")
                 if d.get("title")
@@ -222,26 +202,18 @@ def list_notion_databases(
         logger.error(f"❌ Notion API 요청 실패: {e}")
         raise HTTPException(status_code=500, detail=f"Notion API 요청 실패: {e}")
 
+# 노션 연동 해제
 @router.delete("/disconnect", status_code=status.HTTP_204_NO_CONTENT, summary="노션 연동 해제")
 def disconnect_notion(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    노션 연동 해제:
-    - 로컬 DB에서 해당 사용자의 NotionAuth 레코드를 삭제(또는 access_token을 무효화)
-    - Notion API에 별도의 토큰 revoke 엔드포인트는 없으므로(공식 제공 없음),
-      사용자가 Notion > Settings & members > Connections에서 수동 해제할 수 있게 안내 권장.
-    """
     auth: Optional[NotionAuth] = (
         db.query(NotionAuth).filter(NotionAuth.user_id == current_user.id).first()
     )
 
     if not auth:
-        # 이미 해제된 상태
         return
-
-    # 필요 시 완전 삭제 대신 토큰만 무효화(빈 문자열)로 남기는 방식도 가능
     db.delete(auth)
     db.commit()
     return

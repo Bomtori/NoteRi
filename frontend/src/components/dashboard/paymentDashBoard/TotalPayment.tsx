@@ -12,7 +12,6 @@ const API_BASE_URL =
   (import.meta as any).env?.API_BASE_URL ??
   "http://127.0.0.1:8000";
 
-// ✅ 부드러운 카운트업 훅
 function useCountUp(target: number, duration = 900) {
   const [val, setVal] = useState(0);
   useEffect(() => {

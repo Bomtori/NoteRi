@@ -75,10 +75,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
         )
         assert_login_allowed(db_user, db)
     except OAuthProviderConflict as e:
-        # 이미 다른 provider로 가입된 이메일 → 프론트에서 전용 안내
-        # detail 안에 registered_provider를 넣어두었으니 꺼내서 전달
         registered = getattr(e, "detail", {}).get("registered_provider", "")
-        # 프론트에서 이 정보를 이용해 "○○로 로그인" 버튼 제공
         return RedirectResponse(
             f"{FRONTEND_URL}/auth/callback"
             f"?error=provider_conflict&registered_provider={registered}"
@@ -109,28 +106,25 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
     access_token = create_access_token({"sub": str(db_user.id), "email": db_user.email})
     refresh_token = create_refresh_token({"sub": str(db_user.id), "email": db_user.email})
 
-    # ✅ access_token을 URL 쿼리에 포함하여 전달
     redirect_to = f"{FRONTEND_URL}/auth/callback?access_token={quote(access_token)}"
     resp = RedirectResponse(url=redirect_to, status_code=status.HTTP_302_FOUND)
-    
-    # ✅ access_token도 쿠키로 설정 (프론트엔드가 자동으로 사용 가능)
+
     resp.set_cookie(
         key="access_token",
         value=access_token,
-        httponly=False,  # JavaScript에서 접근 가능하도록 설정
-        secure=False,    # 로컬 HTTP는 False, 운영 HTTPS에서는 True
+        httponly=False, 
+        secure=False,  
         samesite="lax",
         domain=None,
         max_age=ACCESS_TOKEN_MAX_AGE,
         path="/",
     )
     
-    # ✅ refresh_token 쿠키 설정
     resp.set_cookie(
         key="refresh_token",
         value=refresh_token,
-        httponly=True,   # XSS 공격 방지
-        secure=False,    # 로컬 HTTP는 False, 운영 HTTPS에서는 True
+        httponly=True, 
+        secure=False, 
         samesite="lax",
         domain=None,
         max_age=REFRESH_MAX_AGE,

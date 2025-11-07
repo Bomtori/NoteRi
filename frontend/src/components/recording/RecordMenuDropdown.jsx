@@ -33,7 +33,7 @@ export default function RecordMenuDropdown({ onClose, onDelete, onRename }) {
                 onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
-                        onRename(e);  // ✅ e 전달
+                        onRename(e); 
                         onClose();
                     }}
                 className="block w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
@@ -44,7 +44,7 @@ export default function RecordMenuDropdown({ onClose, onDelete, onRename }) {
                 onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
-                        onDelete(e);  // ✅ e 전달
+                        onDelete(e);
                         onClose();
                     }}
                 className="block w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-gray-50"

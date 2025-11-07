@@ -8,7 +8,7 @@ ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 router = APIRouter()
 BASE_URL = os.getenv("APP_BASE_URL", "http://127.0.0.1:8000")
 
-@router.post("/upload", summary="프로필 사진 업로드") # 사진 업로드
+@router.post("/upload", summary="프로필 사진 업로드") 
 async def upload_picture(file: UploadFile = File(...)):
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
@@ -20,10 +20,9 @@ async def upload_picture(file: UploadFile = File(...)):
     with open(file_path, "wb") as f:
         f.write(await file.read())
 
-    # DB에는 상대경로만 저장
     relative_path = f"/static/uploads/{new_filename}"
 
     return {
-        "url": f"{BASE_URL}{relative_path}",  # API 응답에는 절대경로
-        "path": relative_path                 # DB 저장용
+        "url": f"{BASE_URL}{relative_path}",  
+        "path": relative_path                 
     }

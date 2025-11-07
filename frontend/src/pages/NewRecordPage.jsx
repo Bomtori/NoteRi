@@ -104,7 +104,7 @@ export default function NewRecordPage() {
                     ...prev,
                     {
                         id: Date.now(),
-                        bullets: bullets,
+                        summary: bullets.join("\n"),
                     },
                 ]);
                 setLiveLines([]);

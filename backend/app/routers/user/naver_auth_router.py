@@ -17,7 +17,6 @@ from backend.app.util.errors import OAuthProviderConflict
 
 router = APIRouter(prefix="/auth/naver", tags=["NaverAuth"])
 
-# 프론트 진입점 (Vite 5173, /test 프리픽스)
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 NAVER_CLIENT_ID = os.getenv("NAVER_CLIENT_ID")
 NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET")
@@ -34,7 +33,7 @@ oauth.register(
     authorize_url="https://nid.naver.com/oauth2.0/authorize",
     access_token_url="https://nid.naver.com/oauth2.0/token",
     api_base_url="https://openapi.naver.com/v1/nid/",
-    client_kwargs={"scope": "profile"},  # email 포함하려면 'profile'로 충분 (응답에서 제공)
+    client_kwargs={"scope": "profile"},
 )
 
 @router.get("/login", summary="네이버 로그인")
@@ -60,10 +59,7 @@ async def naver_callback(request: Request, db: Session = Depends(get_db)):
     provider = "naver"
     naver_id = str(user_info.get("id") or "")
     email = user_info.get("email")
-    # 정책상 이메일이 없을 수도 있으므로 서비스 정책에 맞춰 처리
     if not email and naver_id:
-        # ① (정책 A) 가짜 이메일 생성: email = f"{naver_id}@naver.local"
-        # ② (정책 B) 프론트로 missing_email 리다이렉트 → 여기선 B로 통일
         return RedirectResponse(
             f"{FRONTEND_URL}/auth/callback?error=missing_email&provider={provider}",
             status_code=302,
@@ -103,7 +99,7 @@ async def naver_callback(request: Request, db: Session = Depends(get_db)):
             )
     except Exception as e:
         traceback.print_exc()
-        print("🔥 NAVER OAUTH ERROR:", e)
+        print("NAVER OAUTH ERROR:", e)
         return RedirectResponse(f"{FRONTEND_URL}/auth/callback?error=internal_error", status_code=302)
 
 
@@ -118,28 +114,28 @@ async def naver_callback(request: Request, db: Session = Depends(get_db)):
     access_token = create_access_token({"sub": str(db_user.id), "email": db_user.email})
     refresh_token = create_refresh_token({"sub": str(db_user.id), "email": db_user.email})
 
-    # ✅ access_token을 URL 쿼리에 포함하여 전달
+    # access_token을 URL 쿼리에 포함하여 전달
     redirect_to = f"{FRONTEND_URL}/auth/callback?access_token={quote(access_token)}"
     resp = RedirectResponse(url=redirect_to, status_code=status.HTTP_302_FOUND)
     
-    # ✅ access_token도 쿠키로 설정 (프론트엔드가 자동으로 사용 가능)
+    # access_token도 쿠키로 설정 (프론트엔드가 자동으로 사용 가능)
     resp.set_cookie(
         key="access_token",
         value=access_token,
-        httponly=False,  # JavaScript에서 접근 가능하도록 설정
-        secure=False,    # 로컬 HTTP는 False, 운영 HTTPS에서는 True
+        httponly=False,
+        secure=False,    
         samesite="lax",
         domain=None,
         max_age=ACCESS_TOKEN_MAX_AGE,
         path="/",
     )
     
-    # ✅ refresh_token 쿠키 설정
+    # refresh_token 쿠키 설정
     resp.set_cookie(
         key="refresh_token",
         value=refresh_token,
-        httponly=True,   # XSS 공격 방지
-        secure=False,    # 로컬 HTTP는 False, 운영 HTTPS에서는 True
+        httponly=True, 
+        secure=False, 
         samesite="lax",
         domain=None,
         max_age=REFRESH_MAX_AGE,

@@ -12,9 +12,7 @@ import os
 
 router = APIRouter()
 
-# 📌 Pydantic 모델 정의
-
-# ✅ 사용자 정보 조회 (GET)
+# 사용자 정보 조회 (GET)
 @router.get("/users/me", response_model=user_schema.UserResponse, summary="사용자 본인 정보 조회")
 async def get_user_me(
     request: Request,                        # ✅ 순서 제일 위
@@ -44,7 +42,7 @@ async def get_user_me(
         if not expired and not inactive and latest_sub.plan:
             # Plan.name 이 Enum일 수도 있으니 안전하게 문자열로
             raw_name = latest_sub.plan.name
-            if isinstance(raw_name, Enum):  # e.g. PlanType.PRO
+            if isinstance(raw_name, Enum):
                 effective_plan_name = raw_name.value.lower()
             else:
                 effective_plan_name = str(raw_name).lower()
@@ -60,12 +58,11 @@ async def get_user_me(
         "role": current_user.role,
         "created_at": current_user.created_at,
         "updated_at": current_user.updated_at,
-        # ✅ 만료/비활성 시 자동으로 "free"
         "plan_name": effective_plan_name,
     }
 
 
-# ✅ 사용자 정보 수정 (PATCH)
+# 사용자 정보 수정
 @router.patch("/users/me", summary="사용자 정보 수정")
 async def update_user(
     data: user_schema.UserUpdate,
@@ -90,7 +87,7 @@ async def update_user(
         "picture": current_user.picture
     }
 
-# ✅ 사용자 탈퇴 (soft delete)
+# 사용자 탈퇴 (soft delete)
 @router.delete("/users/me", summary="사용자 탈퇴")
 async def delete_user(
     db: Session = Depends(get_db),

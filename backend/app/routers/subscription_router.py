@@ -14,7 +14,7 @@ from backend.app.schemas.subscription_schema import (
     PlanUserCount,
 )
 from backend.app.crud.subscription_crud import get_subscription_count_by_plan
-from backend.app.deps.auth import get_current_user  # 이미 쓰고 있던 의존성이라 유지
+from backend.app.deps.auth import get_current_user 
 
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
 
@@ -55,7 +55,7 @@ def get_my_subscription(
     today = datetime.now(timezone.utc).date()
     now_dt = datetime.now(timezone.utc)
 
-    print(f"✅ current_user.id={current_user.id}, today={today}")
+    print(f"current_user.id={current_user.id}, today={today}")
 
     sub = (
         db.query(Subscription)
@@ -68,26 +68,23 @@ def get_my_subscription(
     def is_active(s) -> bool:
         if not s or not s.start_date:
             return False
-        # end_date가 None이면 무기한으로 간주
         if s.end_date is None:
             return s.start_date <= today
         return s.start_date <= today < s.end_date
 
     if sub and is_active(sub):
         plan_name = sub.plan.name if getattr(sub, "plan", None) else "unknown"
-        print(f"🎯 활성 구독 ID={sub.id}, plan={plan_name}")
         return {
             "id": sub.id,
             "user_id": sub.user_id,
             "plan_id": sub.plan_id,
             "plan_name": plan_name,
-            "start_date": sub.start_date,           # required
-            "end_date": sub.end_date,               # optional
-            "updated_at": sub.updated_at,           # optional
+            "start_date": sub.start_date,           
+            "end_date": sub.end_date,               
+            "updated_at": sub.updated_at,           
             "is_active": True,
         }
 
-    # 🔁 free 폴백 (응답 스키마 맞추기: start_date는 필수이므로 today로 설정)
     free_plan = (
         db.query(Plan)
           .filter(Plan.name.ilike("free"))
@@ -99,13 +96,13 @@ def get_my_subscription(
     print("⚠️ 유효한 구독 없음 → free 플랜 폴백 (start_date=today 로 채움)")
 
     return {
-        "id": 0,                         # 가상 ID
+        "id": 0,                        
         "user_id": current_user.id,
-        "plan_id": plan_id,              # Optional[int]
-        "plan_name": plan_name,          # str
-        "start_date": today,             # ✅ 필수 필드: None 금지
-        "end_date": None,                # Optional[date]
-        "updated_at": now_dt,            # Optional[datetime]
+        "plan_id": plan_id,              
+        "plan_name": plan_name,         
+        "start_date": today,             
+        "end_date": None,                
+        "updated_at": now_dt,            
         "is_active": False,
     }
 
@@ -140,8 +137,6 @@ def update_my_subscription(
     if update.is_active is not None:
         sub.is_active = update.is_active
 
-    # updated_at 수동 보정 (모델에 onupdate 없을 때)
-    # func.now() 할당은 일부 DB에서 기대대로 동작하지 않을 수 있으니, 애플리케이션 시간으로 갱신
     sub.updated_at = datetime.utcnow()
 
     db.commit()
@@ -157,7 +152,7 @@ def update_my_subscription(
         is_active=sub.is_active,
     )
 
-# 내 구독 취소 (is_active=False 만 처리, end_date는 유지)
+# 내 구독 취소
 @router.patch("/me/cancel", response_model=SubscriptionResponse, summary="구독 취소")
 def cancel_my_subscription(
     db: Session = Depends(get_db),
@@ -190,7 +185,7 @@ def cancel_my_subscription(
         is_active=sub.is_active,
     )
 
-# 플랜별 유저 수 집계 (프론트: PricingBreakdownCard 등에서 사용)
+# 플랜별 유저 수 집계 
 @router.get("/count/plan", response_model=List[PlanUserCount], summary="플랜별 유저 수 집계")
 def get_plan_user_counts(
     db: Session = Depends(get_db),

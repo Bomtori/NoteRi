@@ -14,7 +14,7 @@ export default function StatCard({
   highlight,
   caption,
   className,
-  actions,              // 제목 아래 버튼 영역
+  actions,            
   hideTrend = false,
   center = false,
 }: {
@@ -57,7 +57,7 @@ export default function StatCard({
        <CardContent
         className={cn(
           "flex flex-col h-full",
-          center && "items-center justify-center text-center py-8" // ✅ 가운데 정렬
+          center && "items-center justify-center text-center py-8" 
         )}
       >
         {/* 3) 값 — 한 줄 고정 */}

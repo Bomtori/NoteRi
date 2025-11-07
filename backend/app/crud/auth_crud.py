@@ -28,7 +28,7 @@ def assert_login_allowed(db_user: User, db: Session | None = None) -> None:
             db.commit()
         return
 
-    # 영구밴 또는 아직 유효한 밴이면 차단 (상세정보 포함)
+    # 영구밴 또는 아직 유효한 밴이면 차단
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail={
@@ -42,11 +42,9 @@ def _ensure_free_plan(db: Session) -> Plan:
     free = db.query(Plan).filter(Plan.name == PlanType.free.value).first()
     if free:
         return free
-    # 새 프로젝트라면 최소 스켈레톤만 생성(기간/할당량은 관리자가 Plan에서 관리)
     free = Plan(
         name=PlanType.free.value,
         price=0,
-        # duration_days / 할당량은 Plan 테이블 스키마에 맞게 관리자 화면에서 설정
         description="기본 무료 플랜",
         created_at=datetime.now(UTC),
     )
@@ -56,10 +54,6 @@ def _ensure_free_plan(db: Session) -> Plan:
     return free
 
 def _plan_alloc_seconds(plan: Plan) -> int | None:
-    """
-    Plan에 allocated_seconds 또는 allocated_minutes 둘 중 무엇이든 존재하면 읽어
-    초 단위로 반환. 값이 없거나 0이면 무제한(None)으로 간주.
-    """
     secs = None
     if hasattr(plan, "allocated_seconds") and plan.allocated_seconds is not None:
         secs = int(plan.allocated_seconds)
@@ -71,9 +65,6 @@ def _plan_alloc_seconds(plan: Plan) -> int | None:
     return secs
 
 def _subscription_end_by_plan(plan: Plan, start: date) -> date | None:
-    """
-    Plan.duration_days가 있으면 종료일 계산, 없으면 None(무기한/관리자 정책).
-    """
     dur = getattr(plan, "duration_days", None)
     if dur is None or int(dur) <= 0:
         return None
@@ -81,7 +72,6 @@ def _subscription_end_by_plan(plan: Plan, start: date) -> date | None:
 
 
 def _create_default_shared_folder(db: Session, user_id: int) -> None:
-    """신규 가입자 전용: '공유받은 회의' 폴더가 없으면 만든다."""
     exists = (
         db.query(Folder)
         .filter(Folder.user_id == user_id, Folder.name == "공유받은 회의")

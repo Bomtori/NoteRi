@@ -36,7 +36,6 @@ def admin_user_overview(
         raise HTTPException(status_code=404, detail="User not found")
     return res
 
-# (선택) 결제만 별도로 불러오는 엔드포인트도 제공하면 프론트에서 무한스크롤/추가 로딩이 편함
 from typing import List
 from backend.app.schemas.admin_user_overview_schema import AdminUserPayment
 
@@ -47,6 +46,5 @@ def admin_user_payments(
     db: Session = Depends(get_db),
     _: None = Depends(require_admin),
 ):
-    # 내부 CRUD 재사용
     payments = admin_user_overview_crud._fetch_user_payments(db, user_id, limit=limit)  # pylint: disable=protected-access
     return payments

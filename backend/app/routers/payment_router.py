@@ -46,7 +46,7 @@ SUCCESS_URL = os.getenv("PAYMENT_SUCCESS_URL")
 FAIL_URL = os.getenv("PAYMENT_FAIL_URL")
 
 
-# ✅ 요청용 Pydantic 모델
+# 요청용 Pydantic 모델
 class PaymentRequest(BaseModel):
     plan_name: str  # 예: "pro", "enterprise"
 
@@ -63,17 +63,13 @@ class SortBy:
     CREATED_AT = "created_at"
 
 def _parse_statuses(status: Optional[str]) -> Optional[List[str]]:
-    """
-    status=SUCCESS or 'SUCCESS,FAIL' 처럼 들어온 값을 ['SUCCESS','FAIL']로 변환.
-    None이면 필터 미적용.
-    """
     if not status:
         return None
     # 공백 제거 + 빈 문자열 필터링
     arr = [s.strip() for s in status.split(",") if s.strip()]
     return arr or None
 
-# ✅ 1️⃣ 결제 요청 API (프론트 → 토스 결제창으로 이동하기 전에 호출)
+# 결제 요청 API (프론트 → 토스 결제창으로 이동하기 전에 호출)
 @router.post("/request", summary="결제 요청")
 def request_payment(
     req: PaymentRequest,
@@ -98,14 +94,14 @@ def request_payment(
 
 
 
-# ✅ 2️⃣ 결제 승인 API (토스 결제 완료 후 호출)
+# 결제 승인 API (토스 결제 완료 후 호출)
 @router.post("/confirm", summary="결제 승인")
 async def confirm_payment(
     req: PaymentConfirmRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # ✅ ② 멱등성 체크를 맨 앞으로 이동
+    # ② 멱등성 체크를 맨 앞으로 이동
     already = (
         db.query(Payment)
         .filter(Payment.order_id == req.orderId, Payment.status.in_(["SUCCESS", "DONE"]))
@@ -154,7 +150,7 @@ async def confirm_payment(
 
     payment_result = resp.json()
 
-    # ③ 플랜 조회 - ✅ 강력한 정규화
+    # ③ 플랜 조회 
     # "PlanType.PRO" → "pro", "BASIC" → "basic", "Pro" → "pro"
     plan_name_input = req.plan_name
     if "PlanType." in plan_name_input:
@@ -163,7 +159,7 @@ async def confirm_payment(
     
     print(f"🔍 플랜 조회 시도: 입력='{req.plan_name}' → 정규화='{plan_name_normalized}'")
     
-    # ✅ Plan 테이블에서 대소문자 무시하고 조회
+    # Plan 테이블에서 대소문자 무시하고 조회
     plan = (
         db.query(Plan)
         .filter(func.lower(Plan.name) == plan_name_normalized)
@@ -171,7 +167,7 @@ async def confirm_payment(
     )
     
     if not plan:
-        # ✅ 디버깅: DB에 있는 모든 플랜 이름 출력
+        # 디버깅: DB에 있는 모든 플랜 이름 출력
         all_plans = db.query(Plan.name).all()
         print(f"❌ 플랜을 찾을 수 없음. DB의 플랜 목록: {[p.name for p in all_plans]}")
         raise HTTPException(
@@ -201,7 +197,7 @@ async def confirm_payment(
         if customer_key:
             sub.customer_key = customer_key
         sub.next_renew_on = new_end
-        print(f"✅ 구독 업데이트: user_id={current_user.id}, plan_id {old_plan_id} → {plan.id}")
+        print(f"구독 업데이트: user_id={current_user.id}, plan_id {old_plan_id} → {plan.id}")
     else:
         sub = Subscription(
             user_id=current_user.id,
@@ -215,7 +211,7 @@ async def confirm_payment(
             next_renew_on=new_end,
         )
         db.add(sub)
-        print(f"✅ 구독 생성: user_id={current_user.id}, plan_id={plan.id}")
+        print(f"구독 생성: user_id={current_user.id}, plan_id={plan.id}")
 
     db.commit()
     db.refresh(sub)
@@ -240,16 +236,16 @@ async def confirm_payment(
     db.commit()
     db.refresh(new_payment)
 
-    # ✅ ⑦ Plan 이름 안전하게 추출
+    # ⑦ Plan 이름 안전하게 추출
     raw_name = plan.name
     if isinstance(raw_name, Enum):
         effective_plan_name = raw_name.value.lower()
     else:
         effective_plan_name = str(raw_name).lower()
 
-    print(f"✅ 결제 완료: subscription_id={sub.id}, plan_name={effective_plan_name}")
+    print(f"결제 완료: subscription_id={sub.id}, plan_name={effective_plan_name}")
 
-    # ✅ ⑧ 응답
+    # ⑧ 응답
     return {
         "message": "Payment successful",
         "subscription": {
@@ -338,10 +334,6 @@ def list_my_payments_simple(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    로그인한 사용자의 모든 결제 내역을 단순 리스트로 반환.
-    (정렬: 최신 결제 순)
-    """
     payments = (
         db.query(Payment)
         .join(Subscription, Subscription.id == Payment.subscription_id, isouter=True)
@@ -351,7 +343,6 @@ def list_my_payments_simple(
         .all()
     )
 
-    # plan_name을 Payment 객체에 주입 (조인 라벨 대신)
     for p in payments:
         p.plan_name = p.subscription.plan.name if p.subscription and p.subscription.plan else None
 

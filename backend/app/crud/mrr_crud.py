@@ -28,20 +28,12 @@ def _to_float(x) -> float:
     return float(x)
 
 def _price_to_mrr(price: Decimal, duration_days: int) -> float:
-    """
-    price가 '월 가격'이면 그대로 쓰고,
-    기간이 다른 요금제가 섞일 수 있으면 30일 기준 월환산.
-    """
     p = _to_float(price)
     if not duration_days or duration_days == 30:
         return p
     return p * (30.0 / float(duration_days))
 
 def _active_subs_at(db: Session, month_end: date):
-    """
-    월말 기준 활성 구독 + 플랜 가격 조회.
-    활성 조건: start_date ≤ month_end, (end_date is NULL or end_date > month_end), is_active=True
-    """
     return (
         db.query(
             Subscription.user_id.label("user_id"),
@@ -65,14 +57,10 @@ def _mrr_by_user_at(db: Session, month_end: date) -> Dict[int, float]:
     return agg
 
 def get_mrr_breakdown_monthly(db: Session, start_month: date, months: int = 6) -> Dict[str, Any]:
-    """
-    월별 MRR 분해: 신규(new), 확장(expansion), 축소(contraction), 해지(churn) 및
-    net_new/ending_mrr를 계산해 series로 반환.
-    """
+
     months_list = _month_seq(start_month, months)
     series: List[Dict[str, Any]] = []
 
-    # 첫 달 계산을 위해 전월 말 스냅샷이 필요
     prev_month_end = _eom(_add_months(months_list[0], -1))
     prev_by_user = _mrr_by_user_at(db, prev_month_end)
     prev_total = sum(prev_by_user.values())
@@ -80,7 +68,6 @@ def get_mrr_breakdown_monthly(db: Session, start_month: date, months: int = 6) -
     for m0 in months_list:
         month_end = _eom(m0)
         cur_by_user = _mrr_by_user_at(db, month_end)
-        # 분해
         new = expansion = contraction = churn = 0.0
         all_uids = set(prev_by_user.keys()) | set(cur_by_user.keys())
         for uid in all_uids:
@@ -109,8 +96,6 @@ def get_mrr_breakdown_monthly(db: Session, start_month: date, months: int = 6) -
             "net_new": round(net_new, 2),
             "ending_mrr": round(ending, 2),
         })
-
-        # 다음 월 대비 이전 값 갱신
         prev_by_user = cur_by_user
         prev_total = sum(cur_by_user.values())
 

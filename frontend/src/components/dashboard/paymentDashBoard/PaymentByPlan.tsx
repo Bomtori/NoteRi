@@ -9,7 +9,7 @@ type PlanDatum = { id: string; value: number; color?: string };
 
 type ApiItem = {
   plan_id: number;
-  plan_name: string;       // ✅ 백엔드에서 바로 내려옴
+  plan_name: string;    
   total_amount: number;
 };
 type ApiResponse = { items: ApiItem[] } | null;
@@ -21,7 +21,7 @@ type LegacyRevenue =
 
 const COLORS: Record<string, string> = {
   free: "#94a3b8",
-  pro: "#F59E0B",
+  pro: "#ac6dffff",
   enterprise: "#10B981",
   starter: "#6366f1",
 };

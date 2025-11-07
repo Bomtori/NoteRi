@@ -32,12 +32,12 @@ export default function SideNav() {
     const [tempName, setTempName] = useState("");
     const [user, setUser] = useState(null);
 
-    // ✅ 폴더 목록 불러오기
+    // 폴더 목록 불러오기
     useEffect(() => {
         dispatch(fetchFolders());
     }, [dispatch]);
 
-    // ✅ 로그인된 유저 정보
+    // 로그인된 유저 정보
     useEffect(() => {
         async function fetchUser() {
             try {
@@ -53,7 +53,7 @@ export default function SideNav() {
         fetchUser();
     }, []);
 
-    // ✅ 새 폴더 추가
+    // 새 폴더 추가
     const handleAddFolder = async () => {
         const trimmed = newFolder.trim();
         if (!trimmed) {
@@ -77,7 +77,7 @@ export default function SideNav() {
         }
     };
 
-    // ✅ 폴더 이름 변경
+    // 폴더 이름 변경
     const handleRename = async (id) => {
         const trimmed = tempName.trim();
         if (!trimmed) {
@@ -103,7 +103,7 @@ export default function SideNav() {
         }
     };
 
-    // ✅ 폴더 삭제
+    // 폴더 삭제
     const handleDelete = async (id) => {
         const folder = folders.find((f) => f.id === id);
         if (!folder) return;
@@ -121,21 +121,18 @@ export default function SideNav() {
     return (
         <aside className="w-64 bg-white border-r border-gray-200 flex flex-col justify-between">
             <div>
-                {/* ✅ 로고 */}
+                {/* 로고 */}
                 <div className="p-5 border-b border-gray-200 flex items-center justify-start">
                     <Link to="/" className="flex items-center gap-2 group">
                         <img
-                            src="/assets/NoteRi-Logo.svg"
+                            src="/assets/NoteRi-Logo.png"
                             alt="NoteRi Logo"
                             className="w-7 h-7 object-contain group-hover:scale-110 transition-transform duration-300"
                         />
-                        <span className="text-lg font-bold text-[#7E37F9] group-hover:text-[#682be0] transition-colors">
-              NoteR<span className="text-black">i</span>
-            </span>
                     </Link>
                 </div>
 
-                {/* ✅ 녹음 관련 버튼 */}
+                {/* 녹음 관련 버튼 */}
                 <div className="px-5 py-4 border-b border-gray-200 flex flex-col gap-2">
                     <Link
                         to="/record"
@@ -151,7 +148,7 @@ export default function SideNav() {
                     </Link>
                 </div>
 
-                {/* ✅ 폴더 목록 */}
+                {/* 폴더 목록 */}
                 <div className="p-5 border-b border-gray-200 flex justify-between items-center">
                     <h2 className="text-lg font-semibold text-gray-800">폴더</h2>
                     {!isAdding ? (
@@ -218,7 +215,7 @@ export default function SideNav() {
                                         to={`/folder/${folder.id}`}
                                         className="flex items-center gap-2 text-sm text-gray-800 truncate hover:text-[#7E37F9]"
                                     >
-                                        {/* ✅ color 기반 아이콘 */}
+                                        {/* color 기반 아이콘 */}
                                         {colorToIcon[folder.color] || (
                                             <Folder className="w-4 h-4 text-gray-400" />
                                         )}
@@ -250,7 +247,7 @@ export default function SideNav() {
 
             </div>
 
-            {/* ✅ 하단 유저 정보 */}
+            {/* 하단 유저 정보 */}
             <div className="p-4 border-t border-gray-200">
                 <Link
                     to={user ? "/user" : "/login"}

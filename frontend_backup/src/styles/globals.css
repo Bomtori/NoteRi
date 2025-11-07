@@ -29,11 +29,8 @@
     }
 }
 
-/* ==========================
-   💫 커스텀 애니메이션 정의
-   ========================== */
 
-/* 1️⃣ 콘텐츠 등장 (ex: 카드 hover 시) */
+/* 콘텐츠 카드 hover */
 @keyframes fadeInSmooth {
     0% {
         opacity: 0;
@@ -50,7 +47,7 @@
     animation: fadeInSmooth 0.25s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* 2️⃣ 드롭다운 / 모달 (살짝 위에서 내려오며 scale 효과) */
+/* 드롭다운 / 모달 */
 @keyframes dropdown {
     0% {
         opacity: 0;
@@ -65,4 +62,74 @@
 }
 .animate-dropdown {
     animation: dropdown 0.18s cubic-bezier(0.25, 1, 0.5, 1);
+}
+/* tiptap */
+.tiptap ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"] {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > label {
+  flex-shrink: 0;
+  margin-top: 2px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > label input {
+  width: 16px;
+  height: 16px;
+  accent-color: #7E37F9; /* 보라색 체크 */
+  cursor: pointer;
+}
+
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"] > div {
+  display: inline-flex; /* 핵심!! block -> inline-flex */
+  align-items: center;
+  flex: 1;
+}
+
+.tiptap ul[data-type="taskList"] li[data-type="taskItem"] p {
+  margin: 0;
+  display: inline; /* 내부 <p>도 inline 처리 */
+  word-break: break-word;
+}
+.tiptap-editor ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+.tiptap-editor ul[data-type="taskList"] li[data-type="taskItem"] {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px;
+  margin: 4px 0;
+}
+
+.tiptap-editor ul[data-type="taskList"] li[data-type="taskItem"] > label {
+  display: inline-flex !important;
+  align-items: center !important;
+  flex-shrink: 0;
+}
+
+.tiptap-editor ul[data-type="taskList"] li[data-type="taskItem"] > div {
+  display: inline-flex !important;
+  align-items: center !important;
+  flex: 1;
+}
+
+.tiptap-editor ul[data-type="taskList"] li[data-type="taskItem"] p {
+  margin: 0;
+  display: inline !important;
+  word-break: break-word;
 }

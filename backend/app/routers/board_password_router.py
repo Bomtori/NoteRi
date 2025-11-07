@@ -15,15 +15,15 @@ router = APIRouter(prefix="/boards", tags=["boards:password"])
 
 # 요청 스키마: 숫자 4자리만 허용
 class BoardPasswordSet(BaseModel):
-    password: constr(pattern=r"^\d{4}$")  # exactly 4 digits
+    password: constr(pattern=r"^\d{4}$")
 
 class BoardPasswordVerify(BaseModel):
     password: constr(pattern=r"^\d{4}$")
 
-JWT_SECRET = os.getenv("GUEST_SECRET_KEY")      # 환경변수로!
+JWT_SECRET = os.getenv("GUEST_SECRET_KEY") 
 JWT_ALG = "HS256"
 
-# ✅ 비밀번호 설정/변경 (오너만)
+# 비밀번호 설정/변경 (오너만)
 @router.patch("/{board_id}/password", response_model=schemas.BoardResponse, summary="비밀번호 변경/설정")
 def set_password(
     board_id: int,
@@ -36,12 +36,11 @@ def set_password(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if not board:
-        # 존재/권한 노출 최소화: 404로 통일
         raise HTTPException(status_code=404, detail="Board not found")
     return board
 
 
-# ✅ 비밀번호 제거 (오너만)
+# 비밀번호 제거 (오너만)
 @router.delete("/{board_id}/password", response_model=schemas.BoardResponse, summary="비밀번호 제거")
 def clear_password(
     board_id: int,
@@ -54,7 +53,7 @@ def clear_password(
     return board
 
 
-# ✅ 비밀번호 검증 (게스트/사용자 공통; 비로그인 허용)
+# 비밀번호 검증 (게스트/사용자 공통; 비로그인 허용)
 @router.post("/{board_id}/verify-password")
 def verify_password(board_id: int, body: schemas.BoardPasswordVerify, response: Response, db: Session = Depends(get_db)):
     board = db.query(Board).filter(Board.id == board_id).first()

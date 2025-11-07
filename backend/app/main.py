@@ -81,7 +81,7 @@ app.add_middleware(
         "http://1.236.171.160.nip.io:8000",
         "http://noteri-dev-static-files.s3-website.ap-northeast-2.amazonaws.com",
         "https://dottily-habilimented-vernell.ngrok-free.dev",
-        "https://djwcvo3wrx68t.cloudfront.net",  # ✅ CloudFront 추가
+        "https://djwcvo3wrx68t.cloudfront.net",
     ],
     allow_credentials=True,
     allow_methods=["*"],

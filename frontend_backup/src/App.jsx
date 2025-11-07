@@ -28,10 +28,12 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/auth/callback" element={<AuthCallbackPage />} />
         </Route>
+
         <Route path="/test" element={<LoginPage/> } />
               <Route path="/test/auth/callback" element={<AuthCallback/>}/>
               <Route path="/test/chat" element={<ChatBox/>}/>
-          <Route path="/test/login" element={<LoginPage/>}/>
+        <Route path="/test/login" element={<LoginPage/>}/>
+
         <Route path="/" element={<PaymentButton />} />
         <Route path="/payments/success" element={<PaymentSuccess />} />
         <Route path="/payments/fail" element={<PaymentFail />} />

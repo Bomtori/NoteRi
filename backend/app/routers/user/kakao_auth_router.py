@@ -16,7 +16,7 @@ from backend.app.util.errors import OAuthProviderConflict
 
 router = APIRouter(prefix="/auth/kakao", tags=["KakaoAuth"])
 
-# ✅ 환경변수에서 프론트 주소 가져오기 (기본값: 5173 포트)
+# 환경변수에서 프론트 주소 가져오기 (기본값: 5173 포트)
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 KAKAO_CLIENT_ID = os.getenv("KAKAO_CLIENT_ID")
 KAKAO_LOGOUT_REDIRECT = f"{FRONTEND_URL}/login"
@@ -25,7 +25,7 @@ ACCESS_TOKEN_MAX_AGE = 3600  # 초
 SECURE_COOKIE = os.getenv("SECURE_COOKIE", "false").lower() == "true"
 REFRESH_MAX_AGE = 60 * 60 * 24 * 14  # 14일
 
-# ✅ Kakao OAuth 설정
+# Kakao OAuth 설정
 oauth = OAuth()
 oauth.register(
     name="kakao",
@@ -38,19 +38,17 @@ oauth.register(
 
 @router.get("/session-warmup", summary="OAuth 세션 웜업")
 async def session_warmup(request: Request):
-    # Starlette SessionMiddleware가 request.session 접근 시 세션 쿠키를 준비
     _ = request.session
-    # 필요시 nonce 같은 것도 미리 넣을 수 있음: request.session["warm"] = True
     return JSONResponse({"ok": True})
 
-# ✅ 로그인 시작
+# 로그인 시작
 @router.get("/login", summary="카카오 로그인")
 async def login_kakao(request: Request):
     redirect_uri = request.url_for("kakao_callback")
     return await oauth.kakao.authorize_redirect(request, redirect_uri)
 
 
-# ✅ 콜백 (Kakao → 백엔드)
+# 콜백 (Kakao → 백엔드)
 @router.get("/callback", name="kakao_callback", summary="카카오 콜백")
 async def kakao_callback(request: Request, db: Session = Depends(get_db)):
     # 1) 토큰/유저 정보
@@ -126,28 +124,28 @@ async def kakao_callback(request: Request, db: Session = Depends(get_db)):
     access_token = create_access_token({"sub": str(db_user.id), "email": db_user.email})
     refresh_token = create_refresh_token({"sub": str(db_user.id), "email": db_user.email})
 
-    # ✅ access_token을 URL 쿼리에 포함하여 전달
+    # access_token을 URL 쿼리에 포함하여 전달
     redirect_to = f"{FRONTEND_URL}/auth/callback?access_token={quote(access_token)}"
     resp = RedirectResponse(url=redirect_to, status_code=status.HTTP_302_FOUND)
     
-    # ✅ access_token도 쿠키로 설정 (프론트엔드가 자동으로 사용 가능)
+    # access_token도 쿠키로 설정
     resp.set_cookie(
         key="access_token",
         value=access_token,
-        httponly=False,  # JavaScript에서 접근 가능하도록 설정
-        secure=False,    # 로컬 HTTP는 False, 운영 HTTPS에서는 True
+        httponly=False,  
+        secure=False,    
         samesite="lax",
         domain=None,
         max_age=ACCESS_TOKEN_MAX_AGE,
         path="/",
     )
     
-    # ✅ refresh_token 쿠키 설정
+    # refresh_token 쿠키 설정
     resp.set_cookie(
         key="refresh_token",
         value=refresh_token,
-        httponly=True,   # XSS 공격 방지
-        secure=False,    # 로컬 HTTP는 False, 운영 HTTPS에서는 True
+        httponly=True,  
+        secure=False,    
         samesite="lax",
         domain=None,
         max_age=REFRESH_MAX_AGE,
@@ -155,7 +153,7 @@ async def kakao_callback(request: Request, db: Session = Depends(get_db)):
     )
     return resp
 
-# ✅ 재가입 처리 (비활성 유저 복구)
+# 재가입 처리 (비활성 유저 복구)
 @router.post("/rejoin", summary="카카오 재가입")
 def kakao_rejoin(
         db: Session = Depends(get_db),
@@ -173,7 +171,7 @@ def kakao_rejoin(
             content={"detail": "이미 활성화된 계정입니다."}
         )
 
-    # ✅ 계정 재활성화
+    # 계정 재활성화
     current_user.is_active = True
     current_user.updated_at = datetime.now(UTC)
     db.commit()

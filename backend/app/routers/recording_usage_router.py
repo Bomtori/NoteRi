@@ -36,7 +36,6 @@ def use_by_board_id(
     except recording_usage_crud.NotReadyError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except recording_usage_crud.AlreadyDebitedError as e:
-        # 이미 차감된 경우 200 OK로 응답
         return RecordingUseResponse(
             user_id=current_user.id,
             used_seconds=int(usage.used_seconds or 0),
@@ -79,7 +78,7 @@ def get_current_usage(
             .first()
         )
 
-        # ✅ 사용량 데이터가 없을 경우 (404 대신 기본값 반환)
+        # 사용량 데이터가 없을 경우 (404 대신 기본값 반환)
         if not usage:
             logger.info(f"[recordings] No usage found for user_id={current_user.id}, returning default 0 usage.")
             return RecordingUseResponse(
@@ -90,7 +89,7 @@ def get_current_usage(
                 period_end=None
             )
 
-        # ✅ 남은 시간 계산
+        # 남은 시간 계산
         remaining = (
             "unlimited"
             if usage.allocated_seconds is None

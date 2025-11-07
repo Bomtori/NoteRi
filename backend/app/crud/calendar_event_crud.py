@@ -8,9 +8,6 @@ class NotFound(Exception): ...
 class Forbidden(Exception): ...
 
 def _normalize_all_day(start, end, all_day: bool):
-    """
-    all_day일 때 end가 없으면 start+1일로 보정 (FullCalendar 일반 패턴).
-    """
     if all_day and end is None:
         return start, start + timedelta(days=1)
     return start, end
@@ -62,7 +59,6 @@ def create_event(db: Session, user_id: int, payload) -> CalendarEvent:
 def update_event(db: Session, event_id: int, user_id: int, payload) -> CalendarEvent:
     ev = get_event(db, event_id, user_id)
 
-    # 부분 업데이트
     for field in [
         "title","description","location","board_id","rrule","exdates",
         "background_color","text_color","border_color","extended_props","url"
@@ -71,7 +67,6 @@ def update_event(db: Session, event_id: int, user_id: int, payload) -> CalendarE
         if val is not None:
             setattr(ev, field, str(val) if field=="url" and val is not None else val)
 
-    # 시간/종일 처리
     st = payload.start_time if getattr(payload, "start_time", None) is not None else ev.start_time
     en = payload.end_time if getattr(payload, "end_time", None) is not None else ev.end_time
     ad = payload.all_day if getattr(payload, "all_day", None) is not None else ev.all_day

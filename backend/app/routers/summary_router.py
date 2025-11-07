@@ -9,7 +9,7 @@ from backend.app.schemas.summary_schema import (
     SummaryUpdate, SummaryResponse, SummaryListResponse
 )
 from backend.app.crud import summary_crud
-from backend.app.deps.auth import get_current_user  # 프로젝트 기존 의존성 사용
+from backend.app.deps.auth import get_current_user
 
 router = APIRouter(prefix="/summaries", tags=["summaries"])
 
@@ -18,15 +18,11 @@ def _assert_session_access(db: Session, session_id: int, user: User):
     if not session:
         raise HTTPException(status_code=404, detail="RecordingSession not found")
 
-    # 권한 정책: 세션의 보드 소유자이거나 공유 사용자면 허용
-    # 프로젝트에 board_shares 권한 체크 헬퍼가 있다면 그걸 사용하세요.
     board = db.query(Board).get(session.board_id)
     if not board:
         raise HTTPException(status_code=404, detail="Board not found")
 
     if board.owner_id != user.id:
-        # 공유 권한 여부를 추가로 검사하려면 여기서 처리
-        # 단순히 소유자만 허용하려면 아래 한 줄로 충분
         raise HTTPException(status_code=403, detail="No permission for this session")
 
 
@@ -40,7 +36,6 @@ def read_summary(
     if not obj:
         raise HTTPException(status_code=404, detail="Summary not found")
 
-    # 접근 제어: 요약의 세션 → 보드 확인
     _assert_session_access(db, obj.recording_session_id, current_user)
     return obj
 
@@ -71,7 +66,6 @@ def list_summaries_by_board(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # 보드 접근 권한 체크(간단히 소유자만 허용)
     board = db.query(Board).get(board_id)
     if not board:
         raise HTTPException(status_code=404, detail="Board not found")

@@ -18,7 +18,6 @@ FRONTEND_LOGOUT_REDIRECT = os.getenv("FRONTEND_LOGOUT_REDIRECT", "http://localho
 
 
 def _delete_cookie(resp: RedirectResponse, key: str):
-    # domain이 비어있으면 인자 자체를 전달하지 않음
     if COOKIE_DOMAIN:
         resp.delete_cookie(key, domain=COOKIE_DOMAIN, path="/")
     else:
@@ -31,16 +30,14 @@ def refresh_access_token(
     authorization: Optional[str] = Header(default=None, alias="Authorization"),
     body: dict | None = Body(default=None),
 ):
-    # 1) 쿠키 우선
+
     rt = cookie_rt
 
-    # 2) Authorization: Bearer <token> 허용
     if not rt and authorization:
         parts = authorization.split()
         if len(parts) == 2 and parts[0].lower() == "bearer":
             rt = parts[1]
 
-    # 3) JSON 바디 { "refresh_token": "..." } 도 허용
     if not rt and body and isinstance(body, dict):
         rt = body.get("refresh_token")
 
@@ -61,21 +58,16 @@ def refresh_access_token(
 
 @router.get("/logout", summary="로그아웃")
 def logout(provider: str | None = Query(default=None)):
-    # 1) provider별 리다이렉트 목적지 결정
 
     if provider == "google":
         target = "https://accounts.google.com/Logout"
     elif (provider == "naver" or "kakao"):
-        # 네이버는 별도 로그아웃 URL 실효성이 없어 보통 프론트 로그아웃 페이지로 이동
         target = FRONTEND_LOGOUT_REDIRECT
     else:
-        # 기본: 프론트 로그아웃 페이지
         target = FRONTEND_LOGOUT_REDIRECT
 
-    # 2) RedirectResponse 하나 생성
     resp = RedirectResponse(url=target, status_code=302)
 
-    # 3) 같은 객체에 쿠키 삭제 적용 (중요: 이 resp를 그대로 return)
     _delete_cookie(resp, "refresh_token")
     _delete_cookie(resp, "access_token")
 

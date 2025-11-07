@@ -15,10 +15,6 @@ from backend.app.schemas import board_schema as schemas
 from sqlalchemy.orm import joinedload
 from backend.app.crud import audio_crud, memo_crud, summary_crud, final_summary_crud
 
-
-# -----------------------------
-# Helpers
-# -----------------------------
 _PIN_RE = re.compile(r"^\d{4}$")
 
 def _now():
@@ -51,9 +47,6 @@ def _normalize_pin(pin: str) -> str:
     # 공백/개행 제거, 문자열화
     return str(pin).strip()
 
-# -----------------------------
-# Create (owner는 항상 JWT의 current_user.id)
-# -----------------------------
 def create_board(db: Session, current_user_id: int, data: schemas.BoardCreate):
     new_board = model.Board(
         folder_id=data.folder_id,
@@ -64,7 +57,6 @@ def create_board(db: Session, current_user_id: int, data: schemas.BoardCreate):
         updated_at=_now(),
     )
 
-    # 비밀번호(PIN) 처리
     if getattr(data, "password", None):
         raw = data.password
         print("DEBUG create_board raw password:", repr(raw), "len:", len(str(raw)))
@@ -79,20 +71,16 @@ def create_board(db: Session, current_user_id: int, data: schemas.BoardCreate):
 
         new_board.password_hash = argon2.hash(pin)
 
-    # 1) 보드 먼저 저장
     db.add(new_board)
     db.commit()
     db.refresh(new_board)
 
-    # 2) 기본 메모 자동 생성
+
     memo_crud.create_default_memo(db, new_board.id, current_user_id)
     db.refresh(new_board, attribute_names=["memos"])  #
 
     return new_board
 
-# -----------------------------
-# Read (소유 + 공유 받은 보드)
-# -----------------------------
 def _serialize_board(b: Board) -> dict:
     return {
         "id": b.id,
@@ -126,7 +114,6 @@ def _serialize_board(b: Board) -> dict:
                 "user_id": m.user_id,
             } for m in (getattr(b, "memos", None) or [])
         ],
-        # 필요 시 transcripts/summaries도 동일 패턴으로 추가
     }
 
 def get_boards(db: Session, user_id: int, skip: int = 0, limit: int = 7):
@@ -219,8 +206,6 @@ def get_board_full(db: Session, current_user_id: int, board_id: int) -> dict | N
         .order_by(RecordingResult.created_at.asc().nullslast())
         .all()
     )
-
-    # ✅ board는 “메타만” 담는 슬림 직렬화 (audios/memos 등 중첩 제거)
     board_meta = {
         "id": board.id,
         "owner_id": board.owner_id,
@@ -303,18 +288,15 @@ def get_board_full(db: Session, current_user_id: int, board_id: int) -> dict | N
         }
 
     return {
-        "board": board_meta,                               # ✅ 슬림
-        "audio": _audio_to_dict(audio),                    # 단건 or null
-        "memo": _memo_to_dict(memo),                       # 단건 or null
+        "board": board_meta,                               
+        "audio": _audio_to_dict(audio),                    
+        "memo": _memo_to_dict(memo),                       
         "recording_sessions": [_session_to_dict(s) for s in sessions],
         "summaries": [_summary_to_dict(su) for su in summaries],
         "final_summaries": [_final_summary_to_dict(fs) for fs in final_summaries],
         "recording_results": [_result_to_dict(r) for r in results],
     }
 
-# -----------------------------
-# Update (owner 또는 editor 이상만)
-# -----------------------------
 def update_board(db: Session, board_id: int, current_user: model.User, update: schemas.BoardUpdate):
     try:
         board = db.query(model.Board).filter(model.Board.id == board_id).first()
@@ -344,10 +326,6 @@ def update_board(db: Session, board_id: int, current_user: model.User, update: s
         db.rollback()
         raise
 
-
-# -----------------------------
-# Move (오너만)
-# -----------------------------
 def move_board(db: Session, board_id: int, current_user: model.User, move: schemas.BoardMove):
     board = db.query(model.Board).filter(model.Board.id == board_id).first()
     if not board or not _is_owner(board, current_user.id):
@@ -358,33 +336,22 @@ def move_board(db: Session, board_id: int, current_user: model.User, move: schem
     db.refresh(board)
     return board
 
-
-# -----------------------------
-# Delete (오너만)
-# -----------------------------
 def delete_board(db: Session, current_user: model.User, board_id: int) -> model.Board | None:
     board = db.query(model.Board).filter(model.Board.id == board_id).first()
     if not board:
-        return None  # 존재 안 함
+        return None 
     if not _is_owner(board, current_user.id):
-        return None  # 권한 없음
+        return None
 
-    # 선택: 삭제 직전 정보 복사하고 싶으면 여기서 dict로 빼둘 수 있음
     db.delete(board)
     db.commit()
-    # commit 후 board 객체는 세션에서 expired 상태라 보통은 그대로 리턴 안 쓰기도 함
     return board
 
-
-# -----------------------------
-# Verify password (게스트/추가 검증용)
-# -----------------------------
 def verify_board_password(db: Session, board_id: int, pin4: str) -> bool:
     board = db.query(model.Board).filter(model.Board.id == board_id).first()
     if not board or not board.password_hash:
         return False
     try:
-        # PIN 형식 검사는 라우터에서 수행(정규식) — 여기선 해시 검증만
         return argon2.verify(pin4, board.password_hash)
     except Exception:
         return False

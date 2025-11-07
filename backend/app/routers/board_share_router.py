@@ -15,7 +15,6 @@ from backend.app.util.access import can_read_board
 router = APIRouter(prefix="/boards/{board_id}/shares", tags=["boards:share"])
 
 def _to_resp(s, include_user=False) -> ShareResponse:
-    # s: model.BoardShare
     return ShareResponse(
         id=s.id,
         board_id=s.board_id,
@@ -34,13 +33,13 @@ def list_board_members(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),  # ✅ 로그인 유저만
 ):
-    # 1️⃣ 오너인지 확인
+    # 오너인지 확인
     board = db.query(Board).filter(Board.id == board_id).first()
     if not board:
         raise HTTPException(status_code=404, detail="Board not found")
 
     if board.owner_id != current_user.id:
-        # 2️⃣ 공유받은 멤버인지 확인
+        # 공유받은 멤버인지 확인
         shared = (
             db.query(BoardShare)
             .filter(
@@ -52,7 +51,7 @@ def list_board_members(
         if not shared:
             raise HTTPException(status_code=403, detail="Access denied")
 
-    # 3️⃣ 멤버 목록 조회
+    # 멤버 목록 조회
     members = get_board_members(db, board_id)
     if members is None:
         raise HTTPException(status_code=404, detail="Board not found")
@@ -68,11 +67,6 @@ def list_board_shares(
 ):
     shares = crud.list_shares(db, board_id, current_user.id)
     if shares == []:
-        # 보드가 없거나 소유자가 아니면 빈 배열이 오므로 404로 정리
-        # (원한다면 빈 배열 그대로 200 처리도 가능)
-        # 여기서는 보안상 404 권장
-        # 다만 '공유가 0개'인 정상 케이스도 있으니 아래처럼 분기:
-        #   - 보드 미소유: None을 리턴하도록 CRUD 바꾸고 여기서 404
         pass
     return [_to_resp(s, include_user=True) for s in shares]
 

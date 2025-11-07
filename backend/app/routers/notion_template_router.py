@@ -13,7 +13,6 @@ import os
 
 router = APIRouter(prefix="/notion", tags=["notion-template"])
 
-# ---------- 공용 DB 의존성 ----------
 async def get_db():
     db = SessionLocal()
     try:
@@ -21,21 +20,18 @@ async def get_db():
     finally:
         db.close()
 
-# ---------- 요청 스키마 ----------
 class RenderRequest(BaseModel):
     session_id: Optional[int] = None
     board_id: Optional[int] = None
-    # 프론트의 라디오 “회의기록/스크립트/전체요약”과 TemplateType 매핑
     ui_type: Literal["회의기록", "스크립트", "전체요약"] = Field(default="회의기록")
 
 class UploadRequest(RenderRequest):
     parent_id: str = Field(description="Notion parent database/page id")
     parent_type: Literal["database", "page"] = "database"
     page_title: Optional[str] = None
-    # 미리보기에서 받은 content를 그대로 업로드하고 싶을 때 사용 (없으면 서버가 다시 생성)
     content_override: Optional[str] = None
 
-# ---------- 유틸: 접근 가능 세션 resolve ----------
+# 유틸: 접근 가능 세션 resolve
 def resolve_session_or_404(db: Session, user_id: int, session_id: Optional[int], board_id: Optional[int]) -> RecordingSession:
     """
     1) session_id가 오면: 해당 세션이 현재 사용자에게 소유/공유 되었는지 검사 후 반환
@@ -71,7 +67,7 @@ def resolve_session_or_404(db: Session, user_id: int, session_id: Optional[int],
 
     raise HTTPException(status_code=400, detail="session_id or board_id is required")
 
-# ---------- UI 타입 → 템플릿 타입 매핑 ----------
+# UI 타입 → 템플릿 타입 매핑
 def map_ui_to_template(ui_type: str) -> TemplateType:
     # TemplateType = Literal["script", "minutes", "final"] 라고 가정
     if ui_type == "회의기록":
@@ -82,13 +78,12 @@ def map_ui_to_template(ui_type: str) -> TemplateType:
         return "final"
     return "minutes"
 
-# ---------- Qwen(또는 Ollama)로 Markdown 다듬기 (선택) ----------
+# Qwen(또는 Ollama)로 Markdown 다듬기 (선택
 async def polish_with_llm(markdown: str) -> str:
-    # 선택 기능: .env에서 OLLAMA_BASE_URL/OLLAMA_MODEL 설정되면 Qwen으로 다듬기
     base = os.getenv("OLLAMA_BASE_URL")
     model = os.getenv("OLLAMA_MODEL")
     if not base or not model:
-        return markdown  # 설정 없으면 그대로 반환
+        return markdown 
 
     prompt = f"""다음 회의록 Markdown을 더 읽기 좋게 정리해줘.
 - 제목과 소제목을 구조화하고
@@ -112,17 +107,15 @@ async def polish_with_llm(markdown: str) -> str:
     except Exception:
         return markdown
 
-# ---------- 미리보기: 노션 업로드 전 Markdown/JSON 생성 ----------
+# 미리보기: 노션 업로드 전 Markdown/JSON 생성
 @router.post("/render")
 async def render_for_notion(req: RenderRequest, db: Session = Depends(get_db), user=Depends(get_current_user)):
     rs = resolve_session_or_404(db, user_id=user.id, session_id=req.session_id, board_id=req.board_id)
     template: TemplateType = map_ui_to_template(req.ui_type)
 
-    # services/notion_template.py 안의 핵심 함수 (이미 제공됨)
-    # 반환 예: {"title": "...", "content": "...(markdown)...", "raw": {...}}
+   
     doc = await build_notion_markdown(db, session_id=rs.id, template=template)
 
-    # 선택: Qwen으로 Markdown 다듬기
     polished = await polish_with_llm(doc["content"])
 
     return {
@@ -131,11 +124,11 @@ async def render_for_notion(req: RenderRequest, db: Session = Depends(get_db), u
         "board_id": rs.board_id,
         "title": doc.get("title") or "회의 템플릿",
         "content_markdown": polished,
-        "content_markdown_raw": doc["content"],  # LLM 적용 전 원본
-        "content_json": doc.get("raw")          # 블록/메타 등 필요 시
+        "content_markdown_raw": doc["content"], 
+        "content_json": doc.get("raw")          
     }
 
-# ---------- 업로드: 바로 노션으로 ----------
+# 업로드: 바로 노션으로 
 @router.post("/upload_template")
 async def upload_template(req: UploadRequest, db: Session = Depends(get_db), user=Depends(get_current_user)):
     rs = resolve_session_or_404(db, user_id=user.id, session_id=req.session_id, board_id=req.board_id)

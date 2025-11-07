@@ -15,9 +15,6 @@ def _is_owner(board: model.Board, user_id: int) -> bool:
     return board.owner_id == user_id
 
 def set_board_password(db: Session, board_id: int, current_user_id: int, pin_4digits: str) -> model.Board | None:
-    """
-    숫자 4자리만 허용. 오너만 설정/변경 가능.
-    """
     if not (_PIN_RE.match(pin_4digits or "")):
         raise ValueError("Password must be exactly 4 digits.")
 
@@ -39,9 +36,6 @@ def set_board_password(db: Session, board_id: int, current_user_id: int, pin_4di
         raise
 
 def clear_board_password(db: Session, board_id: int, current_user_id: int) -> model.Board | None:
-    """
-    비밀번호 제거. 오너만 가능.
-    """
     board = db.query(model.Board).filter(model.Board.id == board_id).first()
     if not board or not _is_owner(board, current_user_id):
         return None
@@ -57,9 +51,6 @@ def clear_board_password(db: Session, board_id: int, current_user_id: int) -> mo
         raise
 
 def verify_board_password(db: Session, board_id: int, pin_4digits: str) -> bool:
-    """
-    게스트 접근/추가 검증용. 4자리 숫자만 허용.
-    """
     if not (_PIN_RE.match(pin_4digits or "")):
         return False
 

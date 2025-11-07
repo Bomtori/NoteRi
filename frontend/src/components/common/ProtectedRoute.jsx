@@ -7,7 +7,7 @@ export default function ProtectedRoute({ children, requiredRole }) {
     const token = localStorage.getItem("access_token");
     const location = useLocation();
 
-    // ✅ /record/:id 경로는 완전히 제외 (게스트 접근 허용)
+    // /record/:id 경로는 완전히 제외 (게스트 접근 허용)
     const isRecordDetailPage = /^\/record\/\d+$/.test(location.pathname);
     
     if (isRecordDetailPage) {
@@ -15,7 +15,7 @@ export default function ProtectedRoute({ children, requiredRole }) {
         return children ? children : <Outlet />;
     }
 
-    // 🔹 로그인 보호가 필요한 경로들
+    // 로그인 보호가 필요한 경로들
     const protectedPaths = [
         "/record",      // 회의 목록 (로그인 필수)
         "/folder",      // 폴더 관리 (로그인 필수)
@@ -25,7 +25,7 @@ export default function ProtectedRoute({ children, requiredRole }) {
         "/shared"       // 공유된 회의 (로그인 필수)
     ];
     
-    // ✅ 정확한 경로 매칭 (하위 경로 제외)
+    // 정확한 경로 매칭 (하위 경로 제외)
     const isProtected = protectedPaths.some((path) => {
         if (path === "/record") {
             // /record 정확히 일치할 때만 보호
@@ -34,12 +34,12 @@ export default function ProtectedRoute({ children, requiredRole }) {
         return location.pathname.startsWith(path);
     });
 
-    // 🔹 로그인 필수 경로인데 인증 안 됨 → /login 리디렉션
+    // 로그인 필수 경로인데 인증 안 됨 → /login 리디렉션
     if (isProtected && (!token || !isAuthenticated)) {
         return <Navigate to="/login" state={{ from: location }} replace />;
     }
 
-    // 🔹 관리자 전용 페이지
+    // 관리자 전용 페이지
     if (requiredRole === "admin" && user?.role !== "admin") {
         return <Navigate to="/" replace />;
     }

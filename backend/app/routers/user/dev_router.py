@@ -6,14 +6,13 @@ router = APIRouter(prefix="/auth/dev", tags=["AuthDev"])
 
 @router.get("/issue", summary="테스트")
 def issue_cookie():
-    # 가짜 refresh 토큰 내려서 쿠키 저장 테스트
     fake_rt = "debug-refresh-token"
     resp = JSONResponse({"ok": True})
     resp.set_cookie(
         key="refresh_token",
         value=fake_rt,
         httponly=True,
-        secure=False,   # 로컬
+        secure=False, 
         samesite="lax",
         domain=None,
         path="/",

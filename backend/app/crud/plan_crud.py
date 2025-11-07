@@ -51,7 +51,6 @@ def update_plan(db: Session, plan_id: int, payload: PlanUpdate) -> Plan:
     if not plan:
         raise HTTPException(status_code=404, detail="Plan을 찾을 수 없습니다.")
 
-    # ✅ 이름 변경 허용 (unique 체크)
     if payload.name is not None and payload.name != plan.name:
         dup = db.query(Plan).filter(Plan.name == payload.name).first()
         if dup:

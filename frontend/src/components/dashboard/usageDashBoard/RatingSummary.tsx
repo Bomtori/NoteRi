@@ -84,7 +84,7 @@ type Props = {
   /** 개발 중 임시 데이터 사용 */
   useMock?: boolean;
   /** 외곽 Card를 바깥에서 감쌀 때 내용만 렌더 */
-  frameless?: boolean;            // ✅ 추가
+  frameless?: boolean;            
 };
 
 const API_BASE_URL =
@@ -92,7 +92,7 @@ const API_BASE_URL =
   (import.meta as any).env?.VITE_API_BASE_URL ??
   "http://127.0.0.1:8000";
 
-// ✅ 임시 데이터 (원할 때만 사용)
+// 임시 데이터
 const MOCK: RatingSummary = ensureSummary({
   counts: { 1: 8, 2: 14, 3: 32, 4: 57, 5: 89 },
 });
@@ -104,7 +104,7 @@ export default function RatingSummaryCard({
   endpoint = "/summary/final/ratings",
   params,
   useMock = false,
-  frameless = false,              // ✅ 추가
+  frameless = false,              
 }: Props) {
   const [summary, setSummary] = useState<RatingSummary | null>(useMock ? MOCK : null);
   const [loading, setLoading] = useState(!useMock);
@@ -157,7 +157,6 @@ export default function RatingSummaryCard({
   const fmtAvg = (n?: number) =>
     typeof n === "number" && Number.isFinite(n) ? n.toFixed(2) : "0.00";
 
-  // ✅ frameless일 때는 외곽 스타일 제거(바깥에서 DASH_CARD로 감싸기)
   const wrapper = frameless ? "" : "p-4 bg-card rounded-2xl shadow";
 
   return (

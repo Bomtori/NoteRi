@@ -17,7 +17,8 @@ export default function RightSidePanel({
   handleRagSubmit,
 }) {
   return (
-    <aside className="w-[30%] bg-white rounded-2xl shadow-sm p-6 flex flex-col min-h-[700px]">
+    <aside className="w-[30%] bg-white rounded-2xl shadow-sm p-6 flex flex-col
+                 max-h-[calc(100vh-80px)] overflow-hidden">
       {/* 일정 미리보기 */}
       <div className="mb-6 border-b border-gray-200 pb-3">
         <div className="flex justify-between items-center mb-2">
@@ -44,7 +45,10 @@ export default function RightSidePanel({
                   className="w-2 h-2 rounded-full flex-shrink-0"
                   style={{
                     backgroundColor:
-                      ev.extended_props?.color || ev.extendedProps?.color || "#7E37F9",
+                       ev.extendedProps?.color ||
+                        ev.extended_props?.color ||
+                        ev.color ||
+                        "#7E37F9",
                   }}
                 ></span>
                 <span className="text-gray-700 font-medium flex-1 truncate">
@@ -80,37 +84,33 @@ export default function RightSidePanel({
         ))}
       </div>
 
+  {/* GPT 검색 영역 */}
       {gptTab === "gpt" && (
-        <div className="flex flex-col h-full">
-          {/* 에러 메시지 */}
-          {ragError && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
-              ❌ {ragError}
-            </div>
-          )}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* 내부 스크롤 가능 영역 */}
+          <div className="flex-1 overflow-y-auto pr-1 space-y-4">
+            {ragError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+                ❌ {ragError}
+              </div>
+            )}
 
-          {/* 답변 영역 */}
-          <div className="flex-1 overflow-y-auto">
-            {ragLoading && (
+            {ragLoading ? (
               <div className="flex flex-col items-center justify-center h-full text-gray-400">
                 <div className="w-8 h-8 border-4 border-gray-200 border-t-[#7E37F9] rounded-full animate-spin mb-3" />
                 <p className="text-sm">답변 생성 중...</p>
               </div>
-            )}
-
-            {!ragLoading && ragAnswer && (
+            ) : ragAnswer ? (
               <div>
-                {/* AI 답변 */}
-                <div className="mb-4 p-4 bg-[#F5F3FF] border border-[#7E37F9]/20 rounded-lg">
+                <div className="p-4 bg-[#F5F3FF] border border-[#7E37F9]/20 rounded-lg mb-4">
                   <p className="font-semibold text-[#7E37F9] mb-2 text-sm">
                     노트리의 답변
                   </p>
-                  <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                  <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
                     {ragAnswer}
                   </div>
                 </div>
 
-                {/* 참조 소스 */}
                 {ragSources.length > 0 && (
                   <div>
                     <p className="font-semibold text-gray-700 mb-2 text-sm">
@@ -133,20 +133,13 @@ export default function RightSidePanel({
                           <p className="text-xs text-gray-600 line-clamp-3">
                             {source.text}
                           </p>
-                          {source.metadata?.date && (
-                            <p className="text-xs text-gray-400 mt-1">
-                              {new Date(source.metadata.date).toLocaleDateString()}
-                            </p>
-                          )}
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
               </div>
-            )}
-
-            {!ragLoading && !ragAnswer && (
+            ) : (
               <div className="flex flex-col items-center justify-center h-full text-gray-400">
                 <p className="text-sm text-center">
                   모든 녹음 내용에서<br />원하는 정보를 검색해보세요!
@@ -155,13 +148,13 @@ export default function RightSidePanel({
             )}
           </div>
 
-          {/* 질문 입력 영역 */}
-          <div className="mb-4">
+          {/* 입력 영역 (하단 고정) */}
+          <div className="pt-4 border-t border-gray-100 bg-white flex-shrink-0">
             <textarea
               value={ragQuestion}
               onChange={(e) => setRagQuestion(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="모든 녹음에서 검색할 질문을 입력하세요!&#10;예: 프론트엔드 디자인 언제 완료래?"
+              placeholder="모든 녹음에서 검색할 질문을 입력하세요!"
               className="w-full h-24 p-3 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-[#7E37F9] focus:outline-none text-sm"
               disabled={ragLoading}
             />

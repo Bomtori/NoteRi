@@ -7,18 +7,18 @@ export default function LandingTopNav() {
     const navigate = useNavigate();
     const [user, setUser] = useState(null);
     const [isScrolled, setIsScrolled] = useState(false);
-    const fetchedRef = useRef(false); // ✅ 중복 호출 방지
+    const fetchedRef = useRef(false); // 중복 호출 방지
     const handleLogout = useLogout();
 
     useEffect(() => {
-        // ✅ 비로그인 상태면 요청하지 않음
+        // 비로그인 상태면 요청하지 않음
         const accessToken = localStorage.getItem("access_token");
         if (!accessToken) {
             console.log("🔓 Public mode — skip /users/me");
             return;
         }
 
-        // ✅ 이미 요청한 적 있으면 또 안 함
+        // 이미 요청한 적 있으면 또 안 함
         if (fetchedRef.current) return;
         fetchedRef.current = true;
 
@@ -27,7 +27,7 @@ export default function LandingTopNav() {
                 const res = await apiClient.get("/users/me");
                 setUser(res.data);
             } catch (err) {
-                // ✅ refresh 실패(401)는 무시하고 계속 공개 페이지 유지
+                // refresh 실패(401)는 무시하고 계속 공개 페이지 유지
                 if (err.response?.status === 401) {
                     console.log("⚠️ Unauthorized — probably expired token, stay logged out.");
                     localStorage.removeItem("access_token");
@@ -42,7 +42,7 @@ export default function LandingTopNav() {
         fetchUser();
     }, []);
 
-    // ✅ 스크롤 색상 반전
+    // 스크롤 색상 반전
     useEffect(() => {
         const handleScroll = () => {
             setIsScrolled(window.scrollY > window.innerHeight * 0.8);
@@ -64,22 +64,22 @@ export default function LandingTopNav() {
                     : "bg-transparent text-white"
             }`}
         >
-            <div className="max-w-7xl mx-auto flex items-center justify-between px-8 py-4">
-                {/* ✅ 로고 */}
+            <div className="max-w-10xl mx-auto flex items-center justify-between px-8 py-4">
+                {/* 로고 */}
                 <div
                     onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
                     className="cursor-pointer flex items-center gap-2 select-none"
                 >
                     <img
-                        src="/assets/NoteRi-Logo.svg"
+                        src="/assets/NoteRi-Logo.png"
                         alt="NoteRi Logo"
-                        className={`h-6 md:h-8 transition-all duration-500 ${
+                        className={`h-20 md:h-20 lg:h-24  transition-all duration-500 ${
                             isScrolled ? "" : "brightness-0 invert"
                         }`}
-                    />
+                        />
                 </div>
 
-                {/* ✅ 메뉴 */}
+                {/* 메뉴 */}
                 <div
                     className={`hidden md:flex items-center gap-10 text-sm font-medium transition-colors duration-500 ${
                         isScrolled ? "text-gray-900" : "text-white"

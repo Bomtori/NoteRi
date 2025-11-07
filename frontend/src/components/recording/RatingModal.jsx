@@ -2,7 +2,14 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Star } from "lucide-react";
 
-export default function RatingModal({ show, onClose, onSubmit }) {
+/**
+ * 오른쪽 하단에서 올라오는 별점 피드백 토스트
+ * props:
+ *  - show: boolean (표시 여부)
+ *  - onClose: () => void
+ *  - onSubmit: (rating: number) => void
+ */
+export default function RatingToast({ show, onClose, onSubmit }) {
   const [rating, setRating] = useState(0);
   const [hovered, setHovered] = useState(0);
 
@@ -10,79 +17,67 @@ export default function RatingModal({ show, onClose, onSubmit }) {
     if (!show) setRating(0);
   }, [show]);
 
-  if (!show) return null;
-
   return (
     <AnimatePresence>
-      <motion.div
-        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/30 backdrop-blur-md"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onClose}
-      >
+      {show && (
         <motion.div
-          className="relative w-[340px] rounded-2xl p-6 text-center shadow-xl bg-white/30 backdrop-blur-2xl border border-white/40"
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.9, opacity: 0 }}
-          transition={{ type: 'spring', stiffness: 280, damping: 22 }}
-          onClick={(e) => e.stopPropagation()}
+          key="rating-toast"
+          initial={{ opacity: 0, y: 40, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 40, scale: 0.9 }}
+          transition={{ type: "spring", stiffness: 300, damping: 24 }}
+          className="fixed bottom-6 right-6 z-[9999]"
         >
-          {/* 헤더 */}
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">
-            이번 요약은 어떠셨나요?
-          </h3>
-          <p className="text-sm text-gray-600 mb-5">
-            별점을 눌러 피드백을 남겨주세요!
-          </p>
+          <div
+            className="w-[280px] bg-white border border-gray-100 shadow-lg 
+                       rounded-2xl p-4 backdrop-blur-md"
+          >
+            {/* 헤더 */}
+            <h3 className="text-sm font-semibold text-gray-800 mb-1">
+              이번 요약은 어땠나요?
+            </h3>
+            <p className="text-xs text-gray-500 mb-3">
+              별점을 눌러 피드백을 남겨주세요!
+            </p>
 
-          {/* 별점 */}
-          <div className="flex justify-center gap-2 mb-5">
-            {[1, 2, 3, 4, 5].map((num) => (
-              <motion.div
-                key={num}
-                whileHover={{ scale: 1.15 }}
-                whileTap={{ scale: 0.9 }}
-              >
-                <Star
-                  onMouseEnter={() => setHovered(num)}
-                  onMouseLeave={() => setHovered(0)}
-                  onClick={() => setRating(num)}
-                  className={`w-8 h-8 cursor-pointer transition-colors duration-150
-                    ${
+            {/* 별점 */}
+            <div className="flex justify-center gap-2 mb-3">
+              {[1, 2, 3, 4, 5].map((num) => (
+                <motion.div
+                  key={num}
+                  whileHover={{ scale: 1.15 }}
+                  whileTap={{ scale: 0.9 }}
+                >
+                  <Star
+                    onMouseEnter={() => setHovered(num)}
+                    onMouseLeave={() => setHovered(0)}
+                    onClick={() => setRating(num)}
+                    className={`w-6 h-6 cursor-pointer transition-all ${
                       num <= (hovered || rating)
-                        ? "fill-[#7E37F9] text-[#7E37F9] drop-shadow-[0_0_6px_rgba(126,55,249,0.5)]"
-                        : "text-gray-300 hover:text-[#9E77FF]"
+                        ? "fill-[#7E37F9] text-[#7E37F9] drop-shadow-[0_0_5px_rgba(126,55,249,0.5)]"
+                        : "text-gray-300 hover:text-[#B68CFF]"
                     }`}
-                />
-              </motion.div>
-            ))}
+                  />
+                </motion.div>
+              ))}
+            </div>
+
+            {/* 제출 버튼 */}
+            <button
+              disabled={!rating}
+              onClick={() => {
+                onSubmit?.(rating);
+                onClose?.();
+              }}
+              className="w-full py-1.5 rounded-lg bg-[#7E37F9] text-white text-sm font-medium
+                         shadow-[0_3px_10px_rgba(126,55,249,0.25)]
+                         hover:bg-[#6b2de4] transition disabled:opacity-40"
+            >
+              제출하기
+            </button>
           </div>
-
-          {/* 제출 버튼 */}
-          <button
-            disabled={!rating}
-            onClick={() => {
-              onSubmit?.(rating);
-              onClose();
-            }}
-            className="w-full py-2.5 rounded-lg bg-[#7E37F9]/90 text-white font-medium
-                       shadow-[0_4px_15px_rgba(126,55,249,0.3)]
-                       hover:bg-[#682be0] transition disabled:opacity-40"
-          >
-            제출하기
-          </button>
-
-          {/* 닫기 버튼 */}
-          <button
-            onClick={onClose}
-            className="absolute top-3 right-4 text-gray-400 hover:text-gray-600 text-sm"
-          >
-            ✕
-          </button>
         </motion.div>
-      </motion.div>
+      )}
     </AnimatePresence>
   );
 }

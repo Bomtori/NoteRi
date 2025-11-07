@@ -7,16 +7,16 @@ export default function RecordSection({
                                           liveText,
                                           recordingState,
                                           allHistory = [],
-                                          finalSummary = null, // ✅ 전체 요약 데이터
+                                          finalSummary = null, // 전체 요약 데이터
                                       }) {
     const isRecording = recordingState === "recording";
     const words = liveText ? liveText.split(" ") : [];
 
-    // 🔹 회의기록 탭
+    // 회의기록 탭
     if (activeTab === "record") {
         return (
             <div className="flex flex-col gap-4 mt-4 overflow-y-auto flex-1">
-                {/* ✅ 1분 요약 카드 */}
+                {/* 1분 요약 카드 */}
                 <AnimatePresence>
                     {summaries.map((item) => (
                         <motion.div
@@ -36,7 +36,7 @@ export default function RecordSection({
                             transition={{ duration: 1, ease: [0.22, 0.61, 0.36, 1] }}
                             className="relative border border-gray-200 bg-[#F9F6FF] rounded-xl p-5 text-sm text-gray-800 leading-relaxed shadow-sm overflow-hidden"
                         >
-                            {/* ✨ 반짝 라인 효과 */}
+                            {/* 라인 효과 */}
                             <motion.div
                                 initial={{ x: "-100%" }}
                                 animate={{ x: "100%" }}
@@ -48,7 +48,7 @@ export default function RecordSection({
                                 className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent pointer-events-none"
                             />
 
-                            {/* ✏️ 불릿 단위로 줄바꿈 표시 */}
+                            {/* 불릿 단위로 줄바꿈 표시 */}
                             <motion.ul
                                 className="list-disc ml-4 space-y-2 relative z-10"
                                 variants={{
@@ -84,7 +84,7 @@ export default function RecordSection({
                     ))}
                 </AnimatePresence>
 
-                {/* ✅ 실시간 STT만 표시 */}
+                {/* 실시간 STT만 표시 */}
                 {isRecording && (
                     <motion.div
                         layout
@@ -128,7 +128,7 @@ export default function RecordSection({
         );
     }
 
-    // 🔹 스크립트 탭
+    // 스크립트 탭
     if (activeTab === "script") {
         return (
             <div className="flex flex-col gap-6 mt-4 overflow-y-auto flex-1 px-2">
@@ -168,7 +168,7 @@ export default function RecordSection({
         );
     }
 
-    // 🔹 전체 요약 탭
+    // 전체 요약 탭
     if (activeTab === "summary") {
         return (
             <div className="flex flex-col gap-4 mt-4 overflow-y-auto flex-1">
@@ -202,7 +202,7 @@ export default function RecordSection({
                             {/* 후속 조치 */}
                             {finalSummary.actions?.length > 0 && (
                                 <div>
-                                    <p className="font-semibold text-gray-700 mb-2">✅ 후속 조치</p>
+                                    <p className="font-semibold text-gray-700 mb-2">후속 조치</p>
                                     <ul className="list-disc ml-5 space-y-1 text-sm text-gray-700">
                                         {finalSummary.actions.map((action, i) => (
                                             <li key={i} className="leading-relaxed">

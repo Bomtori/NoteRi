@@ -3,7 +3,7 @@ import { API_BASE_URL } from "../config";
 
 console.log("🌐 VITE_API_URL =", import.meta.env.VITE_API_URL);
 
-// 🔹 Axios 인스턴스 (쿠키 포함)
+// Axios 인스턴스 (쿠키 포함)
 const apiClient = axios.create({
     baseURL: API_BASE_URL,
     withCredentials: true, // refresh_token 쿠키 자동 포함
@@ -13,10 +13,10 @@ const apiClient = axios.create({
     },
 });
 
-// 🔹 요청 시 Authorization 자동 주입 (매번 localStorage에서 읽기!)
+// 요청 시 Authorization 자동 주입 (매번 localStorage에서 읽기!)
 apiClient.interceptors.request.use(
     (config) => {
-        // ✅ 매번 localStorage에서 최신 토큰 읽기
+        // 매번 localStorage에서 최신 토큰 읽기
         const token = localStorage.getItem("access_token");
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
@@ -26,7 +26,7 @@ apiClient.interceptors.request.use(
     (error) => Promise.reject(error)
 );
 
-// 🔹 응답 시 401 → /auth/refresh 로 자동 재발급
+// 응답 시 401 → /auth/refresh 로 자동 재발급
 apiClient.interceptors.response.use(
     (res) => res,
     async (error) => {
@@ -38,7 +38,7 @@ apiClient.interceptors.response.use(
             console.warn("🔁 AccessToken 만료 → refresh 요청");
 
             try {
-                // ✅ refresh_token은 HttpOnly 쿠키로 자동 포함됨
+                // refresh_token은 HttpOnly 쿠키로 자동 포함됨
                 const refreshRes = await axios.post(
                     `${API_BASE_URL}/auth/refresh`,
                     {},
@@ -47,7 +47,7 @@ apiClient.interceptors.response.use(
 
                 const newToken = refreshRes.data.access_token;
                 if (newToken) {
-                    console.log("✅ 새 AccessToken 발급 완료");
+                    console.log("새 AccessToken 발급 완료");
                     localStorage.setItem("access_token", newToken);
 
                     // 새 토큰으로 원래 요청 재시도

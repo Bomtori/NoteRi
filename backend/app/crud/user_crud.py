@@ -35,7 +35,6 @@ def get_user_count_by_provider(db: Session):
         .all()
     )
 
-    # provider가 None인 경우를 'none'으로 치환
     provider_stats = {provider or "none": count for provider, count in results}
     return provider_stats
 
@@ -92,13 +91,13 @@ def get_user_signup_last_5_years(db: Session):
         start=start, end=end, granularity="year", agg="count"
     )
 
-LOCAL_TZ = ZoneInfo("Asia/Seoul")  # 로컬 날짜 경계(캘린더 날짜) 기준
+LOCAL_TZ = ZoneInfo("Asia/Seoul") 
 
 def _count_signups(
     db: Session,
     *,
     start_date: Optional[date] = None,
-    end_date: Optional[date] = None,   # [start, end)
+    end_date: Optional[date] = None, 
 ) -> int:
     q = db.query(func.count(User.id))
     if start_date is not None:
@@ -108,7 +107,7 @@ def _count_signups(
     return int(q.scalar() or 0)
 
 
-# ---------- 1) 최근 일주일 간 가입자 ----------
+# 최근 일주일 간 가입자
 def get_last_7d_signups(db: Session) -> int:
     """
     오늘 포함 최근 7일 (오늘~6일 전). [start, end) = [today-6, tomorrow)
@@ -119,7 +118,7 @@ def get_last_7d_signups(db: Session) -> int:
     return _count_signups(db, start_date=start, end_date=end)
 
 
-# ---------- 2) 최근 1개월 간 가입자 ----------
+# 최근 1개월 간 가입자
 def get_last_m_signups(db: Session) -> int:
     """
     오늘 기준 1개월 전 같은 일자부터 오늘까지.
@@ -131,7 +130,7 @@ def get_last_m_signups(db: Session) -> int:
     return _count_signups(db, start_date=start, end_date=end)
 
 
-# ---------- 3) 최근 1년 간 가입자 ----------
+# 최근 1년 간 가입자
 def get_last_12m_signups(db: Session) -> int:
     """
     오늘 기준 1년 전 같은 일자부터 오늘까지.
@@ -149,12 +148,10 @@ def get_dod_signup_growth(db: Session) -> dict:
     """
     today = _today_local()
 
-    # 오늘 구간: [오늘 00시, 내일 00시)
     cur_start = today
     cur_end = today + timedelta(days=1)
     current = _count_signups(db, start_date=cur_start, end_date=cur_end)
 
-    # 어제 구간: [어제 00시, 오늘 00시)
     prev_start = today - timedelta(days=1)
     prev_end = today
     previous = _count_signups(db, start_date=prev_start, end_date=prev_end)
@@ -163,7 +160,7 @@ def get_dod_signup_growth(db: Session) -> dict:
     return {"current": current, "previous": previous, "growth_rate": growth_rate}
 
 
-# ---------- 전주 대비 가입자 성장률 ----------
+# 전주 대비 가입자 성장률
 def get_wow_signup_growth(db: Session) -> dict:
     """
     이번 주 누적(월요일~오늘 포함) vs 지난주 동일 요일까지 누적.
@@ -171,21 +168,19 @@ def get_wow_signup_growth(db: Session) -> dict:
     """
     today = _today_local()
 
-    # 이번 주 시작(월요일)
     cur_week_start = today - timedelta(days=today.weekday())
-    cur_end = today + timedelta(days=1)  # 오늘 포함 (내일 00시)
+    cur_end = today + timedelta(days=1)  
     current = _count_signups(db, start_date=cur_week_start, end_date=cur_end)
 
-    # 지난 주 시작 ~ 지난주 동일 요일까지
     prev_week_start = cur_week_start - timedelta(days=7)
-    elapsed_days = (today - cur_week_start).days  # 월요일 기준 경과 일수
+    elapsed_days = (today - cur_week_start).days  
     prev_end = prev_week_start + timedelta(days=elapsed_days + 1)
     previous = _count_signups(db, start_date=prev_week_start, end_date=prev_end)
 
     growth_rate = None if previous == 0 else (current - previous) / previous
     return {"current": current, "previous": previous, "growth_rate": growth_rate}
 
-# ---------- 4) 전월 대비 가입자 성장률 ----------
+# 전월 대비 가입자 성장률
 def get_mom_signup_growth(db: Session) -> dict:
     """
     현재달 MTD(이달 1일~오늘) vs 전월 동일일수(전월 1일~전월 today.day).
@@ -193,24 +188,23 @@ def get_mom_signup_growth(db: Session) -> dict:
     """
     today = _today_local()
 
-    # 현재달: [이달 1일, 내일)
+
     cur_start, _cur_month_end = _month_bounds(today)
     cur_end = today + timedelta(days=1)
     current = _count_signups(db, start_date=cur_start, end_date=cur_end)
 
-    # 전월: [전월 1일, 전월 today.day 다음날)  (말일 안전)
-    prev_anchor = cur_start - timedelta(days=1)  # 전월 내 임의 날짜
+    prev_anchor = cur_start - timedelta(days=1) 
     prev_m_start, prev_m_end = _month_bounds(prev_anchor)
     prev_last_day = (prev_m_end - timedelta(days=1)).day
     prev_end_day = min(today.day, prev_last_day)
-    prev_end = prev_m_start + timedelta(days=prev_end_day)  # 다음날 0시
+    prev_end = prev_m_start + timedelta(days=prev_end_day)  
     previous = _count_signups(db, start_date=prev_m_start, end_date=prev_end)
 
     growth_rate = None if previous == 0 else (current - previous) / previous
     return {"current": current, "previous": previous, "growth_rate": growth_rate}
 
 
-# ---------- 5) 전년 대비 가입자 성장률 ----------
+# 전년 대비 가입자 성장률 
 def get_yoy_signup_growth(db: Session) -> dict:
     """
     YTD(올해 1/1~오늘) vs 전년 동기(작년 1/1~작년 같은 월/일).
@@ -222,10 +216,10 @@ def get_yoy_signup_growth(db: Session) -> dict:
     cur_end = today + timedelta(days=1)
     current = _count_signups(db, start_date=cur_y_start, end_date=cur_end)
 
-    last_year_same_day = _add_months(today, -12)  # 작년 같은 월/일 (말일 안전 처리)
+    last_year_same_day = _add_months(today, -12) 
     prev_y_start, _prev_y_end = _year_bounds(last_year_same_day)
-    # 전년 동기의 길이를 올해 YTD와 동일하게 맞춤
-    prev_period_days = (today - cur_y_start).days + 1  # 오늘 포함 일수
+
+    prev_period_days = (today - cur_y_start).days + 1 
     prev_end = prev_y_start + timedelta(days=prev_period_days)
     previous = _count_signups(db, start_date=prev_y_start, end_date=prev_end)
 
@@ -274,7 +268,6 @@ def set_ban_state(
         user.banned_reason = None
         user.banned_until = None
 
-    # ✅ 로그 남기기
     log = UserBanLog(
         user_id=user_id,
         actor_id=actor_id,
@@ -297,7 +290,6 @@ def ban_user(
     until: Optional[datetime] = None,
     actor_id: Optional[int] = None,
 ) -> User:
-    """밴 전용 헬퍼."""
     return set_ban_state(
         db,
         user_id,
@@ -314,7 +306,6 @@ def unban_user(
     *,
     actor_id: Optional[int] = None,
 ) -> User:
-    """밴 해제 전용 헬퍼."""
     return set_ban_state(
         db,
         user_id,

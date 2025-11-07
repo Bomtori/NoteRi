@@ -90,11 +90,6 @@ def list_history(
         4000, ge=64, le=20000, description="prompt/response 최대 노출 길이"
     ),
 ):
-    """
-    사용자의 최신 대화 기록을 시간 역순으로 반환.
-    - cursor 없는 최초 요청: 최신 N개
-    - cursor 제공 시: 해당 시각보다 과거 레코드 N개 (무한스크롤/무한로딩 용)
-    """
     # 기본 쿼리
     conds = [AIGemini.user_id == user.id]
     if not include_errors:
@@ -111,12 +106,11 @@ def list_history(
         select(AIGemini)
         .where(and_(*conds))
         .order_by(desc(AIGemini.created_at), desc(AIGemini.id))
-        .limit(limit + 1)  # 다음 페이지 유무 확인을 위해 1개 더!
+        .limit(limit + 1) 
     )
 
     rows = db.execute(stmt).scalars().all()
 
-    # next_cursor 계산 (더 있으면 마지막 항목의 created_at)
     has_more = len(rows) > limit
     rows = rows[:limit]
 
@@ -147,15 +141,13 @@ def list_history(
     return ChatListResponse(items=items, next_cursor=next_cursor_val, total_count=total_count)
 
 
+# 특정 채팅 정보 가져오기
 @router.get("/{item_id}", response_model=ChatItem, summary="특정 채팅 정보")
 def get_history_item(
     item_id: int,
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    """
-    특정 기록 1건 상세 조회
-    """
     r = db.get(AIGemini, item_id)
     if not r or r.user_id != user.id:
         raise HTTPException(status_code=404, detail="not found")

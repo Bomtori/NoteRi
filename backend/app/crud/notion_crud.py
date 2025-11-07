@@ -8,12 +8,8 @@ from sqlalchemy.orm import Session
 
 from backend.app.db import get_db
 from backend.app.model import NotionAuth
-from backend.app.util.auth import verify_token  # ✅ 분리된 키 구조에 맞춘 검증기 사용
+from backend.app.util.auth import verify_token
 
-
-# -----------------------------
-# Helpers
-# -----------------------------
 def _extract_bearer_token(authorization: str = Header(..., alias="Authorization")) -> str:
     """
     Authorization 헤더에서 'Bearer <token>' 형태의 JWT를 추출.
@@ -35,10 +31,6 @@ def _extract_bearer_token(authorization: str = Header(..., alias="Authorization"
 
 
 def _user_id_from_jwt(token: str) -> int:
-    """
-    JWT 디코드하여 user_id(sub)를 획득.
-    Access/Refresh 분리 구조: 반드시 access 토큰으로만 검증.
-    """
     payload = verify_token(token, token_type="access")
     if not payload:
         raise HTTPException(
@@ -61,10 +53,6 @@ def _user_id_from_jwt(token: str) -> int:
             detail="Invalid token: 'sub' must be an integer",
         )
 
-
-# -----------------------------
-# CRUD
-# -----------------------------
 def save_user_notion_token(
     db: Session,
     user_id: int,
@@ -73,12 +61,7 @@ def save_user_notion_token(
     workspace_id: Optional[str] = None,
     workspace_name: Optional[str] = None,
 ) -> NotionAuth:
-    """
-    사용자별 Notion OAuth 토큰 저장/갱신 (upsert)
-    - access_token: 필수, 매 갱신 시 덮어씀
-    - refresh_token: 제공된 경우에만 갱신(일부 리프레시 플로우에서 refresh_token이 안 내려올 수 있음)
-    - workspace_id/name: 제공된 경우에만 갱신
-    """
+   
     auth = db.query(NotionAuth).filter(NotionAuth.user_id == user_id).first()
 
     if auth:
@@ -108,9 +91,7 @@ def get_user_notion_token(
     db: Session = Depends(get_db),
     token: str = Depends(_extract_bearer_token),  # Authorization: Bearer <JWT>
 ) -> Optional[str]:
-    """
-    JWT(Authorization 헤더) → user_id(sub) 추출 → DB에서 Notion access_token 조회
-    """
+
     user_id = _user_id_from_jwt(token)
     auth = db.query(NotionAuth).filter(NotionAuth.user_id == user_id).first()
     return auth.access_token if auth else None
@@ -121,8 +102,6 @@ def get_user_notion_auth(
     db: Session = Depends(get_db),
     token: str = Depends(_extract_bearer_token),
 ) -> Optional[NotionAuth]:
-    """
-    JWT 기반 user_id로 NotionAuth 전체 레코드 조회 (access_token 외 정보가 필요할 때 사용)
-    """
+
     user_id = _user_id_from_jwt(token)
     return db.query(NotionAuth).filter(NotionAuth.user_id == user_id).first()

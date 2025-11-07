@@ -523,7 +523,7 @@ export default function RecordShareModal({
                           {notionStatus.workspace_name || "노션 계정"}과 연결됨
                         </span>
                       ) : (
-                        <span className="text-sm text-gray-500">❌ 노션이 연결되어 있지 않습니다.</span>
+                        <span className="text-sm text-gray-500">노션이 연결되어 있지 않습니다.</span>
                       )}
                       <button
                         onClick={async () => {
@@ -597,7 +597,7 @@ export default function RecordShareModal({
                         </label>
                       </div>
 
-                      {/* 제목 입력(선택) */}
+                      {/* 제목 입력 */}
                       <div className="mt-2">
                         <input
                           className="w-full border rounded-lg px-3 py-2 text-sm"

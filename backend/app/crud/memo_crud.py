@@ -5,7 +5,7 @@ import backend.app.model as model
 from backend.app.schemas import memo_schema as schemas
 
 
-# ✅ 보드 생성 시 자동 메모 생성
+# 보드 생성 시 자동 메모 생성
 def create_default_memo(db: Session, board_id: int, user_id: int):
     new_memo = model.Memo(
         board_id=board_id,
@@ -19,7 +19,7 @@ def create_default_memo(db: Session, board_id: int, user_id: int):
     return new_memo
 
 
-# ✅ 특정 보드의 메모 조회
+# 특정 보드의 메모 조회
 def get_memo_by_board(db: Session, board_id: int):
     return (
         db.query(model.Memo)
@@ -27,12 +27,12 @@ def get_memo_by_board(db: Session, board_id: int):
         .first()
     )
 
-# ✅ 단일 메모 조회
+# 단일 메모 조회
 def get_memo(db: Session, memo_id: int):
     return db.query(model.Memo).filter(model.Memo.id == memo_id).first()
 
 
-# ✅ 메모 수정 (PATCH)
+# 메모 수정
 def update_memo(db: Session, memo_id: int, content: str):
     try:
         memo = db.query(model.Memo).filter(model.Memo.id == memo_id).first()
@@ -49,7 +49,7 @@ def update_memo(db: Session, memo_id: int, content: str):
         raise
 
 
-# ✅ 메모 삭제
+# 메모 삭제
 def delete_memo(db: Session, memo_id: int):
     memo = db.query(model.Memo).filter(model.Memo.id == memo_id).first()
     if not memo:

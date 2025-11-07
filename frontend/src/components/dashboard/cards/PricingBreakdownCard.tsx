@@ -16,8 +16,8 @@ interface Props {
   usersByPlan?: UsersByPlanInput;
   title?: string;
   className?: string;
-  loading?: boolean;           // ✅ 추가
-  error?: string | null;       // ✅ 추가
+  loading?: boolean;           
+  error?: string | null;
 }
 
 const PricingBreakdownCard: React.FC<Props> = ({

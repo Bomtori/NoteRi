@@ -28,7 +28,7 @@ export default function HeroSection({ user }) {
 
     return (
         <section className="relative flex flex-col h-screen w-full items-center justify-center text-center h-[90vh] overflow-hidden">
-            {/* 🎬 배경 영상 */}
+            {/* 배경 영상 */}
             <video
                 className="absolute object-cover object-center inset-0 w-full h-full object-cover"
                 src="/assets/landing-bg-loop.mp4"
@@ -41,7 +41,7 @@ export default function HeroSection({ user }) {
             {/* 글라스 오버레이 */}
             <div className="absolute inset-0 bg-black/40 backdrop-blur-[16px]" />
 
-            {/* 💥 렌즈 플레어 */}
+            {/* 렌즈 플레어 */}
             <div className="lens-flare absolute top-1/2 left-1/2 w-[300px] h-[300px] rounded-full blur-3xl opacity-0 pointer-events-none z-10"></div>
 
             {/* 로고 애니메이션 */}
@@ -66,7 +66,7 @@ export default function HeroSection({ user }) {
                     <h1 className="text-6xl md:text-7xl font-extrabold mb-8 leading-tight tracking-tight">
                         <TypeAnimation
                             sequence={[
-                                () => triggerFlare(), // 💥 flare + flicker 시작
+                                () => triggerFlare(), 
                                 "Note + 利",
                                 1600,
                                 "노트, 그리고 이로움",

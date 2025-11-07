@@ -5,7 +5,7 @@ from backend.app.crud import folder_crud as crud
 from backend.app.db import get_db
 from backend.app.schemas.board_schema import BoardResponse
 from backend.app.deps.auth import get_current_user
-from backend.app.model import User, Folder  # 타입 힌트용
+from backend.app.model import User, Folder
 from typing import Optional
 
 router = APIRouter(prefix="/folders", tags=["folders"])
@@ -25,7 +25,7 @@ def create_folder(
 @router.get("/", response_model=schemas.FolderListResponse, summary="폴더 가져오기")
 def read_folders(
     skip: int = 0,
-    limit: Optional[int] = None,  # ✅ 올바른 문법
+    limit: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -54,7 +54,7 @@ def read_boards_by_folder(
     boards = crud.get_boards_by_folder(db, folder_id)
     return boards
 
-# Update # 🍒 10.27 frontend 수정
+# Update
 @router.patch("/{folder_id}", response_model=schemas.FolderResponse, summary="폴더 업데이트")
 def update_folder(
     folder_id: int,
@@ -70,7 +70,6 @@ def update_folder(
     if not folder:
         raise HTTPException(status_code=404, detail="Folder not found")
 
-    # ✅ 전달된 필드만 업데이트
     for key, value in folder_update.dict(exclude_unset=True).items():
         setattr(folder, key, value)
 
@@ -79,14 +78,13 @@ def update_folder(
     return folder
 
 
-# Delete # 🍒 10.27 frontend 수정
+# Delete 
 @router.delete("/{folder_id}", response_model=schemas.FolderResponse, summary="폴더 삭제")
 def delete_folder(
     folder_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # ✅ current_user.id 정수형을 넘기므로 CRUD에서는 user_id 그대로 써야 함
     folder = crud.delete_folder(db, folder_id, current_user)
     if not folder:
         raise HTTPException(status_code=404, detail="Folder not found or no permission")

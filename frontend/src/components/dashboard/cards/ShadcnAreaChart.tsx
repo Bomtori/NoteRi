@@ -43,7 +43,7 @@ export default function ShadcnAreaChart({
   height = 220,
   showGrid,
   tickFormatter,
-  animation, // ✅ 추가
+  animation, 
 }: {
   title?: string;
   data?: any[];
@@ -52,13 +52,13 @@ export default function ShadcnAreaChart({
   height?: number;
   showGrid?: boolean;
   tickFormatter?: (v: any) => string;
-  animation?: AnimationOpts;   // ✅ 추가
+  animation?: AnimationOpts;  
 }) {
   const safeData = Array.isArray(data) ? data : [];
   const safeSeries = Array.isArray(series) ? series : [];
   const { ref, size } = useMeasuredSize(height);
 
-  // ✅ 애니메이션 기본값
+ 
   const isActive  = animation?.active ?? true;
   const begin     = animation?.begin ?? 0;
   const duration  = animation?.duration ?? 700;
@@ -85,7 +85,7 @@ export default function ShadcnAreaChart({
                 fill={s.color}
                 fillOpacity={s.fillOpacity ?? 0.25}
                 strokeWidth={s.strokeWidth ?? 2}
-                isAnimationActive={isActive}      // ✅ 켰다!
+                isAnimationActive={isActive}     
                 animationBegin={begin}
                 animationDuration={duration}
                 animationEasing={easing}

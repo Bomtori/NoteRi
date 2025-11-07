@@ -1,8 +1,11 @@
-import React from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import RatingModal from "./RatingModal";
+import { useToast } from "@/hooks/useToast";
+import apiClient from "../../api/apiClient";
 
 export default function FinalSummarySection({ finalSummaries }) {
    const [showRating, setShowRating] = useState(false);
+   const { showToast } = useToast();
 
   // ✅ 전체 요약이 처음 생성되면 별점 모달 표시
   useEffect(() => {
@@ -12,20 +15,17 @@ export default function FinalSummarySection({ finalSummaries }) {
     }
   }, [finalSummaries]);
 
-  const handleSubmitRating = (score) => {
-    console.log("유저가 남긴 평점:", score);
-
-    // ✅ 서버로 전송 (예시)
-    fetch("/api/feedback/summary", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ score }),
-    })
-      .then((r) => r.ok && console.log("✅ 별점 저장 완료"))
-      .catch((e) => console.error("❌ 별점 저장 실패:", e));
+ 
+  const handleSubmitRating = async (rating) => {
+    try {
+      // 실제 API 호출 (임시: 콘솔로 확인)
+      console.log("⭐ 별점 제출:", rating);
+      await apiClient.post("/feedback/summary", { rating }); // 백엔드 준비 안 됐으면 주석 처리 가능
+      showToast("피드백이 제출되었습니다!", 2000);
+    } catch {
+      showToast("⚠️ 피드백 서버가 아직 연결되지 않았어요.", 2000);
+    }
   };
-
     if (!finalSummaries || finalSummaries.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center flex-1 text-gray-400 text-sm">
@@ -75,6 +75,7 @@ export default function FinalSummarySection({ finalSummaries }) {
             onSubmit={(score) => {
                 showToast(`피드백 감사합니다! ${score}점으로 평가하셨습니다 💜`);
                 handleSubmitRating(score);
+                setTimeout(() => setShowRating(false), 1500);
             }}
             />
 

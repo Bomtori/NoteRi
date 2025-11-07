@@ -4,7 +4,7 @@ import os, time
 from fastapi import Query, HTTPException
 from backend.app.util.enc_url import parse_link_token
 
-DEFAULT_TTL = int(os.getenv("LINK_TOKEN_TTL_SECONDS", "0"))  # 0이면 exp 강제 X
+DEFAULT_TTL = int(os.getenv("LINK_TOKEN_TTL_SECONDS", "0"))  
 
 @dataclass
 class LinkContext:
@@ -20,7 +20,6 @@ def optional_link_ctx(t: Optional[str] = Query(None, description="URL link token
     try:
         data = parse_link_token(t)
     except ValueError as e:
-        # 토큰이 있으나 잘못된 경우만 401. (없으면 None으로 통과)
         raise HTTPException(status_code=401, detail=str(e))
 
     bid = data.get("bid")

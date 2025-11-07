@@ -95,7 +95,7 @@ def update_ban_state(
     user_id: int = Path(..., ge=1),
     body: BanUpdateRequest = ...,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_admin),  # ✅ 관리자만 허용
+    admin: User = Depends(require_admin),
 ):
     try:
         updated = user_crud.set_ban_state(
@@ -157,11 +157,10 @@ def get_user_ban_info(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    # 남은 시간 계산
     remaining_seconds = None
     if user.is_banned:
         if user.banned_until is None:
-            remaining_seconds = None  # 영구밴
+            remaining_seconds = None 
         else:
             now = datetime.now(timezone.utc)
             diff = int((user.banned_until - now).total_seconds())
@@ -188,13 +187,12 @@ def init_guest_token(response: Response):
     }
     token = jwt.encode(payload, GUEST_SECRET_KEY, algorithm=JWT_ALG)
 
-    # ✅ 쿠키로 심기
     response.set_cookie(
         key="guest_token",
         value=GUEST_SECRET_KEY,
         httponly=True,
-        samesite="none",    # ✅ cross-site 전송 허용
-        secure=True,        # ✅ https일 경우 필수 (로컬 테스트면 False)
-        path="/",           # ✅ 모든 경로에서 전송
+        samesite="none",    
+        secure=True,        
+        path="/",           
     )
     return {"guest_token": token, "message": "Guest token issued"}

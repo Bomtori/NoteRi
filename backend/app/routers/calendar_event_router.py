@@ -5,8 +5,8 @@ from typing import List
 from backend.app.db import get_db
 from backend.app.schemas.calendar_event_schema import EventCreate, EventUpdate, EventOut
 from backend.app.crud import calendar_event_crud
-from backend.app.deps.auth import get_current_user  # 프로젝트의 인증 의존성 경로로 수정
-from backend.app.model import User  # 실제 경로에 맞게 수정
+from backend.app.deps.auth import get_current_user 
+from backend.app.model import User  
 
 router = APIRouter(prefix="/calendar", tags=["calendar"])
 

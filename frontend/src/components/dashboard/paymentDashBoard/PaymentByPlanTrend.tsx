@@ -26,7 +26,7 @@ function makeXs(range: UiRange): string[] {
 }
 
 function pickArray(resp: unknown): any[] {
-  const r = resp as any;                 // ✅ any 로 접근
+  const r = resp as any;               
   if (Array.isArray(r)) return r;
 
   const items = r?.items as any;
@@ -52,24 +52,23 @@ const fmtTick = (v: string) => {
 
 /** 플랜 컬러 맵 + 팔레트 */
 const PLAN_COLORS: Record<string, string> = {
-  free: "#94a3b8",
-  pro: "#F59E0B",
-  enterprise: "#10B981",
+  free: "#A1A1AA",        
+  pro: "#9B6BFF",         
+  enterprise: "#5EEAD4",  
 };
 const PALETTE = [
-  "#7E36F9",
-  "#10B981",
-  "#F59E0B",
-  "#EF4444",
-  "#3B82F6",
-  "#E11D48",
-  "#22D3EE",
-  "#A78BFA",
-  "#14B8A6",
-  "#F97316",
-  "#84CC16",
+  "#7E37F9",
+  "#9B6BFF",
+  "#B794F4",
+  "#6D28D9",
+  "#C084FC",
+  "#4F46E5",
+  "#5EEAD4",
+  "#A5B4FC",
+  "#F0ABFC",
+  "#DDD6FE",
+  "#8B5CF6",
 ];
-
 /** 응답에서 플랜 키 추출 (wide/long 모두) */
 function inferPlanKeys(resp: any): string[] {
   const rows: any[] = pickArray(resp);   // ✅ items.data 포함 모든 경로 커버
@@ -173,7 +172,6 @@ export default function PaymentByPlanTrend({
         console.log("PaymentTrend", resp)
 
         // 1) 응답에서 플랜 키 동적 추출
-       // 1) 응답에서 플랜 키 동적 추출
         let keys = inferPlanKeys(resp);
         // 키가 없으면, 기존 팔레트 키(= 현재 쓰는 플랜 레이블)를 기본으로 사용
         if (keys.length === 0) {

@@ -58,7 +58,7 @@ export default function RecordSection({
                                 opacity: 1,
                                 y: 0,
                                 scale: 1,
-                                backgroundColor: "rgba(255,255,255,0)", // ✅ 들어오고 난 뒤 배경 투명
+                                backgroundColor: "rgba(255,255,255,0)", 
                             }}
                             exit={{ opacity: 0, y: -20 }}
                             transition={{
@@ -66,7 +66,7 @@ export default function RecordSection({
                                 y: { duration: 0.6, ease: [0.25, 0.6, 0.3, 1] },
                                 scale: { duration: 0.6 },
                                 backgroundColor: {
-                                    delay: 0.3 + idx * 0.15, // ✅ 살짝 늦게 사라지게 (보라색 유지 시간)
+                                    delay: 0.3 + idx * 0.15,
                                     duration: 1.2,
                                     ease: "easeOut",
                                 },
@@ -175,7 +175,7 @@ export default function RecordSection({
         const safeSummaries = Array.isArray(summaries) ? summaries : [];
         const safeAllHistory = Array.isArray(allHistory) ? allHistory : [];
 
-        // 🔹 summaries와 allHistory 모두 있을 때
+        // summaries와 allHistory 모두 있을 때
         if (safeSummaries.length > 0 && safeAllHistory.length > 0) {
             console.log(summaries, allHistory)
             safeSummaries.forEach((summary, idx) => {
@@ -206,7 +206,7 @@ export default function RecordSection({
                 }
             });
 
-            // 🔹 마지막 요약 이후의 남은 스크립트
+            // 마지막 요약 이후의 남은 스크립트
             const lastEnd = Math.max(
                 ...safeSummaries.map((s) => new Date(s.interval_end_at).getTime())
             );
@@ -222,14 +222,14 @@ export default function RecordSection({
                 });
             }
         } else {
-            // 🔹 요약이 없을 때 전체 스크립트로 표시
+            // 요약이 없을 때 전체 스크립트로 표시
             groupedScript.push({
                 title: "전체 스크립트",
                 lines: safeAllHistory.map((l) => l.text || ""),
             });
         }
 
-        // 🔹 렌더링
+        // 렌더링
         return (
             <div className="flex flex-col gap-6 mt-4 overflow-y-auto flex-1 px-2">
                 {groupedScript.length > 0 ? (

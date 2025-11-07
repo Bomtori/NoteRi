@@ -12,7 +12,7 @@ const COLORS: Record<string, string> = {
   google: "#4285F4",
 };
 
-// ✅ 범례에 쓸 표시명 매핑
+// 범례에 쓸 표시명 매핑
 const LABELS: Record<string, string> = {
   kakao: "카카오",
   google: "구글",
@@ -76,9 +76,9 @@ export default function UserByProvider({
           <RechartsDonut
             data={data}
             height={height}
-            showLegend                   // ✅ 범례 표시
-            legendPlacement="right"      // ✅ 오른쪽에 범례
-            labelsMap={LABELS}           // ✅ id → 한글 표시명
+            showLegend                   // 범례 표시
+            legendPlacement="right"      // 오른쪽에 범례
+            labelsMap={LABELS}           // id → 한글 표시명
           />
         </div>
       </CardContent>

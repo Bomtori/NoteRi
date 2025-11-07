@@ -6,9 +6,8 @@ from backend.app.model import Folder, User
 from backend.app.schemas import folder_schema as schemas
 from backend.app.deps.auth import get_current_user
 
-# Create
 def create_folder(db: Session, folder: schemas.FolderCreate, current_user: model.User):
-    # ✅ 이름 중복 체크 (같은 유저 내에서 동일 이름 금지)
+    # 이름 중복 체크 (같은 유저 내에서 동일 이름 금지)
     exists = (
         db.query(model.Folder)
         .filter(
@@ -30,8 +29,7 @@ def create_folder(db: Session, folder: schemas.FolderCreate, current_user: model
     db.refresh(new_folder)
     return new_folder
 
-
-# Read one
+#  보드 하나
 def get_folder(db: Session, folder_id: int, current_user: model.User):
     return (
         db.query(model.Folder)
@@ -39,7 +37,7 @@ def get_folder(db: Session, folder_id: int, current_user: model.User):
         .first()
     )
 
-# Read all
+# 모든 보드 가져오기
 def get_folders(db: Session, user_id: int, skip: int = 0, limit: int = 10):
     return (
         db.query(model.Folder)
@@ -51,7 +49,7 @@ def get_folders(db: Session, user_id: int, skip: int = 0, limit: int = 10):
     return query.all()
 
 
-# ✅ 폴더별 보드 목록
+# 폴더별 보드 목록
 def get_boards_by_folder(db: Session, folder_id: int):
     return (
         db.query(model.Board)
@@ -72,7 +70,6 @@ def update_folder(db: Session, folder_id: int, folder_update: schemas.FolderUpda
     if not folder:
         raise HTTPException(status_code=404, detail="Folder not found")
 
-    # ✅ 이름 중복 체크
     if folder_update.name and folder_update.name != folder.name:
         exists = (
             db.query(model.Folder)
@@ -110,7 +107,7 @@ def delete_folder(db: Session, folder_id: int, current_user: model.User):
     db.commit()
     return folder
 
-# ✅ 트리 구조
+# 트리 구조
 def build_folder_tree(folder, db, user_id: int):
     children = (
         db.query(model.Folder)

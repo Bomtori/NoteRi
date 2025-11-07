@@ -1,7 +1,7 @@
 # backend/app/routers/plan_router.py
 from fastapi import APIRouter, Depends, HTTPException, Path
-from sqlalchemy.orm import Session, joinedload        # ✅ joinedload 추가
-from sqlalchemy import func, desc                     # ✅ func, desc 추가
+from sqlalchemy.orm import Session, joinedload        
+from sqlalchemy import func, desc              
 from datetime import date
 from typing import List
 
@@ -31,7 +31,7 @@ def get_my_current_plan(
 
     db.expire_all()
 
-    # ✅ is_active=True + start_date 기준 최신 구독
+    # is_active=True + start_date 기준 최신 구독
     sub = (
         db.query(Subscription)
         .options(joinedload(Subscription.plan))
@@ -50,14 +50,14 @@ def get_my_current_plan(
             raise HTTPException(status_code=404, detail="Free plan not found")
         return free_plan
 
-    # ✅ 만료 체크
+    # 만료 체크
     today = date.today()
     if sub.end_date and sub.end_date < today:
         print("⚠️ 구독 만료 → free 반환")
         free_plan = db.query(Plan).filter(func.lower(Plan.name) == "free").first()
         return free_plan
 
-    print(f"✅ 현재 플랜: {sub.plan.name}")
+    print(f"현재 플랜: {sub.plan.name}")
     return sub.plan
 
 @router.get("/{plan_id}", response_model=PlanRead, summary="특정 플랜 조회")

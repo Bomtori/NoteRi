@@ -8,7 +8,7 @@ export default function LandingTopNav() {
     const [user, setUser] = useState(null);
     const [isScrolled, setIsScrolled] = useState(false);
 
-    // ✅ 사용자 로그인 상태 확인
+    // 사용자 로그인 상태 확인
     useEffect(() => {
         async function fetchUser() {
             try {
@@ -23,7 +23,7 @@ export default function LandingTopNav() {
         fetchUser();
     }, []);
 
-    // ✅ HeroSection 지나가면 색 반전
+    // HeroSection 지나가면 색 반전
     useEffect(() => {
         const handleScroll = () => {
             const scrollY = window.scrollY;
@@ -54,13 +54,13 @@ export default function LandingTopNav() {
             }
         >
             <div className="max-w-7xl mx-auto flex items-center justify-between px-8 py-4">
-                {/* ✅ 로고 */}
+                {/* 로고 */}
                 <div
                     onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
                     className="cursor-pointer flex items-center gap-2 select-none"
                 >
                     <img
-                        src="/assets/NoteRi-Logo.svg"
+                        src="/assets/NoteRi-Logo.png"
                         alt="NoteRi Logo"
                         className={`h-6 md:h-8 transition-all duration-500 ${
                             isScrolled ? "" : "brightness-0 invert"
@@ -68,7 +68,7 @@ export default function LandingTopNav() {
                     />
                 </div>
 
-                {/* ✅ 메뉴 */}
+                {/* 메뉴 */}
                 <div
                     className={`hidden md:flex items-center gap-10 text-sm font-medium transition-colors duration-500 ${
                         isScrolled ? "text-gray-900" : "text-white"

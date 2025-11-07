@@ -55,7 +55,7 @@ export default function UsageAvgByPlan({
     return { credentials: "include", headers };
   };
 
-  /** 1️⃣ 플랜 메타 가져오기 */
+  /** 플랜 메타 가져오기 */
   useEffect(() => {
     const ac = new AbortController();
     (async () => {
@@ -87,7 +87,7 @@ export default function UsageAvgByPlan({
     return () => ac.abort();
   }, []);
 
-  /** 2️⃣ 평균 사용량 가져오기 */
+  /** 평균 사용량 가져오기 */
   useEffect(() => {
     const ac = new AbortController();
     (async () => {
@@ -115,7 +115,7 @@ export default function UsageAvgByPlan({
     return () => ac.abort();
   }, []);
 
-  /** 3️⃣ 색상 맵 (DB color > fallback) */
+  /** 색상 맵 (DB color > fallback) */
   const colorMap: Record<string, string> = useMemo(() => {
     const m: Record<string, string> = { ...FALLBACK_COLORS };
     for (const pm of planMeta) {
@@ -125,7 +125,7 @@ export default function UsageAvgByPlan({
     return m;
   }, [planMeta]);
 
-  /** 4️⃣ 차트 데이터 생성 (빈 값/누락 대비 완전 방어) */
+  /** 차트 데이터 생성 (빈 값/누락 대비 완전 방어) */
   const chartData: ChartDatum[] = useMemo(() => {
     const usageByPlan = new Map<string, PlanStat>();
     for (const r of plans || []) {
@@ -148,18 +148,18 @@ export default function UsageAvgByPlan({
         return {
           id: label,
           value: Number(stat?.avg_used_minutes ?? 0) || 0,
-          color: colorMap[key] || "#7E37F9", // ✅ CSS 변수 대신 HEX
+          color: colorMap[key] || "#7E37F9", // CSS 변수 대신 HEX
           users: Number(stat?.sample_size ?? 0) || 0,
         };
       })
-      .filter((d): d is ChartDatum => !!d); // ✅ null 방어
+      .filter((d): d is ChartDatum => !!d); // null 방어
 
     return filled.length > 0
       ? filled.slice().sort((a, b) => (b.value || 0) - (a.value || 0))
       : [{ id: "—", value: 0, color: "#7E37F9", users: 0 }];
   }, [plans, planMeta, colorMap]);
 
-  /** 5️⃣ 총 표본 수 */
+  /** 총 표본 수 */
   const totalSamples = useMemo(
     () =>
       Array.isArray(plans)
@@ -171,7 +171,7 @@ export default function UsageAvgByPlan({
     [plans]
   );
 
-  /** 6️⃣ 외곽 Card 여부 */
+  /** 외곽 Card 여부 */
   const wrapperClass = frameless ? "" : "p-4 bg-card rounded-xl shadow-sm";
 
   return (
@@ -193,7 +193,7 @@ export default function UsageAvgByPlan({
       {!loading && !error && (
         <>
           <div className="flex-1 min-h-0">
-            {/* ✅ data가 무조건 배열이 되도록 보장 */}
+            {/* data가 무조건 배열이 되도록 보장 */}
             <NivoBar
               data={Array.isArray(chartData) ? chartData : []}
               height={height}

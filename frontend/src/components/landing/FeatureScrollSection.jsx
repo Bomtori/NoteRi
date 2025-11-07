@@ -23,7 +23,7 @@ export default function FeatureScrollSection() {
     const [activeIndex, setActiveIndex] = useState(0);
     const sectionRefs = useRef([]);
 
-    // 🔹 IntersectionObserver로 현재 섹션 감지
+    // IntersectionObserver로 현재 섹션 감지
     useEffect(() => {
         const observer = new IntersectionObserver(
             (entries) => {
@@ -41,7 +41,7 @@ export default function FeatureScrollSection() {
         return () => observer.disconnect();
     }, []);
 
-    // 🔹 클릭 시 스크롤 이동
+    // 클릭 시 스크롤 이동
     const scrollToSection = (index) => {
         sectionRefs.current[index]?.scrollIntoView({
             behavior: "smooth",
@@ -51,7 +51,7 @@ export default function FeatureScrollSection() {
 
     return (
         <section className="relative flex w-full bg-white overflow-hidden">
-            {/* 🔸 왼쪽 텍스트 영역 */}
+            {/* 왼쪽 텍스트 영역 */}
             <div className="w-1/2 flex flex-col">
                 {features.map((f, i) => (
                     <div
@@ -79,7 +79,7 @@ export default function FeatureScrollSection() {
                 ))}
             </div>
 
-            {/* 🔸 오른쪽 영상 (sticky 고정) */}
+            {/* 오른쪽 영상 (sticky 고정) */}
             <div className="sticky top-0 right-0 h-screen w-1/2 flex items-center justify-center">
                 <motion.video
                     key={features[activeIndex].media}
@@ -89,12 +89,12 @@ export default function FeatureScrollSection() {
                     muted
                     playsInline
                     className="
-                        w-[90%]               /* ✅ 영상 너비 확장 (기존 75%) */
-                        max-w-[800px]         /* ✅ 최대 크기 제한 */
-                        aspect-[16/10]        /* ✅ 비율 유지 (더 와이드하게) */
-                        rounded-3xl           /* ✅ 부드러운 모서리 */
+                        w-[90%]               
+                        max-w-[800px]         
+                        aspect-[16/10]        
+                        rounded-3xl           
                         object-cover
-                        shadow-[0_20px_60px_rgba(0,0,0,0.15)] /* ✅ 더 강한 그림자 */
+                        shadow-[0_20px_60px_rgba(0,0,0,0.15)]
                         "
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -102,7 +102,7 @@ export default function FeatureScrollSection() {
                 />
             </div>
 
-            {/* 🔸 스크롤 내비게이션 */}
+            {/* 스크롤 내비게이션 */}
             <div className="absolute top-1/2 right-[calc(50%+40px)] -translate-y-1/2 flex flex-col gap-4">
                 {features.map((f, i) => (
                     <button

@@ -30,13 +30,13 @@ export default function FeatureChatbotSection() {
                 muted
                 playsInline
                 className="
-      w-[90%]               /* ✅ 영상 너비 확장 (기존 75%) */
-      max-w-[800px]         /* ✅ 최대 크기 제한 */
-      aspect-[16/10]        /* ✅ 비율 유지 (더 와이드하게) */
-      rounded-3xl           /* ✅ 부드러운 모서리 */
-      object-cover
-      shadow-[0_20px_60px_rgba(0,0,0,0.15)] /* ✅ 더 강한 그림자 */
-    "
+                w-[90%]               
+                max-w-[800px]         
+                aspect-[16/10]        
+                rounded-3xl           
+                object-cover
+                shadow-[0_20px_60px_rgba(0,0,0,0.15)] 
+                "
                 initial={{ opacity: 0, scale: 0.9, filter: "blur(8px)" }}
                 animate={isVisible ? { opacity: 1, scale: 1, filter: "blur(0px)" } : {}}
                 transition={{ duration: 0.9 }}

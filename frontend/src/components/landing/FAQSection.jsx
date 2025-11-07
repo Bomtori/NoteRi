@@ -13,7 +13,7 @@ export default function FAQSection() {
     const sectionRef = useRef(null);
     const contentRefs = useRef([]);
 
-    // ✅ 각 FAQ 항목별로 IntersectionObserver 적용
+    // 각 FAQ 항목별로 IntersectionObserver 적용
     useEffect(() => {
         const observer = new IntersectionObserver(
             (entries) => {

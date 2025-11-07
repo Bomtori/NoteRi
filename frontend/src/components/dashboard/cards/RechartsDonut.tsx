@@ -10,9 +10,9 @@ export default function RechartsDonut({
   data,
   height = 220,
   aspect,
-  showLegend = true,                 // ✅ 범례 표시 여부
-  legendPlacement = "bottom",        // ✅ "bottom" | "right"
-  labelsMap,                         // ✅ id → 표시명 매핑 (ex. kakao → 카카오)
+  showLegend = true,         
+  legendPlacement = "bottom",   
+  labelsMap,              
   className = "",
 }: {
   data: Datum[];

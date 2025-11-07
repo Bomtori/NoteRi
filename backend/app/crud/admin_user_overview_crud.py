@@ -87,13 +87,11 @@ def _collect_latest_subscription_map(
     )
     latest_map: Dict[int, Tuple[Optional[str], Optional[date], Optional[bool]]] = {}
     for uid, plan_name, end_date, is_active, _ in active_sub_rows:
-        if uid not in latest_map:  # user별 최신만
-            # end_date가 datetime이면 date로 변환
+        if uid not in latest_map:
             if isinstance(end_date, datetime):
                 end_date = end_date.date()
             latest_map[uid] = (plan_name, end_date, is_active)
 
-    # 활성 없던 유저는 전체 중 최신을 보정
     no_active_ids = [uid for uid in user_ids if uid not in latest_map]
     if no_active_ids:
         latest_any_rows = (
@@ -140,7 +138,6 @@ def list_overviews(
     )
     user_ids = [u.id for u in users]
 
-    # 배치 집계
     total_paid_map, latest_status_map = _collect_payment_maps(db, user_ids)
     latest_sub_map = _collect_latest_subscription_map(db, user_ids)
 

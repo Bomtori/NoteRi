@@ -133,7 +133,7 @@ def check_session_has_embeddings(db: Session, session_id: int) -> bool:
 
 
 def get_text_chunks_by_session(db: Session, *, session_id: int) -> List[str]:
-    # ✅ 컬럼명 수정: recording_session_id
+    # 컬럼명 수정: recording_session_id
     rows = db.execute(
         select(m.RecordingEmbedding.text_chunk)
         .where(m.RecordingEmbedding.recording_session_id == session_id)

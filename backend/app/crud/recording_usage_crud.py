@@ -8,7 +8,7 @@ from typing import Dict, Any, List, Tuple, Optional
 from backend.app.model import RecordingUsage, Subscription, Plan, PlanType, AudioData, Board, RecordingUsageLog
 from backend.app.util.day_calculation import (_today_local, _week_bounds, _month_bounds, _year_bounds)
 from backend.app.util.errors import NotReadyError, AlreadyDebitedError, UsageExceededError
-# 선택: 초과 에러 전용 예외
+
 class UsageExceededError(ValueError):
     pass
 
@@ -19,8 +19,7 @@ def create_or_update_usage(db: Session, user_id: int, subscription: Subscription
     """
     plan = subscription.plan
     if not plan:
-        # raise ValueError("Subscription has no linked plan")
-        raise ValueError(f"Subscription {subscription.id} has no linked plan") # 🍒 10.22 front결제오류로 수정
+        raise ValueError(f"Subscription {subscription.id} has no linked plan") 
 
 
     prev_usage = (
@@ -34,13 +33,11 @@ def create_or_update_usage(db: Session, user_id: int, subscription: Subscription
     if prev_usage and prev_usage.allocated_seconds is not None:
         prev_remaining = max(int(prev_usage.allocated_seconds) - int(prev_usage.used_seconds or 0), 0)
 
-    # 분→초 환산 (None=무제한)
     if plan.allocated_seconds is None or plan.allocated_seconds < 0:
         alloc_seconds = None
     else:
         alloc_seconds = int(plan.allocated_seconds) * 60
 
-    # free는 기간 무제한
     if plan.name == "free":
         period_start = date.today()
         period_end = None
@@ -48,7 +45,6 @@ def create_or_update_usage(db: Session, user_id: int, subscription: Subscription
         period_start = date.today()
         period_end = date.today() + timedelta(days=plan.duration_days)
 
-    # 무제한이면 None 유지, 아니면 이월분 더하기
     if alloc_seconds is None:
         total_alloc = None
     else:
@@ -71,27 +67,19 @@ def create_or_update_usage(db: Session, user_id: int, subscription: Subscription
 
 
 def use_seconds_from_audio_owner(db: Session, audio_id: int) -> RecordingUsage:
-    """
-    AudioData를 기반으로 RecordingUsage 사용량(seconds)을 차감한다.
-    debited_at 없이 단순 차감만 수행한다.
-    """
 
-    # 1️⃣ AudioData 조회
     audio = db.query(AudioData).filter(AudioData.id == audio_id).first()
     if not audio:
         raise ValueError(f"AudioData {audio_id} not found")
 
-    # 2️⃣ duration 검증
     if not audio.duration or audio.duration <= 0:
         raise NotReadyError(f"AudioData {audio_id} has no duration yet")
 
-    # 3️⃣ board 기반 user_id 찾기
     board = db.query(Board).filter(Board.id == audio.board_id).first()
     if not board:
         raise ValueError(f"Board not found for AudioData {audio_id}")
     user_id = board.owner_id
 
-    # 4️⃣ 활성 RecordingUsage 찾기 (현재 구독 기간 내)
     usage = (
         db.query(RecordingUsage)
         .filter(
@@ -105,7 +93,6 @@ def use_seconds_from_audio_owner(db: Session, audio_id: int) -> RecordingUsage:
     if not usage:
         raise ValueError(f"No active RecordingUsage found for user {user_id}")
 
-    # 5️⃣ 사용량 계산
     used_now = int(usage.used_seconds or 0)
     add_seconds = int(audio.duration)
     total_used = used_now + add_seconds
@@ -115,15 +102,12 @@ def use_seconds_from_audio_owner(db: Session, audio_id: int) -> RecordingUsage:
 
     usage.used_seconds = total_used
 
-    # 6️⃣ 저장
     db.add(usage)
     db.commit()
     db.refresh(usage)
 
     print(f"💳 사용량 차감 완료: user_id={user_id}, +{add_seconds}s, total={total_used}s")
     return usage
-
-# ===== 집계/통계도 전부 '초' 기준 =====
 
 def get_total_usage_all_users(db: Session) -> int:
     total_usage = db.query(func.sum(RecordingUsage.used_seconds)).scalar()
@@ -158,7 +142,7 @@ def get_total_usage_last_7_days(db: Session) -> Dict[str, Any]:
 
 def get_total_usage_month(db: Session) -> Dict[str, Any]:
     today = _today_local()
-    start_30d = today - timedelta(days=29)  # 최근 30일 (오늘 포함)
+    start_30d = today - timedelta(days=29)
     total_usage_30d = (
         db.query(func.sum(RecordingUsage.used_seconds))
         .filter(func.date(RecordingUsage.created_at) >= start_30d)
@@ -265,7 +249,6 @@ def get_usage_comparisons(db: Session) -> Dict[str, Any]:
 KST = timezone(timedelta(hours=9))
 
 def get_avg_usage_by_plan(db: Session):
-    # Plan을 기준으로 시작 → 사용이 없어도 플랜은 항상 나옴
 
     rows = (
         db.query(

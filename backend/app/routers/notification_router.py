@@ -7,12 +7,12 @@ from typing import Optional
 
 from backend.app.db import get_db
 from backend.app.model import Notification
-from backend.app.deps.auth import get_current_user # 실제 프로젝트 인증 의존성 사용
+from backend.app.deps.auth import get_current_user
 from backend.app.crud import notification_crud
 from backend.app.schemas.notification_schema import NotificationsDeleteRequest
 from backend.app.tasks.scheduler import send_morning_calendar_notifications
 
-router = APIRouter(prefix="/notifications", tags=["notifications"]) # /api 쓰면 main에서 prefix 추가
+router = APIRouter(prefix="/notifications", tags=["notifications"])
 KST = ZoneInfo("Asia/Seoul")
 
 def _row_to_dict(n: Notification) -> dict:
@@ -86,8 +86,7 @@ current_user=Depends(get_current_user),
 
 @router.post("/trigger-morning", summary="테스트 용")
 def trigger_morning(current_user=Depends(get_current_user)):
-    # if not current_user.is_admin: raise HTTPException(403, "forbidden")
-    send_morning_calendar_notifications()   # 바로 실행
+    send_morning_calendar_notifications()
     return {"ok": True}
 
 @router.delete("/{notification_id}", status_code=204, summary="알람 삭제")
@@ -109,7 +108,7 @@ def delete_many_notifications(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    # ✅ 빈 선택 방지
+    # 빈 선택 방지
     if not payload.ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -119,7 +118,6 @@ def delete_many_notifications(
     deleted = notification_crud.delete_notifications_by_ids(
         db, user_id=current_user.id, ids=payload.ids
     )
-    # 선택은 있었지만 권한/존재 문제로 실제 삭제 0건인 경우
     if deleted == 0:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

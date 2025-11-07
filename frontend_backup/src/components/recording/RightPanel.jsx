@@ -12,18 +12,18 @@ export default function RightPanel({
                                    }) {
     const [activeTab, setActiveTab] = useState(tabs[0]);
 
-    // ✅ 메모 상태
+    // 메모 상태
     const [memoText, setMemoText] = useState("");
     const [saveStatus, setSaveStatus] = useState("");
     const saveTimeout = useRef(null);
 
-    // ✅ GPT 상태 (변경 없음)
+    // GPT
     const [gptInput, setGptInput] = useState("");
     const [gptOutput, setGptOutput] = useState("");
     const [loading, setLoading] = useState(false);
     const [isAtBottom, setIsAtBottom] = useState(false);
 
-    // ✅ 초기 메모 불러오기
+    // 초기 메모 불러오기
     useEffect(() => {
         if (activeTab === "memo" && boardId && memoId) fetchMemo();
     }, [activeTab, boardId, memoId]);
@@ -38,7 +38,7 @@ export default function RightPanel({
         }
     }
 
-    // ✅ 자동 저장 (입력 멈춘 후 0.8초)
+    // 자동 저장 (0.8초)
     useEffect(() => {
         if (!boardId || !memoId) return;
         if (saveTimeout.current) clearTimeout(saveTimeout.current);
@@ -60,7 +60,7 @@ export default function RightPanel({
         return () => clearTimeout(saveTimeout.current);
     }, [memoText, boardId, memoId]);
 
-    // ✅ GPT 기능 (기존 그대로)
+    // GPT 기능
     useEffect(() => {
         if (activeTab === "gpt") fetchLastHistory();
     }, [activeTab]);
@@ -113,7 +113,7 @@ export default function RightPanel({
             </div>
 
             <div className="flex-1 overflow-y-auto">
-                {/* ✅ 메모 탭 (Markdown Editor) */}
+                {/* 메모 탭 (Markdown Editor) */}
                 {activeTab === "memo" && (
                     <div className="flex flex-col h-full">
                         <div className="flex justify-end mb-2">
@@ -134,7 +134,7 @@ export default function RightPanel({
                     </div>
                 )}
 
-                {/* ✅ GPT 탭 (그대로 유지) */}
+                {/* GPT 탭 */}
                 {activeTab === "gpt" && (
                     <div className="flex flex-col h-full relative">
                         <div

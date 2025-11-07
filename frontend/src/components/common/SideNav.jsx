@@ -39,12 +39,12 @@ export default function SideNav() {
     const colorOptions = ["#7E36F9", "#FFD700", "#3B82F6", "#4ADE80", "#EF4444", "#A855F7"];
     const [colorPickerId, setColorPickerId] = useState(null);
 
-    // ✅ 폴더 목록 불러오기
+    // 폴더 목록 불러오기
     useEffect(() => {
         dispatch(fetchFolders());
     }, [dispatch]);
     const [unreadCount, setUnreadCount] = useState(0);
-    // ✅ user알람
+    // user알람
     useEffect(() => {
         async function fetchUnread() {
             if (!user) return;
@@ -59,12 +59,12 @@ export default function SideNav() {
         }
         fetchUnread();
 
-        // ✅ 1분마다 자동 갱신
+        // 1분마다 자동 갱신
         const interval = setInterval(fetchUnread, 60000);
         return () => clearInterval(interval);
     }, [user]);
 
-    // ✅ 로그인된 유저 정보
+    // 로그인된 유저 정보
     useEffect(() => {
         async function fetchUser() {
             try {
@@ -81,7 +81,7 @@ export default function SideNav() {
     }, []);
 
 
-    // ✅ 새 폴더 추가
+    // 새 폴더 추가
     const handleAddFolder = async () => {
         const trimmed = newFolder.trim();
         if (!trimmed) {
@@ -105,7 +105,7 @@ export default function SideNav() {
         }
     };
 
-    // ✅ 폴더 이름 변경
+    // 폴더 이름 변경
     const handleRename = async (id) => {
         const trimmed = tempName.trim();
         if (!trimmed) {
@@ -131,7 +131,7 @@ export default function SideNav() {
         }
     };
 
-    // ✅ 폴더 삭제
+    // 폴더 삭제
     const handleDelete = async (id) => {
         const folder = folders.find((f) => f.id === id);
         if (!folder) return;
@@ -148,21 +148,17 @@ export default function SideNav() {
 
     return (
         <aside className="w-64 h-screen bg-white border-r border-gray-200 flex flex-col">
-            {/* ✅ 상단 : 로고 + 버튼 (고정) */}
-            <div className="flex-shrink-0">
-                {/* 로고 */}
-                <div className="p-5 border-b border-gray-200 flex items-center justify-start">
-                    <Link to="/" className="flex items-center gap-2 group">
-                        <img
-                            src="/assets/NoteRi-Logo.svg"
-                            alt="NoteRi Logo"
-                            className="w-7 h-7 object-contain group-hover:scale-110 transition-transform duration-300"
-                        />
-                        <span className="text-lg font-bold text-[#7E37F9] group-hover:text-[#682be0] transition-colors">
-                    NoteR<span className="text-black">i</span>
-                </span>
-                    </Link>
-                </div>
+        <div className="flex-shrink-0">
+            <div className="px-3 py-2 border-b border-gray-200 flex items-center justify-start">
+            <Link to="/" className="flex items-center gap-2 group">
+                <img
+                src="/assets/NoteRi-Logo.png"
+                alt="NoteRi Logo"
+                className="max-w-[100px] h-auto object-contain group-hover:scale-110 transition-transform duration-300"
+                />
+            </Link>
+            </div>
+
 
                 {/* 녹음 관련 버튼 */}
                 <div className="px-5 py-4 border-b border-gray-200 flex flex-col gap-2">
@@ -187,9 +183,9 @@ export default function SideNav() {
                 </div>
             </div>
 
-            {/* ✅ 가운데 : 폴더 리스트 (남은 영역 채우고, 스크롤 되지만 스크롤바 숨김) */}
+            {/* 가운데 : 폴더 리스트 (남은 영역 채우고, 스크롤 되지만 스크롤바 숨김) */}
             <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar">
-                {/* no-scrollbar 클래스 추가 ✅ */}
+                {/* no-scrollbar 클래스 추가 */}
                 <div className="p-5 border-b border-gray-200 flex justify-between items-center">
                     <h2 className="text-lg font-semibold text-gray-800">폴더</h2>
                     {!isAdding ? (
@@ -319,7 +315,7 @@ export default function SideNav() {
                 </div>
             </div>
 
-            {/* ✅ 하단 : 유저 정보 (고정) */}
+            {/* 하단 : 유저 정보 (고정) */}
             <div className="flex-shrink-0 p-4 border-t border-gray-200">
                 <div className="flex items-center justify-between">
                     {/* 프로필 링크 */}
@@ -342,7 +338,7 @@ export default function SideNav() {
                         </div>
                     </Link>
 
-                    {/* ✅ 알림 아이콘 (옆에 배치) */}
+                    {/* 알림 아이콘 (옆에 배치) */}
                     <Link to="/user" title="알림 보기" className="relative">
                         <Bell className={`w-5 h-5 transition-colors ${unreadCount > 0 ? "text-[#7E37F9]" : "text-gray-400 hover:text-[#7E37F9]"}`} />
                         {unreadCount > 0 && (

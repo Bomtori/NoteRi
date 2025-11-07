@@ -17,7 +17,6 @@ def read_mrr_breakdown(
         y, m = map(int, start.split("-"))
         start_month = date(y, m, 1)
     else:
-        # 최근 months 개가 나오도록 시작월 산출
         start_month = date(today.year, today.month, 1)
         for _ in range(months - 1):
             if start_month.month == 1:

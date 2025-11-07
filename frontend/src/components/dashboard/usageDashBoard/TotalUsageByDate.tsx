@@ -184,7 +184,7 @@ const TotalUsageByDate: React.FC<Props> = ({ frameless = false }) => {
     </>
   );
 
-  // ✅ frameless면 카드 테두리 없이 “내용만” 반환
+  // frameless면 카드 테두리 없이 “내용만” 반환
   if (frameless) return <div className="flex flex-col h-full min-h-[220px]">{Body}</div>;
 
   // 기본(기존) : 내부에서 Card를 렌더

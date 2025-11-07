@@ -28,9 +28,8 @@ DEFAULT_TTL = int(os.getenv("LINK_TOKEN_TTL_SECONDS", "0"))
 FERNET_KEY = os.getenv("FERNET_KEY")
 logger = logging.getLogger(__name__)
 try:
-    from cryptography.fernet import Fernet, InvalidToken  # type: ignore
-except Exception as _e:  # pragma: no cover
-    # cryptography 미설치 시 명확한 에러
+    from cryptography.fernet import Fernet, InvalidToken 
+except Exception as _e: 
     raise RuntimeError("cryptography 패키지가 필요합니다: pip install cryptography") from _e
 
 # ------------------------------
@@ -44,7 +43,6 @@ def _get_fernet() -> Fernet:
 def _parse_link_token(t: str) -> dict:
     """
     암호화된 URL 토큰을 복호화하고(exp가 있으면 만료 검사) payload(dict)를 반환.
-    payload 예: {"bid": 123, "role": "viewer", "iat": 1730340000, "exp": 1730944800}
     """
     f = _get_fernet()
     try:
@@ -70,7 +68,7 @@ def create_board(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-#✅ 공유받은 회의 페이지 전용: 내가 공유받은 보드만
+# 공유받은 회의 페이지 전용: 내가 공유받은 보드만
 @router.get("/shared-received", response_model=list[schemas.BoardResponse])
 def read_shared_received_boards(
     skip: int = 0,
@@ -90,7 +88,6 @@ def read_boards(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        # 총개수 계산
         total = (
             db.query(Board)
             .outerjoin(BoardShare, BoardShare.board_id == Board.id)
@@ -103,8 +100,6 @@ def read_boards(
             .distinct()
             .count()
         )
-
-        # 실제 목록
         items = crud.get_boards(db, current_user.id, skip=skip, limit=limit)
 
         return {"total": total, "items": items}
@@ -133,17 +128,14 @@ def read_board(
         if not isinstance(bid, int):
             raise HTTPException(status_code=400, detail="token missing bid")
         if bid != board_id:
-            # 다른 보드에 대한 토큰이면 위조/오용
             raise HTTPException(status_code=401, detail="token not for this resource")
         board = db.query(Board).filter(Board.id == board_id).first()
         if not board:
             raise HTTPException(status_code=404, detail="Board not found")
-        # 토큰 유효 → 바로 반환 (필요 시 추가 정책 체크)
         return board
 
     # 2) 토큰 없으면 기존 권한 로직으로 판정
     if not can_read_board(db, board_id, principal):
-        # 권한/존재 모호화 위해 404
         raise HTTPException(status_code=404, detail="Board not found or no permission")
 
     board = db.query(Board).filter(Board.id == board_id).first()
@@ -151,19 +143,16 @@ def read_board(
         raise HTTPException(status_code=404, detail="Board not found")
     return board
 
-# read board and all
+# 보드 1개를 audio, memo, recording_sessions, summaries, final_summaries, recording_results와 함께 반환.
 @router.get("/{board_id}/full", description="모든 보드 가져오기 / 하위 항목 포함")
 def get_board_full(
     board_id: int,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    """
-    보드 1개를 audio, memo, recording_sessions, summaries, final_summaries, recording_results와 함께 반환.
-    """
+    
     data = board_crud.get_board_full(db, current_user.id, board_id)
     if data is None:
-        # 존재하지 않거나 권한 없음
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BOARD_NOT_FOUND_OR_UNAUTHORIZED")
     return data
 
@@ -178,7 +167,7 @@ def update_board(board_id: int, board_update: schemas.BoardUpdate, db: Session =
     except SQLAlchemyError:
         raise HTTPException(status_code=500, detail="Database error")
 
-# Move (owner)
+# Move 
 @router.patch("/{board_id}/move", response_model=schemas.BoardResponse, summary="폴더 이동")
 def move_board_endpoint(board_id: int, board_move: schemas.BoardMove, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     board = crud.move_board(db, board_id, current_user, board_move)
@@ -186,17 +175,15 @@ def move_board_endpoint(board_id: int, board_move: schemas.BoardMove, db: Sessio
         raise HTTPException(status_code=403, detail="No permission or board not found")
     return board
 
-# Delete (owner)
+# Delete 
 @router.delete("/{board_id}", status_code=status.HTTP_204_NO_CONTENT, summary="보드 삭제")
 def delete_board(board_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     board = db.query(Board).filter(Board.id == board_id).first()
     if not board or board.owner_id != current_user.id:
-        # 404/403 적절히 처리
         return Response(status_code=status.HTTP_404_NOT_FOUND)
 
     db.delete(board)
     db.commit()
-# Verify PIN (guest)
 Pin = Annotated[str, StringConstraints(pattern=r"^\d{4}$")]
 class BoardPasswordVerify(BaseModel):
     password: Pin
@@ -209,7 +196,7 @@ def verify_board_password(board_id: int, body: BoardPasswordVerify, db: Session 
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid password")
     return {"ok": True}
 
-# ✅ 공유받은 회의 페이지 전용: 내가 공유받은 보드만
+# 공유받은 회의 페이지 전용: 내가 공유받은 보드만
 @router.get("/shared-received", response_model=list[schemas.BoardResponse], summary="공유받은 보드 목록")
 def read_shared_received_boards(
     skip: int = 0,

@@ -191,7 +191,10 @@ class Board(Base):
 
     owner = relationship("User", back_populates="boards")
     folder = relationship("Folder", back_populates="boards")
-
+    
+    @property
+    def is_protected(self) -> bool:
+        return self.password_hash is not None
     # ✅ Board 직속 소유 데이터들
     audios = relationship("AudioData", back_populates="board", cascade="all, delete-orphan")
     memos = relationship("Memo", back_populates="board", cascade="all, delete-orphan")

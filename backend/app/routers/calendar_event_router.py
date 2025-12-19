@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, Query, Path, HTTPException
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, date, time, timedelta
 from typing import List
 from backend.app.db import get_db
 from backend.app.schemas.calendar_event_schema import EventCreate, EventUpdate, EventOut
 from backend.app.crud import calendar_event_crud
-from backend.app.deps.auth import get_current_user 
-from backend.app.model import User  
+from backend.app.deps.auth import get_current_user  # 프로젝트의 인증 의존성 경로로 수정
+from backend.app.model import User  # 실제 경로에 맞게 수정
 
 router = APIRouter(prefix="/calendar", tags=["calendar"])
 
@@ -68,3 +68,24 @@ def delete_event(
     except calendar_event_crud.NotFound:
         raise HTTPException(status_code=404, detail="Event not found")
     return
+
+@router.get("/day", response_model=List[EventOut], summary="특정 날짜의 이벤트 조회")
+def list_events_by_day(
+    day: date = Query(..., description="YYYY-MM-DD 형식의 날짜"),
+    board_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    📅 특정 '하루'에 해당하는 이벤트만 조회
+
+    - /calendar/day?day=2025-11-25
+    - /calendar/day?day=2025-11-25&board_id=1
+    """
+
+    # 하루의 시작/끝 범위로 변환 (로컬 기준)
+    start = datetime.combine(day, time.min)
+    end = start + timedelta(days=1)
+
+    events = calendar_event_crud.list_events(db, current_user.id, start, end, board_id)
+    return [_to_event_out(e) for e in events]

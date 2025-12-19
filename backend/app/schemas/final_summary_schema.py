@@ -71,3 +71,6 @@ class RatingSummaryOut(BaseModel):
     total: int = 0
     average: float = 0.0
     counts: Dict[Literal[1,2,3,4,5], int] = Field(default_factory=lambda:{1:0,2:0,3:0,4:0,5:0})
+
+class FinalSummaryUpdateContent(BaseModel):
+    content: str

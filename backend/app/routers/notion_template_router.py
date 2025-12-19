@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from typing import Optional, Literal
@@ -130,10 +130,10 @@ async def render_for_notion(req: RenderRequest, db: Session = Depends(get_db), u
 
 # 업로드: 바로 노션으로 
 @router.post("/upload_template")
-async def upload_template(req: UploadRequest, db: Session = Depends(get_db), user=Depends(get_current_user)):
+async def upload_template(req: UploadRequest, request: Request, db: Session = Depends(get_db), user=Depends(get_current_user)):
     rs = resolve_session_or_404(db, user_id=user.id, session_id=req.session_id, board_id=req.board_id)
     template: TemplateType = map_ui_to_template(req.ui_type)
-
+    auth_header = request.headers.get("authorization")
     if req.content_override:
         title = req.page_title or "회의 템플릿"
         content = req.content_override
@@ -150,7 +150,7 @@ async def upload_template(req: UploadRequest, db: Session = Depends(get_db), use
         "parent_type": req.parent_type,
     }
     async with httpx.AsyncClient(timeout=60) as client:
-        r = await client.post("http://localhost:8000/notion/upload", json=payload)
+        r = await client.post("http://localhost:8000/notion/upload", json=payload, headers={"Authorization": auth_header} if auth_header else None)
         r.raise_for_status()
         data = r.json()
 

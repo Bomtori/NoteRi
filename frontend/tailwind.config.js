@@ -1,4 +1,6 @@
 /** @type {import('tailwindcss').Config} */
+import typography from "@tailwindcss/typography";
+
 export default {
     content: [
         "./index.html",
@@ -18,8 +20,9 @@ export default {
             fontFamily: {
                 sans: ['Pretendard', 'ui-sans-serif', 'system-ui', 'sans-serif'],
             },
-
         },
     },
+    plugins: [
+        typography,
+    ],
 };
-

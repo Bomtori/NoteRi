@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import NivoBar from "../cards/NivoBar";
+import apiClient from "../../../api/apiClient";
 
 type PlanMeta = {
   name: string;
@@ -28,12 +29,6 @@ const FALLBACK_COLORS: Record<string, string> = {
 };
 
 /** 베이스 URL */
-const API_BASE_URL =
-  (import.meta as any).env?.VITE_API_URL ??
-  (import.meta as any).env?.VITE_API_BASE ??
-  (import.meta as any).env?.VITE_API_BASE_URL ??
-  "http://127.0.0.1:8000";
-
 export default function UsageAvgByPlan({
   className = "",
   height = 280,
@@ -55,65 +50,75 @@ export default function UsageAvgByPlan({
     return { credentials: "include", headers };
   };
 
-  /** 플랜 메타 가져오기 */
-  useEffect(() => {
-    const ac = new AbortController();
-    (async () => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/plans`, {
-          signal: ac.signal,
-          ...buildInit(),
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
-        const rows: any[] = Array.isArray(json?.plans)
-          ? json.plans
-          : Array.isArray(json)
-          ? json
-          : [];
-        setPlanMeta(
-          rows
-            .filter((p) => p && p.name)
-            .map((p) => ({
-              name: String(p.name).toLowerCase(),
-              display_name: p.display_name ?? undefined,
-              color: p.color ?? undefined,
-            }))
-        );
-      } catch {
-        setPlanMeta([]);
-      }
-    })();
-    return () => ac.abort();
-  }, []);
+useEffect(() => {
+  const ac = new AbortController();
 
-  /** 평균 사용량 가져오기 */
-  useEffect(() => {
-    const ac = new AbortController();
-    (async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const res = await fetch(`${API_BASE_URL}/recordings/usage/avg`, {
-          signal: ac.signal,
-          ...buildInit(),
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
-        const rows: PlanStat[] = Array.isArray(json?.plans)
-          ? json.plans
-          : Array.isArray(json)
-          ? json
-          : [];
-        setPlans(rows);
-      } catch (e: any) {
-        if (e?.name !== "AbortError") setError("불러오기 실패");
-      } finally {
-        setLoading(false);
+  (async () => {
+    try {
+      // buildInit()가 하던 일(헤더/쿠키)이 있으면 apiClient 기본설정 or 아래 옵션에 반영
+      const { data: json } = await apiClient.get("/plans", {
+        signal: ac.signal,
+        // withCredentials: true, // 필요 시
+        // headers: { ... },      // 필요 시 buildInit() 내용 반영
+      });
+
+      const rows: any[] = Array.isArray(json?.plans)
+        ? json.plans
+        : Array.isArray(json)
+        ? json
+        : [];
+
+      setPlanMeta(
+        rows
+          .filter((p) => p && p.name)
+          .map((p) => ({
+            name: String(p.name).toLowerCase(),
+            display_name: p.display_name ?? undefined,
+            color: p.color ?? undefined,
+          }))
+      );
+    } catch (e: any) {
+      // 취소 에러 무시
+      if (e?.name === "CanceledError" || e?.code === "ERR_CANCELED") return;
+      setPlanMeta([]);
+    }
+  })();
+
+  return () => ac.abort();
+}, []);
+
+ useEffect(() => {
+  const ac = new AbortController();
+
+  (async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { data: json } = await apiClient.get("/recordings/usage/avg", {
+        signal: ac.signal,
+        // withCredentials: true, // 필요 시
+        // headers: { ... },      // 필요 시 buildInit() 내용 반영
+      });
+
+      const rows: PlanStat[] = Array.isArray(json?.plans)
+        ? json.plans
+        : Array.isArray(json)
+        ? json
+        : [];
+
+      setPlans(rows);
+    } catch (e: any) {
+      if (e?.name !== "CanceledError" && e?.code !== "ERR_CANCELED") {
+        setError("불러오기 실패");
       }
-    })();
-    return () => ac.abort();
-  }, []);
+    } finally {
+      setLoading(false);
+    }
+  })();
+
+  return () => ac.abort();
+}, []);
 
   /** 색상 맵 (DB color > fallback) */
   const colorMap: Record<string, string> = useMemo(() => {

@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
 import NivoBar from "../cards/NivoBar"; // ← 확장자 제거(.tsx 금지)
+import apiClient from "../../../api/apiClient";
 
 /* ==== (통합) RatingSummary 유틸/타입 ==== */
 export type RatingCounts = Record<1 | 2 | 3 | 4 | 5, number>;
@@ -71,26 +72,16 @@ export function toNivoBarData(summary: RatingSummary) {
     score,
   }));
 }
-/* ===================================== */
 
 type Props = {
   className?: string;
   height?: number;
   showUsers?: boolean;
-  /** 백엔드 라우트 (ex: /summary/final/ratings) */
   endpoint?: string;
-  /** boardId, sessionId 등 쿼리 파라미터 */
   params?: Record<string, any>;
-  /** 개발 중 임시 데이터 사용 */
   useMock?: boolean;
-  /** 외곽 Card를 바깥에서 감쌀 때 내용만 렌더 */
   frameless?: boolean;            
 };
-
-const API_BASE_URL =
-  (import.meta as any).env?.VITE_API_BASE ??
-  (import.meta as any).env?.VITE_API_BASE_URL ??
-  "http://127.0.0.1:8000";
 
 // 임시 데이터
 const MOCK: RatingSummary = ensureSummary({
@@ -111,43 +102,58 @@ export default function RatingSummaryCard({
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    if (useMock) return;
+  if (useMock) return;
 
-    const url = new URL(`${API_BASE_URL}${endpoint}`);
-    if (params) {
-      Object.entries(params).forEach(([k, v]) => {
-        if (v !== undefined && v !== null && v !== "") {
-          url.searchParams.set(k, String(v));
-        }
+  // ✅ params 정리: null/undefined/"" 제거
+  const cleanedParams = Object.fromEntries(
+    Object.entries(params ?? {}).filter(
+      ([, v]) => v !== undefined && v !== null && v !== ""
+    ).map(([k, v]) => [k, String(v)])
+  );
+
+  const ac = new AbortController();
+
+  (async () => {
+    try {
+      setLoading(true);
+      setErr(null);
+
+      const { data: payload } = await apiClient.get(endpoint, {
+        params: cleanedParams,
+        withCredentials: true,
+        signal: ac.signal,
+        // 응답이 text일 수도 있으니 안전 파싱
+        transformResponse: [
+          (raw) => {
+            if (!raw) return { counts: {} };
+            try {
+              return JSON.parse(raw as string);
+            } catch {
+              return raw;
+            }
+          },
+          // Axios 기본 transformer도 함께 적용
+          ...(apiClient.defaults.transformResponse as any[] ?? []),
+        ],
       });
-    }
 
-    const ac = new AbortController();
-    (async () => {
-      try {
-        setLoading(true);
-        setErr(null);
+      const target =
+        (payload?.items && typeof payload.items === "object" ? payload.items :
+         payload?.data  && typeof payload.data  === "object" ? payload.data  :
+         payload) ?? { counts: {} };
 
-        const res = await fetch(url.toString(), { credentials: "include", signal: ac.signal });
-        const text = await res.text();
-        if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
-        const payload = text ? JSON.parse(text) : { counts: {} };
-
-        const target =
-          (payload?.items && typeof payload.items === "object" ? payload.items :
-           payload?.data  && typeof payload.data  === "object" ? payload.data  :
-           payload) ?? { counts: {} };
-
-        setSummary(ensureSummary(target));
-      } catch (e: any) {
-        if (e?.name !== "AbortError") setErr(e?.message ?? "불러오기 실패");
-      } finally {
-        setLoading(false);
+      setSummary(ensureSummary(target));
+    } catch (e: any) {
+      if (e?.name !== "CanceledError" && e?.code !== "ERR_CANCELED") {
+        setErr(e?.message ?? "불러오기 실패");
       }
-    })();
+    } finally {
+      setLoading(false);
+    }
+  })();
 
-    return () => ac.abort();
-  }, [endpoint, JSON.stringify(params), useMock]);
+  return () => ac.abort();
+}, [endpoint, JSON.stringify(params), useMock]);
 
   const barData = useMemo(() => (summary ? toNivoBarData(summary) : []), [summary]);
 

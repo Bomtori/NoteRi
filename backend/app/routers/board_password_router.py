@@ -54,11 +54,19 @@ def clear_password(
 
 
 # 비밀번호 검증 (게스트/사용자 공통; 비로그인 허용)
-@router.post("/{board_id}/verify-password")
-def verify_password(board_id: int, body: schemas.BoardPasswordVerify, response: Response, db: Session = Depends(get_db)):
-    board = db.query(Board).filter(Board.id == board_id).first()
-    if not board or board.password != body.password:
+@router.post("/{board_id}/verify-password", summary="보드 비밀번호 검증 및 guest 토큰 발급")
+def verify_password(
+    board_id: int,
+    body: BoardPasswordVerify,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    # 🔑 평문 4자리 핀을 검증
+    if not pw_crud.verify_board_password(db, board_id, body.password):
         raise HTTPException(status_code=403, detail="비밀번호 불일치")
+
+    if not JWT_SECRET:
+        raise HTTPException(status_code=500, detail="GUEST_SECRET_KEY is not configured")
 
     payload = {
         "guest": True,
@@ -66,13 +74,15 @@ def verify_password(board_id: int, body: schemas.BoardPasswordVerify, response: 
         "iat": int(time.time()),
         "exp": int(time.time()) + 60 * 60 * 6,  # 6시간
     }
-    token = jwt.encode(payload, GUEST_SECRET_KEY, algorithm=JWT_ALG)
+    token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALG)
+
     response.set_cookie(
-        key="guest_token",
-        value=token,
-        httponly=True,
-        max_age=60 * 60 * 6,
-        secure=False,
-        samesite="lax",
-    )
+    key="guest_token",
+    value=token,
+    httponly=True,
+    max_age=60 * 60 * 6,
+    secure=True,       # ngrok https니까 True
+    samesite="none",   # ✅ cross-site XHR 허용
+    path="/",
+)
     return {"message": "인증 성공", "guest_token": token}

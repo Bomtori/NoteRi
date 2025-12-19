@@ -3,6 +3,7 @@ from sqlalchemy.exc import IntegrityError
 from datetime import datetime, UTC, date, timedelta
 from fastapi.responses import JSONResponse
 from fastapi import status, HTTPException
+import os
 
 from backend.app.model import User, Subscription, Plan, PlanType, Folder, RecordingUsage  # PlanType 꼭 import
 from backend.app.util.errors import OAuthProviderConflict
@@ -130,6 +131,15 @@ def _grant_free_subscription_and_usage(db: Session, user_id: int) -> None:
     # 기본 폴더
     _create_default_shared_folder(db, user_id)
 
+FRONT_ORIGIN = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
+def _cookie_options():
+    # 🔥 지금 환경에서는 일단 무조건 크로스 도메인 기준으로 발급
+    return dict(
+        samesite="none",
+        secure=True,
+    )
+
 def get_or_create_user(
     db: Session,
     provider: str,
@@ -214,17 +224,43 @@ def generate_login_response(db_user: User):
             "name": db_user.name,
             "nickname": db_user.nickname,
             "picture": db_user.picture,
-            "role": db_user.role, # 🍒 10.28 frontend 토큰 권한추가
+            "role": db_user.role,
         },
     })
 
-    # 쿠키에 저장 (옵션)
+    cookie_opts = _cookie_options()
+
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=False,  # HTTPS일 때 True로
-        samesite="lax",
         max_age=60 * 60 * 24 * 14,
+        path="/",
+        **cookie_opts,
     )
     return response
+
+def delete_old_inactive_users(db: Session, months: int = 6) -> int:
+    """
+    비활성화된 지 `months`개월 지난 계정을 완전히 삭제한다.
+    - 기준: User.is_active == False 이고, updated_at < now - months
+    - 반환값: 삭제된 유저 수
+    """
+    # 6개월 기준 시점 (단순히 30일 * months 로 계산)
+    cutoff = datetime.now(UTC) - timedelta(days=30 * months)
+
+    # 1) 대상 유저 조회 쿼리
+    query = (
+        db.query(User)
+        .filter(
+            User.is_active == False,      # 비활성 계정
+            User.updated_at != None,      # updated_at 이 있는 경우만
+            User.updated_at < cutoff,     # 6개월 이상 지난 계정
+        )
+    )
+
+    # 2) 실제 삭제 (DB cascade / relationship 설정에 따라 연관 데이터도 같이 정리되는지 확인 필요)
+    deleted_count = query.delete(synchronize_session=False)
+    db.commit()
+
+    return deleted_count

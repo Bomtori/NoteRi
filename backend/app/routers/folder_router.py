@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from backend.app.schemas import folder_schema as schemas
 from backend.app.crud import folder_crud as crud
 from backend.app.db import get_db
-from backend.app.schemas.board_schema import BoardResponse
+from backend.app.schemas.board_schema import BoardResponse, BoardPageResponse, BoardListResponse
 from backend.app.deps.auth import get_current_user
-from backend.app.model import User, Folder
+from backend.app.model import User, Folder, Board
 from typing import Optional
 
 router = APIRouter(prefix="/folders", tags=["folders"])
@@ -45,14 +45,39 @@ def read_folder(
     return folder
 
 # 폴더별 보드 조회
-@router.get("/{folder_id}/boards", response_model=list[BoardResponse], summary="폴더의 보드목록 가져오기")
+@router.get(
+    "/{folder_id}/boards",
+    response_model=BoardListResponse,
+    summary="폴더의 보드목록 가져오기"
+)
 def read_boards_by_folder(
     folder_id: int,
+    page: int = Query(1, ge=1, description="페이지 번호 (1부터 시작)"), 
+    limit: int = Query(7, ge=1, le=100, description="페이지당 개수"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    boards = crud.get_boards_by_folder(db, folder_id)
-    return boards
+    skip = (page - 1) * limit
+
+    from backend.app.model import Board
+    total = (
+        db.query(Board)
+        .filter(
+            Board.folder_id == folder_id,
+            Board.owner_id == current_user.id,
+        )
+        .order_by(Board.created_at.desc()) 
+        .count()
+    )
+
+    boards = crud.get_boards_by_folder(
+        db,
+        folder_id=folder_id,
+        skip=skip,
+        limit=limit,
+    )
+
+    return {"total": total, "items": boards}
 
 # Update
 @router.patch("/{folder_id}", response_model=schemas.FolderResponse, summary="폴더 업데이트")

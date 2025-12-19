@@ -50,13 +50,26 @@ def get_folders(db: Session, user_id: int, skip: int = 0, limit: int = 10):
 
 
 # 폴더별 보드 목록
-def get_boards_by_folder(db: Session, folder_id: int):
-    return (
+def get_boards_by_folder(
+    db: Session,
+    folder_id: int,
+    skip: int = 0,
+    limit: int = 7,
+    owner_id: int | None = None,
+):
+    q = (
         db.query(model.Board)
         .join(model.Folder, model.Board.folder_id == model.Folder.id)
-        .filter(
-            model.Board.folder_id == folder_id
-        )
+        .filter(model.Board.folder_id == folder_id)
+    )
+
+    if owner_id is not None:
+        q = q.filter(model.Board.owner_id == owner_id)
+
+    return (
+        q.order_by(model.Board.created_at.desc())
+        .offset(skip)
+        .limit(limit)
         .all()
     )
 

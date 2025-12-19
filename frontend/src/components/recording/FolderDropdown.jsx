@@ -5,6 +5,9 @@ import { Folder, FileText, Mic, Star } from "lucide-react";
 
 export default function FolderDropdown({ folders = [], currentFolder, onSelect }) {
     const ref = useRef();
+    const safeFolders = Array.isArray(folders) ? folders : [];
+    const safeCurrent = currentFolder ?? { id: null };
+
 
     // 🔒 외부 클릭 시 닫기
     useEffect(() => {
@@ -31,7 +34,7 @@ export default function FolderDropdown({ folders = [], currentFolder, onSelect }
                             onSelect(folder);
                         }}
                         className={`flex items-center gap-2 w-full px-3 py-2 text-sm text-left hover:bg-gray-50 ${
-                            currentFolder?.id === folder.id
+                            safeCurrent.id === folder.id
                                 ? "text-[#7E37F9] font-semibold"
                                 : ""
                         }`}
@@ -39,9 +42,12 @@ export default function FolderDropdown({ folders = [], currentFolder, onSelect }
                         {/* 🎨 폴더 아이콘 */}
                         <Folder
                             className="w-4 h-4"
-                            style={{ color: folder.color || "#6B7280" }}
-                        />
-
+                            style={{
+                                color: currentFolder?.id === folder.id
+                                ? "#7E37F9"
+                                : folder.color || "#6B7280"
+                            }}
+                            />
                         {/* 폴더 이름 */}
                         <span>{folder.name}</span>
                     </button>

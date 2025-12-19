@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { updateRecord, deleteRecord } from "../../features/record/recordSlice";
@@ -129,7 +129,7 @@ function RecordItem({ record, folders, onFolderChange }) {
                     {showFolderDropdown && (
                         <FolderDropdown
                             folders={folders}
-                            currentFolder={record.folder}
+                            currentFolder={record.folder ?? null}
                             onSelect={async (folder) => {
                                 if (!folder) return setShowFolderDropdown(false);
                                 try {

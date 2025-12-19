@@ -11,7 +11,7 @@ from backend.app.crud import final_summary_crud
 from backend.app.schemas.final_summary_schema import (
     FinalSummaryResponse,
     FinalSummaryListResponse,
-    FinalSummaryRatingUpdate, RatingSummaryOut,
+    FinalSummaryRatingUpdate, RatingSummaryOut,FinalSummaryUpdateContent, 
 )
 
 router = APIRouter(prefix="/summary/final", tags=["final_summary"])
@@ -82,7 +82,9 @@ def list_final_summaries_by_session(
         "board_id": db.query(RecordingSession).get(session_id).board_id,
         "session_id": session_id,
         "total": len(items),
-    }
+        "items": items,
+}
+
 
 # 세션 최신 1건
 @router.get("/sessions/{session_id}/latest", response_model=FinalSummaryResponse, summary="가장 최근 세션 최종 요약 가져오기")
@@ -146,3 +148,43 @@ def update_final_summary_rating(
     updated = final_summary_crud.update_rating(db, final_summary_id, payload.rating)
     return updated
 
+@router.patch("/boards/{board_id}/content", response_model=FinalSummaryResponse, summary="보드 최신 최종 요약 content 수정")
+def update_final_summary_content_by_board(
+    board_id: int = Path(..., ge=1),
+    payload: FinalSummaryUpdateContent = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # 보드 접근 권한 체크
+    _assert_board_access(db, board_id, current_user)
+
+    updated = final_summary_crud.update_content_by_board(
+        db=db,
+        board_id=board_id,
+        content=payload.content,
+    )
+
+    if not updated:
+        raise HTTPException(status_code=404, detail="No final summary found for this board")
+
+    return updated
+
+@router.patch(
+    "/boards/{board_id}",
+    response_model=FinalSummaryResponse,
+    summary="보드 기준 최신 최종 요약 수정",
+)
+def update_final_summary_by_board(
+    board_id: int = Path(..., ge=1),
+    payload: Dict[str, Any] = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # 보드 접근 권한 체크
+    _assert_board_access(db, board_id, current_user)
+
+    updated = final_summary_crud.update_by_board(db, board_id, payload)
+    if not updated:
+        raise HTTPException(status_code=404, detail="No final summary found for this board")
+
+    return updated

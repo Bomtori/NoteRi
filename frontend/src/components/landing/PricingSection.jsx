@@ -49,12 +49,17 @@ export default function PricingSection({user}) {
 
     return (
         <section
-            ref={ref}
-            className={`relative h-screen flex items-center justify-center
-      bg-gradient-to-b from-[#F5F0FF]/60 to-white/80 text-center overflow-hidden
+  ref={ref}
+  className={`relative 
+      min-h-screen        /* 화면보다 크면 더 늘어나도록 */
+      py-16               /* 위아래 여백 추가 */
+      flex items-start md:items-center justify-center
+      bg-gradient-to-b from-[#F5F0FF]/60 to-white/80 
+      text-center 
+      overflow-visible md:overflow-hidden   /* 모바일은 잘리지 않게 */
       transition-all duration-[1000ms] ease-out
       ${isVisible ? "opacity-100 translate-y-0 blur-0" : "opacity-0 translate-y-10 blur-md"}`}
-        >
+>
             <div className="flex flex-col items-center justify-center w-full max-w-6xl mx-auto px-6">
                 <h2 className="text-4xl font-bold text-[#272527] mb-16">요금제</h2>
                 <div className="flex flex-wrap justify-center gap-10">

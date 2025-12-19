@@ -4,10 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "../../../components/ui
 import DateButtons from "../cards/DateButtons";
 import AdminToggleTabs from "../../../components/admin/AdminToggleTabs";
 import { DASH_CARD } from "../cards/cardStyles";
-
-/** 기본 API 베이스는 8000 포트 */
-const API_BASE_URL =
-  (import.meta as any).env?.VITE_API_BASE ?? "http://127.0.0.1:8000";
+import apiClient from "../../../api/apiClient";
 
 /** 퍼센트 포매터 */
 function pct(n: number | null | undefined) {
@@ -74,56 +71,57 @@ const TotalPaymentByDate: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const ac = new AbortController();
+ useEffect(() => {
+  const ac = new AbortController();
 
-    const totalEndpoint =
-      {
-        today: "/payments/today",
-        "7d": "/payments/total/week",
-        month: "/payments/total/month",
-        year: "/payments/total/year",
-      }[range] ?? "/payments/today";
+  const totalEndpoint =
+    {
+      today: "/payments/today",
+      "7d": "/payments/total/week",
+      month: "/payments/total/month",
+      year: "/payments/total/year",
+    }[range] ?? "/payments/today";
 
-    // 성장률 엔드포인트 매핑
-    const growthEndpoint =
-      {
-        today: "/analytics/revenue/dod", // Day-over-Day
-        "7d": "/analytics/revenue/wow", // Week-over-Week
-        month: "/analytics/revenue/mom", // Month-over-Month
-        year: "/analytics/revenue/yoy", // Year-over-Year
-      }[range] ?? "/analytics/revenue/dod";
+  const growthEndpoint =
+    {
+      today: "/analytics/revenue/dod", // Day-over-Day
+      "7d": "/analytics/revenue/wow",  // Week-over-Week
+      month: "/analytics/revenue/mom", // Month-over-Month
+      year: "/analytics/revenue/yoy",  // Year-over-Year
+    }[range] ?? "/analytics/revenue/dod";
 
-    const run = async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  const run = async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-        // 총액
-        const res = await fetch(`${API_BASE_URL}${totalEndpoint}`, { signal: ac.signal });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const totalJson = await res.json();
+      // ✅ 총액
+      const { data: totalJson } = await apiClient.get(totalEndpoint, {
+        signal: ac.signal,
+      });
 
-        if (range === "today") setTodayPayment(totalJson.total ?? 0);
-        if (range === "7d") setWeekPayment(totalJson.total ?? 0);
-        if (range === "month") setMonthPayment(totalJson.total ?? 0);
-        if (range === "year") setYearPayment(totalJson.total ?? 0);
+      if (range === "today") setTodayPayment(totalJson.total ?? 0);
+      if (range === "7d") setWeekPayment(totalJson.total ?? 0);
+      if (range === "month") setMonthPayment(totalJson.total ?? 0);
+      if (range === "year") setYearPayment(totalJson.total ?? 0);
 
-        // 성장률
-        const gr = await fetch(`${API_BASE_URL}${growthEndpoint}`, { signal: ac.signal });
-        if (!gr.ok) throw new Error(`HTTP ${gr.status}`);
-        const growthJson = await gr.json();
-        setGrowthRate(pickGrowthRate(growthJson));
-      } catch (e: any) {
-        if (e?.name !== "AbortError") setError("불러오기 실패");
-      } finally {
-        setLoading(false);
+      // ✅ 성장률
+      const { data: growthJson } = await apiClient.get(growthEndpoint, {
+        signal: ac.signal,
+      });
+      setGrowthRate(pickGrowthRate(growthJson));
+    } catch (e: any) {
+      if (e?.name !== "CanceledError" && e?.code !== "ERR_CANCELED") {
+        setError("불러오기 실패");
       }
-    };
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    run();
-    return () => ac.abort();
-  }, [range]);
+  run();
+  return () => ac.abort();
+}, [range]);
 
   const value = useMemo(() => {
     if (range === "today") return todayPayment;

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui
 import RechartsDonut from "../cards/RechartsDonut";
 import {DASH_CARD} from "../cards/cardStyles";
 import {cn} from "../../../lib/utils";
+import apiClient from "../../../api/apiClient";
 
 type PlanDatum = { id: string; value: number; color?: string };
 
@@ -33,11 +34,6 @@ const LABEL_KO: Record<string, string> = {
   starter: "스타터",
 };
 
-const API_BASE_URL =
-  (import.meta as any).env?.VITE_API_BASE ??
-  (import.meta as any).env?.API_BASE_URL ??
-  "http://127.0.0.1:8000";
-
 function titleCase(s: string) {
   return s.replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
 }
@@ -57,33 +53,36 @@ export default function PaymentByPlan({
   const [legacy, setLegacy] = useState<LegacyRevenue | null>(null);
 
   useEffect(() => {
-    const ac = new AbortController();
-    (async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const res = await fetch(`${API_BASE_URL}/analytics/revenue/paid`, { signal: ac.signal });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        // 신형 스키마 우선
-        if (data && typeof data === "object" && Array.isArray(data.items)) {
-          setResp(data as ApiResponse);
-          setLegacy(null);
-        } else {
-          // 구형 스키마 대응
-          setResp(null);
-          setLegacy(data as LegacyRevenue);
-        }
-      } catch (e: any) {
-        if (e?.name !== "AbortError") setError("플랜별 매출을 불러오지 못했습니다.");
-        setResp(null);
+  const ac = new AbortController();
+  (async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const { data } = await apiClient.get("/analytics/revenue/paid", { 
+        signal: ac.signal 
+      });  // ✅ 변경
+      
+      // 신형 스키마 우선
+      if (data && typeof data === "object" && Array.isArray(data.items)) {
+        setResp(data as ApiResponse);
         setLegacy(null);
-      } finally {
-        setLoading(false);
+      } else {
+        // 구형 스키마 대응
+        setResp(null);
+        setLegacy(data as LegacyRevenue);
       }
-    })();
-    return () => ac.abort();
-  }, []);
+    } catch (e: any) {
+      if (e?.name !== "AbortError" && e?.code !== "ERR_CANCELED") {
+        setError("플랜별 매출을 불러오지 못했습니다.");
+      }
+      setResp(null);
+      setLegacy(null);
+    } finally {
+      setLoading(false);
+    }
+  })();
+  return () => ac.abort();
+}, []);
 
   // 신형/구형 모두 RechartsDonut 데이터로 통일
   const data = useMemo<PlanDatum[]>(() => {

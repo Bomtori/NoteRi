@@ -3,7 +3,7 @@ import apiClient from "../../api/apiClient";
 import { API_BASE_URL } from "../../config";
 
 
-// ✅ 초기 상태 (하드코딩 제거)
+// 초기 상태 (하드코딩 제거)
 const initialState = {
     folders: [],
     selectedFolder: null,
@@ -120,8 +120,20 @@ const folderSlice = createSlice({
                 state.status = "loading";
             })
             .addCase(fetchFolders.fulfilled, (state, action) => {
+                // state.status = "succeeded";
+                // state.folders = action.payload;
                 state.status = "succeeded";
-                state.folders = action.payload;
+
+                const raw = action.payload;
+
+                // folders가 객체로 올 때(items)와 배열로 올 때 모두 대응
+                if (Array.isArray(raw)) {
+                    state.folders = raw;
+                } else if (raw?.items && Array.isArray(raw.items)) {
+                    state.folders = raw.items;
+                } else {
+                    state.folders = []; // 예외 상황 방어
+                }
             })
             .addCase(fetchFolders.rejected, (state, action) => {
                 state.status = "failed";
@@ -155,7 +167,7 @@ const folderSlice = createSlice({
                 const folder = state.folders.find((f) => f.id === updated.id);
                 if (folder) folder.color = updated.color;
             });
-    }, // ✅ extraReducers 닫힘
-}); // ✅ createSlice 닫힘
+    }, // extraReducers 닫힘
+}); // createSlice 닫힘
 export const { setSelectedFolder } = folderSlice.actions;
 export default folderSlice.reducer;

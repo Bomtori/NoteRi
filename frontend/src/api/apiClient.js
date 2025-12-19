@@ -1,79 +1,93 @@
+// src/api/apiClient.js
 import axios from "axios";
 import { API_BASE_URL } from "../config";
 
 console.log("🌐 VITE_API_URL =", import.meta.env.VITE_API_URL);
 
-// Axios 인스턴스 (쿠키 포함)
 const apiClient = axios.create({
-    baseURL: API_BASE_URL,
-    withCredentials: true, // refresh_token 쿠키 자동 포함
-    headers: {
-        "Content-Type": "application/json",
-        'ngrok-skip-browser-warning': '1',
-    },
+  baseURL: API_BASE_URL,
+  withCredentials: true,
+  headers: {
+    "Content-Type": "application/json",
+    "ngrok-skip-browser-warning": "1",
+  },
 });
 
-// 요청 시 Authorization 자동 주입 (매번 localStorage에서 읽기!)
+// 요청 인터셉터
 apiClient.interceptors.request.use(
-    (config) => {
-        // 매번 localStorage에서 최신 토큰 읽기
-        const token = localStorage.getItem("access_token");
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
+  (config) => {
+    const accessToken = localStorage.getItem("access_token");
+
+    if (accessToken) {
+      // 로그인 유저 → 기존처럼 Authorization
+      config.headers.Authorization = `Bearer ${accessToken}`;
+    } else {
+      // 비로그인 상태 → guest_token 있는지 확인
+      const url = config.url || "";
+
+      // /boards/{boardId} 또는 /boards/{boardId}/full 같은 패턴에서 boardId 추출
+      const match = url.match(/^\/boards\/(\d+)/);
+      if (match) {
+        const boardId = match[1];
+        const guestToken = localStorage.getItem(`guest_token_board_${boardId}`);
+
+        if (guestToken) {
+          // 저장해둔 guest_token을 X-Guest-Token 헤더로 전송
+          config.headers["X-Guest-Token"] = guestToken;
         }
-        return config;
-    },
-    (error) => Promise.reject(error)
+      }
+    }
+
+    return config;
+  },
+  (error) => Promise.reject(error)
 );
 
-// 응답 시 401 → /auth/refresh 로 자동 재발급
+// 응답 인터셉터 (401 → refresh 로직은 그대로 두되, protectedPaths에 "/record" 는 빼둔 상태 유지)
 apiClient.interceptors.response.use(
-    (res) => res,
-    async (error) => {
-        const originalRequest = error.config;
+  (res) => res,
+  async (error) => {
+    const originalRequest = error.config;
 
-        // AccessToken 만료로 인한 401일 때
-        if (error.response?.status === 401 && !originalRequest._retry) {
-            originalRequest._retry = true;
-            console.warn("🔁 AccessToken 만료 → refresh 요청");
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      console.warn("🔁 AccessToken 만료 → refresh 요청");
 
-            try {
-                // refresh_token은 HttpOnly 쿠키로 자동 포함됨
-                const refreshRes = await axios.post(
-                    `${API_BASE_URL}/auth/refresh`,
-                    {},
-                    { withCredentials: true }
-                );
+      try {
+        const storedRefresh = localStorage.getItem("refresh_token");
 
-                const newToken = refreshRes.data.access_token;
-                if (newToken) {
-                    console.log("새 AccessToken 발급 완료");
-                    localStorage.setItem("access_token", newToken);
+        const refreshRes = await axios.post(
+          `${API_BASE_URL}/auth/refresh`,
+          storedRefresh ? { refresh_token: storedRefresh } : {}, // body에도 실어보냄
+          { withCredentials: true }
+        );
 
-                    // 새 토큰으로 원래 요청 재시도
-                    originalRequest.headers.Authorization = `Bearer ${newToken}`;
-                    return apiClient(originalRequest);
-                }
-            } catch (err) {
-                console.error("⚠️ 토큰 재발급 실패:", err);
-                localStorage.removeItem("access_token");
-                localStorage.removeItem("user");
+        const newToken = refreshRes.data.access_token;
+        if (newToken) {
+          console.log("새 AccessToken 발급 완료");
+          localStorage.setItem("access_token", newToken);
 
-                // 보호된 페이지라면 로그인 페이지로 리다이렉트
-                const protectedPaths = ["/record", "/folder", "/new", "/user", "/payments"];
-                const currentPath = window.location.pathname;
-                const needsLogin = protectedPaths.some((p) => currentPath.startsWith(p));
-
-                if (needsLogin) {
-                    window.location.href = "/login";
-                } else {
-                    console.log("🔓 Public route, stay on current page");
-                }
-            }
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          return apiClient(originalRequest);
         }
+      } catch (err) {
+        console.error("⚠️ 토큰 재발급 실패:", err);
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("refresh_token");
+        localStorage.removeItem("user");
 
-        return Promise.reject(error);
+        const protectedPaths = ["/folder", "/new", "/user", "/payments"];
+        const currentPath = window.location.pathname;
+        const needsLogin = protectedPaths.some((p) => currentPath.startsWith(p));
+
+        if (needsLogin) {
+          window.location.href = "/login";
+        }
+      }
     }
+
+    return Promise.reject(error);
+  }
 );
 
 export default apiClient;

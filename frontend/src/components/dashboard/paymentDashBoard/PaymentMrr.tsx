@@ -4,6 +4,7 @@ import MrrComboChart from "../cards/MrrComboChart";
 import {Card} from "../../ui/card";
 import {cn} from "../../../lib/utils";
 import {DASH_CARD} from "../cards/cardStyles";
+import apiClient from "../../../api/apiClient";
 
 type MrrItem = {
   month: string;
@@ -21,11 +22,6 @@ type Props = {
 };
 
 /** 기본 API 베이스는 8000 포트 */
-const API_BASE_URL =
-  (import.meta as any).env?.VITE_API_BASE ??
-  (import.meta as any).env?.API_BASE_URL ??
-  "http://127.0.0.1:8000";
-
 const PaymentMrr: React.FC<Props> = ({ months = 6, className = "" }) => {
   const [mrrData, setMrrData] = useState<MrrItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,40 +29,44 @@ const PaymentMrr: React.FC<Props> = ({ months = 6, className = "" }) => {
 
   // 데이터 로드
   useEffect(() => {
-    const ac = new AbortController();
-    (async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const params = new URLSearchParams({ months: String(months) });
-        const res = await fetch(
-          `${API_BASE_URL}/billing/mrr/breakdown?${params.toString()}`,
-          { signal: ac.signal }
-        );
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+  const ac = new AbortController();
 
-        // 백엔드 응답 유연 처리: {series: [...] } 또는 배열 그대로
-        const rows: any[] = Array.isArray(data) ? data : data?.series ?? [];
-        setMrrData(
-          rows.map((r) => ({
-            month: String(r.month),
-            new: Number(r.new ?? 0),
-            expansion: Number(r.expansion ?? 0),
-            contraction: Number(r.contraction ?? 0),
-            churn: Number(r.churn ?? 0),
-            ending_mrr: Number(r.ending_mrr ?? 0),
-            net_new: r.net_new != null ? Number(r.net_new) : undefined,
-          }))
-        );
-      } catch (e: any) {
-        if (e?.name !== "AbortError") setError(e?.message ?? "데이터 로드 실패");
-      } finally {
-        setLoading(false);
+  (async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { data } = await apiClient.get("/billing/mrr/breakdown", {
+        params: { months: String(months) },
+        signal: ac.signal, // ✅ Axios v1에서 지원
+      });
+
+      // 백엔드 응답 유연 처리: { series: [...] } 또는 배열 그대로
+      const rows: any[] = Array.isArray(data) ? data : data?.series ?? [];
+
+      setMrrData(
+        rows.map((r) => ({
+          month: String(r.month),
+          new: Number(r.new ?? 0),
+          expansion: Number(r.expansion ?? 0),
+          contraction: Number(r.contraction ?? 0),
+          churn: Number(r.churn ?? 0),
+          ending_mrr: Number(r.ending_mrr ?? 0),
+          net_new: r.net_new != null ? Number(r.net_new) : undefined,
+        }))
+      );
+    } catch (e: any) {
+      // 요청 취소는 무시
+      if (e?.name !== "CanceledError" && e?.code !== "ERR_CANCELED") {
+        setError(e?.message ?? "데이터 로드 실패");
       }
-    })();
-    return () => ac.abort();
-  }, [months]);
+    } finally {
+      setLoading(false);
+    }
+  })();
+
+  return () => ac.abort();
+}, [months]);
 
   // 차트에 바로 쓸 수 있게 정제
   const chartData = useMemo(

@@ -86,18 +86,19 @@ class BoardResponse(BaseModel):
     description: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
-    folder: Optional["FolderResponse"] = None # 🍒 수정 10.27 frontend folderResponse
-
-    # ✅ 1:N 관계 → 리스트로 변경해야 함
+    folder: Optional["FolderResponse"] = None
+    is_protected: bool = False
     audios: List[AudioResponse] = Field(default_factory=list)
     memos: List[MemoResponse] = Field(default_factory=list)
     summaries: List[SummaryResponse] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
+
 class BoardListResponse(BaseModel):
-    boards: List[BoardResponse]
-    model_config = ConfigDict(from_attributes=True)
+    """페이지네이션용 응답: total + items"""
+    total: int
+    items: List[BoardResponse]
 
 class BoardMove(BaseModel):
     folder_id: int
@@ -110,8 +111,14 @@ class BoardMove(BaseModel):
     folder_id: int
 
 class BoardPasswordVerify(BaseModel):
-        password: str = Field(
+        password_hash: str = Field(
         ...,
         pattern=r"^\d{4}$",
         description="4자리 숫자 비밀번호 (예: 1234)",
     )
+        
+class BoardPageResponse(BaseModel):
+    total: int
+    items: list[BoardResponse]
+
+    model_config = ConfigDict(from_attributes=True)

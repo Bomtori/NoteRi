@@ -6,15 +6,16 @@ import time
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Response
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
-from backend.app.deps.guest import get_principal
+from backend.app.deps.guest import get_principal, Principal
 from backend.app.util.access import can_read_board
 from backend.app.schemas import board_schema as schemas
 from backend.app.db import get_db
 from backend.app.crud import board_crud as crud, board_crud
-from backend.app.deps.auth import get_current_user
+from backend.app.deps.auth import get_current_user, get_current_user_optional
 from backend.app.model import User, Board
 from pydantic import BaseModel, StringConstraints
-from typing import Annotated, Optional
+from typing import Annotated, Optional, List
+from datetime import date, time
 from backend.app.model import User, Board, BoardShare
 
 import traceback
@@ -68,46 +69,117 @@ def create_board(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-# 공유받은 회의 페이지 전용: 내가 공유받은 보드만
-@router.get("/shared-received", response_model=list[schemas.BoardResponse])
-def read_shared_received_boards(
-    skip: int = 0,
-    limit: Optional[int] = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    boards = crud.get_shared_boards(db, current_user.id, skip=skip, limit=limit)
-    return boards
-
-# Read all
-@router.get("/", response_model=schemas.BoardListResponse, response_model_exclude_unset=True)
-def read_boards(
+@router.get("/search", response_model=schemas.BoardListResponse, response_model_exclude_unset=True, summary="보드 검색")
+def search_boards(
+    title: Optional[str] = Query(
+        None,
+        description="제목 부분 검색 (LIKE)",
+        example="회의",
+    ),
+    start_date: Optional[date] = Query(
+        None,
+        description="검색 시작 날짜 (YYYY-MM-DD, created_at 기준)",
+        example="2025-10-01",
+    ),
+    end_date: Optional[date] = Query(
+        None,
+        description="검색 종료 날짜 (YYYY-MM-DD, created_at 기준)",
+        example="2025-10-31",
+    ),
     skip: int = 0,
     limit: Optional[int] = 7,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    try:
-        total = (
-            db.query(Board)
-            .outerjoin(BoardShare, BoardShare.board_id == Board.id)
-            .filter(
-                or_(
-                    Board.owner_id == current_user.id,
-                    BoardShare.user_id == current_user.id,
-                )
-            )
-            .distinct()
-            .count()
-        )
-        items = crud.get_boards(db, current_user.id, skip=skip, limit=limit)
+    """
+    🔍 보드 검색 API (total + items)
 
+    - 제목 부분 검색: /boards/search?title=회의
+    - 날짜 + 제목 검색:
+      /boards/search?title=회의&start_date=2025-10-01&end_date=2025-10-31
+    - 날짜만으로 검색:
+      /boards/search?start_date=2025-10-01&end_date=2025-10-31
+    - 페이징:
+      /boards/search?skip=7&limit=7
+    """
+
+    try:
+        total, items = crud.search_boards(
+            db=db,
+            current_user=current_user,
+            title=title,
+            start_date=start_date,
+            end_date=end_date,
+            skip=skip,
+            limit=limit,
+        )
         return {"total": total, "items": items}
 
     except SQLAlchemyError as e:
-        logger.error(f"read_boards failed: {e}")
-        raise HTTPException(status_code=500, detail="보드 목록 조회 실패")
+        logger.error(f"search_boards failed: {e}")
+        raise HTTPException(status_code=500, detail="보드 검색 실패")
 
+# 공유받은 회의 페이지 전용: 내가 공유받은 보드만
+# @router.get("/shared-received", response_model=list[schemas.BoardResponse])
+# def read_shared_received_boards(
+#     skip: int = 0,
+#     limit: Optional[int] = 7,
+#     db: Session = Depends(get_db),
+#     current_user: User = Depends(get_current_user),
+# ):
+#     boards = crud.get_shared_boards(db, current_user.id, skip=skip, limit=limit)
+#     return boards
+# 공유받은 회의 페이지 전용: 내가 공유받은 보드만 (total 추가)
+@router.get("/shared-received", response_model=schemas.BoardListResponse)
+def read_shared_received_boards(
+    page: int = Query(1, ge=1, description="페이지 번호 (1부터 시작)"),
+    limit: int = Query(7, ge=1, le=100, description="페이지당 개수"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    skip = (page - 1) * limit
+    
+    # total count 조회
+    total = (
+        db.query(Board)
+        .join(BoardShare, BoardShare.board_id == Board.id)
+        .filter(BoardShare.user_id == current_user.id)
+        .count()
+    )
+    
+    # items 조회
+    boards = crud.get_shared_boards(db, current_user.id, skip=skip, limit=limit)
+    
+    return {"total": total, "items": boards}
+
+# Read all
+@router.get("/", response_model=schemas.BoardListResponse)
+def read_boards(
+    skip: int = 0,
+    limit: int = 7,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from backend.app.model import Board
+
+    total = (
+        db.query(Board)
+        .filter(Board.owner_id == current_user.id)
+        .count()
+    )
+
+    boards = (
+        db.query(Board)
+        .filter(Board.owner_id == current_user.id)
+        .order_by(Board.created_at.desc()) 
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    # ⛔ 굳이 BoardListResponse(...) 직접 만들 필요 없음
+    # ⭕ 이렇게 dict로만 리턴해도 Pydantic이 BoardListResponse로 변환해 줌
+    return {"total": total, "items": boards}
 # Recent
 @router.get("/recent", response_model=list[schemas.BoardResponse], summary="최근 보드 가져오기(3개)")
 def read_board_recent(limit: int = 3, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -144,18 +216,59 @@ def read_board(
     return board
 
 # 보드 1개를 audio, memo, recording_sessions, summaries, final_summaries, recording_results와 함께 반환.
-@router.get("/{board_id}/full", description="모든 보드 가져오기 / 하위 항목 포함")
+@router.get("/{board_id}/full", description="보드 + 하위 항목 전체 조회")
 def get_board_full(
     board_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user),
+    principal: Principal | None = Depends(get_principal),
 ):
-    
-    data = board_crud.get_board_full(db, current_user.id, board_id)
-    if data is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BOARD_NOT_FOUND_OR_UNAUTHORIZED")
-    return data
+    # 1) 보드 존재 확인
+    board = db.query(Board).filter(Board.id == board_id).first()
+    if not board:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BOARD_NOT_FOUND")
 
+    is_protected = bool(board.password_hash)
+
+    # 2) 로그인 유저 (owner or 공유 멤버)
+    if principal is not None and principal.is_user and principal.user:
+        if not can_read_board(db, board_id, principal):
+            if is_protected:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="BOARD_NOT_FOUND_OR_UNAUTHORIZED",
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="BOARD_NOT_SHARED",
+                )
+
+        data = board_crud.get_board_full(db, board_id)   # ✅ 인자 2개
+        if not data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BOARD_NOT_FOUND")
+        data["board"]["is_protected"] = is_protected
+        return data
+
+    # 3) 게스트 토큰 분기
+    if principal is not None and principal.is_guest:
+        if principal.board_id != board_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="GUEST_TOKEN_BOARD_MISMATCH",
+            )
+
+        data = board_crud.get_board_full(db, board_id)   # ✅ 인자 2개
+        if not data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BOARD_NOT_FOUND")
+        data["board"]["is_protected"] = is_protected
+        return data
+
+    # 4) 보호된 보드인데 principal 없음 → 핀 필요
+    if is_protected:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="BOARD_PROTECTED")
+
+    # 5) 보호도 안돼 있고 principal 도 없음 → 공유 안 된 보드
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="BOARD_NOT_SHARED")
 # Update
 @router.patch("/{board_id}", response_model=schemas.BoardResponse, summary="보드 업데이트")
 def update_board(board_id: int, board_update: schemas.BoardUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -184,25 +297,4 @@ def delete_board(board_id: int, db: Session = Depends(get_db), current_user=Depe
 
     db.delete(board)
     db.commit()
-Pin = Annotated[str, StringConstraints(pattern=r"^\d{4}$")]
-class BoardPasswordVerify(BaseModel):
-    password: Pin
 
-# 비밀번호 설정
-@router.post("/{board_id}/verify-password", description="패스워드 설정")
-def verify_board_password(board_id: int, body: BoardPasswordVerify, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    ok = crud.verify_board_password(db, board_id, body.password)
-    if not ok:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid password")
-    return {"ok": True}
-
-# 공유받은 회의 페이지 전용: 내가 공유받은 보드만
-@router.get("/shared-received", response_model=list[schemas.BoardResponse], summary="공유받은 보드 목록")
-def read_shared_received_boards(
-    skip: int = 0,
-    limit: int = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    boards = crud.get_shared_boards(db, current_user.id, skip=skip, limit=limit)
-    return boards

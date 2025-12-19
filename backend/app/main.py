@@ -8,6 +8,7 @@ import logging
 from typing import Dict
 from dotenv import load_dotenv
 import asyncio  # ← 추가: keep-alive 태스크용
+from pathlib import Path
 
 # ============================================
 # ⚙️ FastAPI / Starlette
@@ -27,6 +28,7 @@ from backend.app.routers.sessions_router import router as sessions_router
 from backend.app.routers import rag_router
 from datetime import datetime
 from backend.app.util.session_repo import ensure_session_saved
+from backend.app.routers import ollama_template_router
 
 # ============================================
 # 🗓 Scheduler & DB 초기화
@@ -69,6 +71,7 @@ app = FastAPI()
 
 # 세션 미들웨어 (OAuth redirect 시 필요할 수 있음)
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("APP_SECRET_KEY"))
+app.include_router(ollama_template_router.router)
 
 # CORS 설정
 app.add_middleware(
@@ -89,7 +92,14 @@ app.add_middleware(
 )
 
 # static 디렉토리 마운트
-app.mount("/static", StaticFiles(directory="static"), name="static")
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+STATIC_DIR = BACKEND_DIR / "static"   # STT_PROJECT/test1/backend/static
+
+print("📁 STATIC_DIR =", STATIC_DIR)
+
+STATIC_DIR.mkdir(parents=True, exist_ok=True)
+
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # 라우터 등록
 app.include_router(sessions_router)

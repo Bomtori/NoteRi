@@ -5,6 +5,7 @@ import ShadcnAreaChart from "../cards/ShadcnAreaChart";
 import { pivotPlansForMultiSeries } from "../utils/pivotPlansForMultiSeries";
 import AdminToggleTabs from "../../../components/admin/AdminToggleTabs";
 import {DateButtonsOption} from "../cards/DateButtons";
+import apiClient from "../../../api/apiClient";
 
 function makeXs(range: UiRange): string[] {
   const today = new Date();
@@ -37,8 +38,6 @@ function pickArray(resp: unknown): any[] {
 
   return [];
 }
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 
 type UiRange = "7d" | "5w" | "6m" | "5y";
 
@@ -160,28 +159,28 @@ export default function PaymentByPlanTrend({
   }, [uiRange]);
 
   useEffect(() => {
-    const ac = new AbortController();
-    (async () => {
-      try {
-        setLoading(true);
-        setError(null);
+  const ac = new AbortController();
+  (async () => {
+    try {
+      setLoading(true);
+      setError(null);
 
-        const res = await fetch(`${API_BASE_URL}${endpoint}`, { signal: ac.signal });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const resp = await res.json();
-        console.log("PaymentTrend", resp)
+      const { data: resp } = await apiClient.get(endpoint, { 
+        signal: ac.signal 
+      });  // ✅ 변경
+      console.log("PaymentTrend", resp);
 
-        // 1) 응답에서 플랜 키 동적 추출
-        let keys = inferPlanKeys(resp);
-        // 키가 없으면, 기존 팔레트 키(= 현재 쓰는 플랜 레이블)를 기본으로 사용
-        if (keys.length === 0) {
-          keys = Object.keys(PLAN_COLORS); // ["free","pro","enterprise"]
-        }
+      // 1) 응답에서 플랜 키 동적 추출
+      let keys = inferPlanKeys(resp);
+      // 키가 없으면, 기존 팔레트 키(= 현재 쓰는 플랜 레이블)를 기본으로 사용
+      if (keys.length === 0) {
+        keys = Object.keys(PLAN_COLORS); // ["free","pro","enterprise"]
+      }
 
-        // 2) 피벗 (동적 키 사용)
-        const wide = pivotPlansForMultiSeries(resp, keys as readonly string[]);
-        // 3) 숫자/형식 정리
-       const next: SeriesRow[] = wide.map((row: any) => {
+      // 2) 피벗 (동적 키 사용)
+      const wide = pivotPlansForMultiSeries(resp, keys as readonly string[]);
+      // 3) 숫자/형식 정리
+      const next: SeriesRow[] = wide.map((row: any) => {
         const out = {} as SeriesRow;
         out.x = String(row.x);
         for (const k of keys) {
@@ -189,7 +188,8 @@ export default function PaymentByPlanTrend({
         }
         return out;
       });
-       if (next.length === 0) {
+      
+      if (next.length === 0) {
         const xs = makeXs(uiRange);
         const filled = xs.map((x) => {
           const r: SeriesRow = { x } as SeriesRow;
@@ -202,25 +202,27 @@ export default function PaymentByPlanTrend({
         return;
       }
 
-        const totalSum = next.reduce(
-          (s: number, r: any) => s + keys.reduce((ss, k) => ss + (r[k] || 0), 0),
-          0
-        );
-        const sig = `${next.length}:${totalSum}`;
+      const totalSum = next.reduce(
+        (s: number, r: any) => s + keys.reduce((ss, k) => ss + (r[k] || 0), 0),
+        0
+      );
+      const sig = `${next.length}:${totalSum}`;
 
-        if (prevSig.current !== sig) {
-          setPlanKeys(keys);
-          setSeriesRows(next);
-          prevSig.current = sig;
-        }
-      } catch (e: any) {
-        if (e?.name !== "AbortError") setError("불러오기 실패");
-      } finally {
-        setLoading(false);
+      if (prevSig.current !== sig) {
+        setPlanKeys(keys);
+        setSeriesRows(next);
+        prevSig.current = sig;
       }
-    })();
-    return () => ac.abort();
-  }, [endpoint]);
+    } catch (e: any) {
+      if (e?.name !== "AbortError" && e?.code !== "ERR_CANCELED") {
+        setError("불러오기 실패");
+      }
+    } finally {
+      setLoading(false);
+    }
+  })();
+  return () => ac.abort();
+}, [endpoint]);
 
   // 동적 series 설정 생성 (색상 매핑 포함)
   const areaSeries = useMemo(() => {

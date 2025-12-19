@@ -1,40 +1,52 @@
+# backend/app/util/access.py
+from typing import Union, Optional
 from sqlalchemy.orm import Session
-import backend.app.model as model
 
-def can_read_board(db: Session, board_id: int, principal) -> bool:
+from backend.app.model import Board, BoardShare, User
+from backend.app.deps.guest import Principal
+
+
+PrincipalLike = Union[Principal, User, int, None]
+
+
+def can_read_board(db: Session, board_id: int, principal: PrincipalLike) -> bool:
     """
-    principal:
-      {"type":"user","id":<user_id>}
-      {"type":"guest","board_id":<board_id>}
+    board_id 에 대해 읽기 권한이 있는지 여부.
+    - Principal(type="user") => owner 또는 share 멤버면 True
+    - Principal(type="guest") => guest.board_id == board_id 이면 True
+    - User / int => owner 또는 share 멤버면 True
+    - None => False
     """
-    if not principal:
-        print("🚫 principal is None")
+    if principal is None:
         return False
 
-    print(f"🔍 can_read_board: board_id={board_id}, principal={principal}")
-    board = (
-        db.query(model.Board)
-        .filter(model.Board.id == board_id)
-        .first()
-    )
-    if not board:
+    # Principal 객체
+    if isinstance(principal, Principal):
+        if principal.is_guest:
+            return principal.board_id == board_id
+
+        if principal.is_user and principal.user:
+            user_id = principal.user.id
+        else:
+            return False
+
+    # User 인스턴스
+    elif isinstance(principal, User):
+        user_id = principal.id
+
+    # 그냥 user_id(int) 로 들어오는 경우
+    elif isinstance(principal, int):
+        user_id = principal
+    else:
         return False
 
-    if principal["type"] == "guest":
-        # 게스트는 비번으로 들어온 그 보드만 읽을 수 있음
-        return int(principal.get("board_id") or 0) == int(board_id)
-
-    # 로그인 사용자:
-    uid = principal["id"]
-    if board.owner_id == uid:
-        return True
-
-    shared = (
-        db.query(model.BoardShare)
+    # 여기부터는 "user_id 가 이 보드를 볼 수 있는지" 검사
+    q = (
+        db.query(Board)
+        .outerjoin(BoardShare, BoardShare.board_id == Board.id)
         .filter(
-            model.BoardShare.board_id == board_id,
-            model.BoardShare.user_id == uid,
+            Board.id == board_id,
+            ((Board.owner_id == user_id) | (BoardShare.user_id == user_id)),
         )
-        .first()
     )
-    return bool(shared)
+    return db.query(q.exists()).scalar()

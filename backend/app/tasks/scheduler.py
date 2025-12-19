@@ -151,6 +151,12 @@ def start_scheduler():
         id="calendar_morning_notifications",
         replace_existing=True,
     )
+    _scheduler.add_job(
+        delete_old_inactive_users,
+        CronTrigger(hour=4, minute=0, timezone=KST),
+        id="cleanup_inactive_users",
+        replace_existing=True,
+    )
     _scheduler.start()
     print("[Scheduler] Started: expire@01:00, renew@03:00")
     return _scheduler
@@ -275,3 +281,32 @@ def send_morning_calendar_notifications(db: Session):
         db.add(noti)
 
     db.commit()
+
+@_with_session
+def delete_old_inactive_users(db: Session, months: int = 6) -> int:
+    """
+    비활성화된 지 `months`개월 지난 계정을 완전히 삭제.
+    - 기준: User.is_active == False 이고, updated_at < now - months
+    - 반환값: 삭제된 유저 수
+    """
+    cutoff = datetime.now(UTC) - timedelta(days=30 * months)
+
+    q = (
+        db.query(User)
+        .filter(
+            User.is_active == False,        # 비활성 계정
+            User.updated_at.isnot(None),    # updated_at 있는 경우만
+            User.updated_at < cutoff,       # 6개월 지난 계정
+        )
+    )
+
+    count = q.count()
+    if count == 0:
+        return 0
+
+    # FK / cascade 잘 걸려있다는 전제 (ON DELETE CASCADE 또는 relationship cascade)
+    q.delete(synchronize_session=False)
+    db.commit()
+
+    print(f"[Scheduler] Deleted {count} inactive users older than {months} months.")
+    return count

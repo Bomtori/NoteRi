@@ -64,6 +64,168 @@ INTERVAL_SUMMARY_PROMPT = """You are a Korean meeting assistant. You MUST respon
 
 요약 (한국어만):"""
 
+TEMPLATE_PROMPTS = {
+    "lecture": """
+당신은 한국어 전문 강의록 작성 보조 AI입니다.
+반드시 한국어만 사용하세요.
+
+다음 자료를 기반으로 "강의록 형태" 문서를 작성하세요.
+- 구어체를 모두 문어체로 변환
+- 불필요한 말투 제거
+- 핵심 내용 구조화
+- 강의 구성 순서에 맞게 흐름 재정렬
+- 예시, 설명, 결론을 명확하게 정리
+
+출력 형식 (Markdown):
+# 강의 제목
+## 1. 강의 개요
+- 강의 주제 요약
+
+## 2. 핵심 내용
+- 핵심 개념 4~8개 정리
+- 설명 포함
+
+## 3. 세부 내용 정리
+### ● 개념 A
+- 설명
+- 관련 맥락
+
+### ● 개념 B
+- 설명
+- 관련 맥락
+
+## 4. 결론 및 정리
+- 전체 요약 3~5줄
+
+자료:
+요약본:
+{summaries}
+
+정제된 스크립트:
+{script}
+
+메모:
+{memo}
+""",
+
+    "meeting": """
+당신은 한국어 전문 회의록 작성 AI입니다.
+반드시 한국어만 사용하세요.
+
+다음 자료로부터 "전문 회의록"을 작성하세요.
+- 구어체 제거, 문어체 변환
+- 의사결정 사항, 작업 항목 분리
+- 발언 순서보다 의미 기준으로 재정렬
+
+출력 형식 (Markdown):
+# 회의록
+## 1. 회의 개요
+- 날짜/시간/주제 요약 (날짜는 입력 자료에 없으면 생략)
+
+## 2. 주요 논의 내용
+- 핵심 논의 4~7개, 불릿 포인트
+
+## 3. 결정 사항
+- 실제 결정된 항목만 추출
+
+## 4. Action Items
+- 담당자/해야할 일 형태로 간단 정리
+
+## 5. 참고 메모
+- Users memo 내용 반영
+
+자료:
+요약본:
+{summaries}
+
+스크립트:
+{script}
+
+사용자 메모:
+{memo}
+""",
+
+    "interview": """
+당신은 한국어 인터뷰 변환 전문가입니다.
+반드시 한국어만 사용하세요.
+
+다음 자료를 기반으로 “인터뷰 기사 형태”로 재작성하세요.
+- 질문/답변 구조 재구성
+- 불필요한 음성적 표현 삭제
+- 핵심만 명확히 정리
+- 실제 기사처럼 자연스럽게 재서술
+
+출력 형식 (Markdown):
+# 인터뷰 기사 제목
+
+## 인터뷰 개요
+- 인터뷰 주제 요약
+
+## 주요 질문 & 답변
+### Q1. 질문 내용
+A1. 답변 요약 및 핵심 설명
+
+### Q2. 질문 내용
+A2. 답변 요약
+
+(가능한 질문/답변을 3~8개 작성)
+
+## 인터뷰 결론
+- 핵심 메시지 정리 3~4줄
+
+자료:
+요약본:
+{summaries}
+
+스크립트:
+{script}
+
+메모:
+{memo}
+""",
+
+    "blog": """
+당신은 한국어 블로그 콘텐츠 생성 AI입니다.
+반드시 한국어만 작성하세요.
+
+다음 자료를 기반으로 “블로그 포스팅”을 작성하세요.
+- 자연스럽고 읽기 쉬운 글
+- 인트로 → 본문 → 결론 구조
+- 핵심 메시지 강조
+- 너무 딱딱하지 않게 구성
+
+출력 형식 (Markdown):
+# 블로그 글 제목
+
+## intro
+- 주제 소개
+- 문제 제기 or 배경 설명
+
+## 본문
+### 1) 핵심 내용 1
+- 설명
+
+### 2) 핵심 내용 2
+- 설명
+
+### 3) 추가적으로 중요한 포인트
+- 설명
+
+## 마무리
+- 전체 정리
+- 독자에게 전달하고 싶은 메시지 2~3줄
+
+자료:
+요약본:
+{summaries}
+
+스크립트:
+{script}
+
+사용자 메모:
+{memo}
+""",
+}
 
 async def ollama_summarize_json(body: str, num_ctx: int = 8192) -> dict:
     """
@@ -169,3 +331,32 @@ def _clean_interval_summary(text: str) -> str:
             lines.append(line)
     
     return '\n'.join(lines[:3])
+
+async def ollama_generate_template(template_type: str, summaries, script, memo, num_ctx: int = 8192) -> str:
+    """
+    템플릿 생성 API - 강의록/회의록/인터뷰/블로그 컨텐츠 자동생성
+    """
+    if template_type not in TEMPLATE_PROMPTS:
+        raise ValueError(f"Unknown template type: {template_type}")
+
+    prompt = TEMPLATE_PROMPTS[template_type].format(
+        summaries=json.dumps(summaries, ensure_ascii=False, indent=2),
+        script=json.dumps(script, ensure_ascii=False, indent=2),
+        memo=json.dumps(memo, ensure_ascii=False, indent=2),
+    )
+
+    payload = {
+        "model": OLLAMA_MODEL,
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "num_ctx": num_ctx,
+            "temperature": 0.3,
+            "top_p": 0.9,
+        },
+    }
+
+    async with httpx.AsyncClient(timeout=180) as client:
+        r = await client.post(f"{OLLAMA_BASE_URL}/api/generate", json=payload)
+        r.raise_for_status()
+        return r.json().get("response", "").strip()

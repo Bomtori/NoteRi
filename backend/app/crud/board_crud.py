@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, UTC
-from typing import Optional
-
+from datetime import datetime, UTC, date, time
+from typing import Optional, List, Tuple
+from fastapi import HTTPException
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -178,7 +178,7 @@ def get_owned_boards(db: Session, user_id: int, *, skip=0, limit=10):
         .all()
     )
 
-def get_shared_boards(db: Session, user_id: int, *, skip=0, limit=None):
+def get_shared_boards(db: Session, user_id: int, *, skip=0, limit=7):
     return (
         db.query(model.Board)
         .join(model.BoardShare, model.BoardShare.board_id == model.Board.id)
@@ -189,8 +189,12 @@ def get_shared_boards(db: Session, user_id: int, *, skip=0, limit=None):
         .all()
     )
 
-def get_board_full(db: Session, current_user_id: int, board_id: int) -> dict | None:
-    board = get_board(db, current_user_id, board_id)
+def get_board_full(db: Session, board_id: int) -> dict | None:
+    """
+    board + audio + memo + sessions + summaries + final_summaries + results 전체 패키지로 반환.
+    ⚠️ 권한 체크는 router에서 이미 끝났다고 가정하고, 여기선 데이터 집계만 한다.
+    """
+    board = db.query(Board).filter(Board.id == board_id).first()
     if not board:
         return None
 
@@ -206,6 +210,7 @@ def get_board_full(db: Session, current_user_id: int, board_id: int) -> dict | N
         .order_by(RecordingResult.created_at.asc().nullslast())
         .all()
     )
+
     board_meta = {
         "id": board.id,
         "owner_id": board.owner_id,
@@ -217,7 +222,8 @@ def get_board_full(db: Session, current_user_id: int, board_id: int) -> dict | N
     }
 
     def _audio_to_dict(a):
-        if not a: return None
+        if not a:
+            return None
         return {
             "id": a.id,
             "file_path": a.file_path,
@@ -228,7 +234,8 @@ def get_board_full(db: Session, current_user_id: int, board_id: int) -> dict | N
         }
 
     def _memo_to_dict(m):
-        if not m: return None
+        if not m:
+            return None
         return {
             "id": m.id,
             "content": m.content,
@@ -288,9 +295,9 @@ def get_board_full(db: Session, current_user_id: int, board_id: int) -> dict | N
         }
 
     return {
-        "board": board_meta,                               
-        "audio": _audio_to_dict(audio),                    
-        "memo": _memo_to_dict(memo),                       
+        "board": board_meta,
+        "audio": _audio_to_dict(audio),
+        "memo": _memo_to_dict(memo),
         "recording_sessions": [_session_to_dict(s) for s in sessions],
         "summaries": [_summary_to_dict(su) for su in summaries],
         "final_summaries": [_final_summary_to_dict(fs) for fs in final_summaries],
@@ -355,3 +362,55 @@ def verify_board_password(db: Session, board_id: int, pin4: str) -> bool:
         return argon2.verify(pin4, board.password_hash)
     except Exception:
         return False
+
+def search_boards(
+    db: Session,
+    current_user: model.User,
+    title: Optional[str] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    skip: int = 0,
+    limit: Optional[int] = 7,
+) -> Tuple[int, List[Board]]:
+    """
+    날짜 + 제목으로 보드 검색 (공유 보드 포함, 페이징 + total)
+    """
+
+    q = (
+        db.query(Board)
+        .outerjoin(BoardShare, BoardShare.board_id == Board.id)
+        .filter(
+            or_(
+                Board.owner_id == current_user.id,
+                BoardShare.user_id == current_user.id,
+            )
+        )
+        .distinct()
+    )
+
+    # 제목 부분 검색
+    if title:
+        like_pattern = f"%{title.strip()}%"
+        q = q.filter(Board.title.ilike(like_pattern))
+
+    # 날짜 범위 (created_at 기준)
+    if start_date:
+        start_dt = datetime.combine(start_date, time.min)
+        q = q.filter(Board.created_at >= start_dt)
+
+    if end_date:
+        end_dt = datetime.combine(end_date, time.max)
+        q = q.filter(Board.created_at <= end_dt)
+
+    # total 먼저 계산
+    total = q.count()
+
+    # 정렬 + 페이징
+    q = q.order_by(Board.created_at.desc())
+
+    if limit is not None:
+        q = q.offset(skip).limit(limit)
+
+    items = q.all()
+
+    return total, items

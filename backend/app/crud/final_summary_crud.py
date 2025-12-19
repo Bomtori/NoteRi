@@ -86,3 +86,28 @@ def get_final_summary_by_session(db, session_id: int):
         .limit(1)
     )
     return db.execute(stmt).scalars().first()
+
+def update_content_by_board(
+    db: Session,
+    board_id: int,
+    content: str,
+) -> Optional[FinalSummary]:
+    """
+    특정 board_id 에 속한 FinalSummary 중
+    가장 최근(created_at 기준) 1건의 content만 수정
+    """
+    obj = (
+        db.query(FinalSummary)
+        .join(RecordingSession, RecordingSession.id == FinalSummary.recording_session_id)
+        .filter(RecordingSession.board_id == board_id)
+        .order_by(desc(FinalSummary.created_at))
+        .first()
+    )
+
+    if not obj:
+        return None
+
+    obj.content = content
+    db.commit()
+    db.refresh(obj)
+    return obj

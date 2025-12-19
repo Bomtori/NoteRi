@@ -5,6 +5,8 @@ import apiClient from "../api/apiClient";
 import { API_BASE_URL } from "../config";
 import { useToast } from "../hooks/useToast";
 import PlanChangeModal from "../components/user/PlanChangeModal";
+import MobileNavBar from "../components/common/MobileNavBar";
+import Calendar from "../components/calendar/Calendar";
 
 
 // =======================
@@ -86,7 +88,7 @@ function ProgressBar({ used, total, mode = "remaining" }: ProgressBarProps) {
     const percentRemaining = 100 - percentUsed;
     const percent = mode === "remaining" ? percentRemaining : percentUsed;
     const [animatedWidth, setAnimatedWidth] = useState(0);
-
+    
     useEffect(() => {
         const timeout = setTimeout(() => setAnimatedWidth(percent), 1000);
         return () => clearTimeout(timeout);
@@ -255,7 +257,17 @@ export default function UserPage() {
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [availablePlans, setAvailablePlans] = useState<PlanOption[]>([]);
+    const [mobileCalendarOpen, setMobileCalendarOpen] = useState(false);
+    const [calendarClosing, setCalendarClosing] = useState(false);
+    const sheetRef = useRef<HTMLDivElement | null>(null);
 
+    const closeCalendar = () => {
+        setCalendarClosing(true);
+        setTimeout(() => {
+            setMobileCalendarOpen(false);
+            setCalendarClosing(false);
+        }, 200);
+    };
 
     // 사용자 정보 불러오기
     useEffect(() => {
@@ -529,7 +541,33 @@ export default function UserPage() {
             ? user.plan.allocated_minutes - user.used_minutes
             : 0;
 
+    const grayBtn =
+    "px-4 py-1.5 text-sm rounded-md border border-gray-300 text-gray-600 " +
+    "hover:border-[#7E37F9] hover:text-[#7E37F9] hover:bg-[#F3EFFF] transition";
+
+    const grayBtnRed =
+    "px-4 py-1.5 text-sm rounded-md border border-gray-300 text-gray-600 " +
+    "hover:border-red-400 hover:text-red-500 hover:bg-[#FFF5F5] transition";
+
+    const handleDeleteAccount = async () => {
+        if (!confirm("정말 회원탈퇴 하시겠습니까?\n모든 회의록이 삭제되며 복구할 수 없습니다.")) return;
+
+        try {
+            await apiClient.delete(`${API_BASE_URL}/users/me`);
+
+            showToast("계정이 삭제되었습니다.");
+            localStorage.removeItem("access_token");
+
+            // 홈이나 로그인 화면으로 이동
+            window.location.href = "/";
+        } catch (err) {
+            console.error("회원탈퇴 실패:", err);
+            showToast("회원탈퇴 중 문제가 발생했습니다.");
+        }
+        };
+
     return (
+        <>
         <main className="bg-gray-50 min-h-screen p-8 space-y-8">
             <h1 className="text-2xl font-semibold mb-6">마이페이지</h1>
 
@@ -698,32 +736,84 @@ export default function UserPage() {
                 </div>
             </div>
 
+            {/* 하단 버튼 영역 */}
+            <div className="flex gap-3 mt-8">
+
+            {/* 회원탈퇴 버튼 (그레이+레드 hover) */}
+            <button
+                onClick={handleDeleteAccount}
+                className={grayBtnRed}
+            >
+                회원탈퇴
+            </button>
+
             {/* 아침 알림 테스트 버튼 */}
             <button
                 onClick={async () => {
-                    try {
-                        const token = localStorage.getItem("access_token");
-                        await apiClient.post(
-                            `${API_BASE_URL}/notifications/trigger-morning`,
-                            null,
-                            {
-                                withCredentials: true,
-                                headers: token ? { Authorization: `Bearer ${token}` } : {},
-                            }
-                        );
-                        showToast("🌅 아침 알림 트리거가 실행되었습니다.");
-                        setTimeout(() => {
-                            refreshNotifications();
-                        }, 800);
-                    } catch (err) {
-                        showToast("트리거 실행 실패");
-                        console.error(err);
+                try {
+                    const token = localStorage.getItem("access_token");
+                    await apiClient.post(
+                    `${API_BASE_URL}/notifications/trigger-morning`,
+                    null,
+                    {
+                        withCredentials: true,
+                        headers: token ? { Authorization: `Bearer ${token}` } : {},
                     }
+                    );
+                    showToast("🌅 아침 알림 트리거가 실행되었습니다.");
+                    setTimeout(() => {
+                    refreshNotifications();
+                    }, 800);
+                } catch (err) {
+                    showToast("트리거 실행 실패");
+                    console.error(err);
+                }
                 }}
-                className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+                className={grayBtn}
             >
                 아침 알림 테스트
             </button>
+
+            </div>
+            
         </main>
+        {/* 모바일 하단 네비게이션 */}
+        
+        <MobileNavBar 
+            active="my"
+            onCalendarClick={() => setMobileCalendarOpen(true)}
+        />
+        {/* 모바일 달력 모달 */}
+        {(mobileCalendarOpen || calendarClosing) && (
+            <div
+                className={`
+                    lg:hidden fixed inset-0 bg-black/50 z-[100] flex items-end 
+                    transition-opacity duration-300
+                    ${calendarClosing ? "opacity-0" : "opacity-100"}
+                `}
+                onClick={closeCalendar}
+            >
+                <div
+                    ref={sheetRef}
+                    onClick={(e) => e.stopPropagation()}
+                    className={`
+                        bg-white w-full max-w-[600px] mx-auto rounded-t-3xl p-6 
+                        max-h-[85vh] overflow-y-auto 
+                        transition-transform duration-300
+                        ${calendarClosing ? "translate-y-full" : "translate-y-0"}
+                    `}
+                >
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-lg font-bold">일정 관리</h2>
+                        <button onClick={closeCalendar} className="text-2xl text-gray-500">
+                            ✕
+                        </button>
+                    </div>
+
+                    <Calendar />
+                </div>
+            </div>
+        )}
+        </>
     );
 }

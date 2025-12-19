@@ -6,8 +6,9 @@ import Placeholder from "@tiptap/extension-placeholder";
 import Image from "@tiptap/extension-image";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
+import Highlight from "@tiptap/extension-highlight";
+import Link from "@tiptap/extension-link";
 import apiClient from "../../api/apiClient";
-import { API_BASE_URL } from "../../config";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -15,39 +16,69 @@ function MemoEditor({ boardId, memoId, saveStatus, setSaveStatus }) {
   const [content, setContent] = useState("");
   const saveTimeout = useRef(null);
 
+  // TaskItem InputRule 비활성화 (체크박스 자동 생성 방지)
+  const CustomTaskItem = TaskItem.extend({
+    addInputRules() {
+      return [];
+    },
+  });
+
   const editor = useEditor({
-  extensions: [
-    StarterKit,
+    extensions: [
+      StarterKit.configure({
+        heading: {
+          levels: [1, 2, 3], // H1, H2, H3 지원
+        },
+      }),
 
-    // TaskItem 먼저 등록 (nested 옵션 켜기)
-    TaskItem.configure({
-      nested: true,
-    }),
+      // 🔗 링크 기능
+      Link.configure({
+        openOnClick: false, // 편집 중 클릭해도 링크 안 열림
+        HTMLAttributes: {
+          class: 'text-blue-500 underline cursor-pointer',
+        },
+      }),
 
-    // 그 다음에 TaskList 등록
-    TaskList,
+      // ✨ 하이라이트 (==텍스트== 형식)
+      Highlight.configure({
+        multicolor: false, // 단일 색상 (노란색 배경)
+      }),
 
-    Image.configure({
-      HTMLAttributes: { class: "rounded-lg max-w-full mx-auto my-2" },
-    }),
-    Placeholder.configure({
-      placeholder:
-        "회의 메모를 작성하세요... (체크박스, 이미지, 목록 등 지원)",
-    }),
-  ],
+      // ☑️ 체크리스트
+      CustomTaskItem.configure({ nested: true }),
+      TaskList,
+
+      // 🖼️ 이미지
+      Image.configure({
+        HTMLAttributes: { class: "rounded-lg max-w-full mx-auto my-2" },
+      }),
+
+      // 💬 Placeholder
+      Placeholder.configure({
+        placeholder: "회의 메모를 작성하세요... (#으로 제목, ==텍스트==로 하이라이트)",
+      }),
+    ],
+
+    editorProps: {
+      attributes: {
+        spellcheck: 'false',
+        autocorrect: 'off',
+        autocomplete: 'off',
+      },
+    },
+
     autofocus: true,
     onUpdate: ({ editor }) => setContent(editor.getHTML()),
   });
+
   // 초기 메모 불러오기
   useEffect(() => {
-    if (!boardId || !memoId) return;
+    if (!boardId || !memoId || !editor) return;
     (async () => {
       try {
-        const res = await apiClient.get(
-          `/boards/${boardId}/memos/${memoId}`
-        );
+        const res = await apiClient.get(`/boards/${boardId}/memos/${memoId}`);
         if (res.data?.content) {
-          editor?.commands.setContent(res.data.content);
+          editor.commands.setContent(res.data.content);
           setContent(res.data.content);
         }
       } catch (err) {
@@ -83,13 +114,20 @@ function MemoEditor({ boardId, memoId, saveStatus, setSaveStatus }) {
     if (url) editor?.chain().focus().setImage({ src: url }).run();
   };
 
+  const handleAddLink = () => {
+    const url = prompt("링크 URL을 입력하세요:");
+    if (url) {
+      editor?.chain().focus().setLink({ href: url }).run();
+    }
+  };
+
   if (!editor)
     return <p className="text-gray-400 text-sm p-4">에디터 로딩 중...</p>;
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden" spellCheck={false}>
       <div className="flex items-center justify-between mb-2 mt-3 text-sm">
-        <div className="flex gap-3 text-gray-500">
+        <div className="flex gap-3 text-gray-500 flex-wrap">
           <button
             onClick={() => editor.chain().focus().toggleBold().run()}
             className={
@@ -107,9 +145,17 @@ function MemoEditor({ boardId, memoId, saveStatus, setSaveStatus }) {
             <i>I</i>
           </button>
           <button
-            onClick={() =>
-              editor.chain().focus().toggleHeading({ level: 2 }).run()
+            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+            className={
+              editor.isActive("heading", { level: 1 })
+                ? "text-[#7E37F9]"
+                : "hover:text-[#7E37F9]"
             }
+          >
+            H1
+          </button>
+          <button
+            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
             className={
               editor.isActive("heading", { level: 2 })
                 ? "text-[#7E37F9]"
@@ -117,6 +163,24 @@ function MemoEditor({ boardId, memoId, saveStatus, setSaveStatus }) {
             }
           >
             H2
+          </button>
+          <button
+            onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+            className={
+              editor.isActive("heading", { level: 3 })
+                ? "text-[#7E37F9]"
+                : "hover:text-[#7E37F9]"
+            }
+          >
+            H3
+          </button>
+          <button
+            onClick={() => editor.chain().focus().toggleHighlight().run()}
+            className={
+              editor.isActive("highlight") ? "text-[#7E37F9]" : "hover:text-[#7E37F9]"
+            }
+          >
+            🖍️ 하이라이트
           </button>
           <button
             onClick={() => editor.chain().focus().toggleBulletList().run()}
@@ -138,6 +202,9 @@ function MemoEditor({ boardId, memoId, saveStatus, setSaveStatus }) {
           >
             ☑️ Task
           </button>
+          <button onClick={handleAddLink} className="hover:text-[#7E37F9]">
+            🔗 Link
+          </button>
           <button onClick={handleAddImage} className="hover:text-[#7E37F9]">
             🖼️ Img
           </button>
@@ -145,10 +212,18 @@ function MemoEditor({ boardId, memoId, saveStatus, setSaveStatus }) {
         <span className="text-xs text-gray-400">{saveStatus}</span>
       </div>
 
-      <div className="flex-1 overflow-y-auto rounded-xl bg-white p-4 max-w-none tiptap-editor">
+      <div className="flex-1 overflow-y-auto rounded-xl bg-white p-4 max-w-none">
         <EditorContent
           editor={editor}
-          className="tiptap focus:outline-none [&_*]:outline-none"
+          spellCheck={false}
+          className="tiptap prose prose-sm max-w-none focus:outline-none
+            [&_ul[data-type='taskList']]:list-none [&_ul[data-type='taskList']]:pl-0
+            [&_ul[data-type='taskList']_li]:flex [&_ul[data-type='taskList']_li]:items-start
+            [&_ul[data-type='taskList']_li]:gap-2
+            [&_ul[data-type='taskList']_input]:mt-1 [&_ul[data-type='taskList']_input]:cursor-pointer
+            [&_mark]:bg-yellow-200 [&_mark]:px-1 [&_mark]:rounded
+            [&_a]:text-blue-500 [&_a]:underline [&_a]:cursor-pointer
+            [&_*]:outline-none"
         />
       </div>
     </div>
@@ -156,7 +231,7 @@ function MemoEditor({ boardId, memoId, saveStatus, setSaveStatus }) {
 }
 
 // RightPanel (메모 + GPT)
-export default function RightPanel({ boardId, memoId, tabs = ["memo", "gpt"], onClose, }) {
+export default function RightPanel({ boardId, memoId, tabs = ["memo", "gpt"], onClose }) {
   const [activeTab, setActiveTab] = useState(tabs[0]);
   const [saveStatus, setSaveStatus] = useState("");
   const [gptInput, setGptInput] = useState("");
@@ -207,27 +282,27 @@ export default function RightPanel({ boardId, memoId, tabs = ["memo", "gpt"], on
 
   return (
     <aside className="bg-white rounded-2xl shadow-sm flex flex-col h-full overflow-hidden">
-    {/* 상단 닫기 버튼 (작고 심플하게) */}
-    <div className="absolute top-2 right-3 z-20">
-      <button
-        onClick={onClose}
-        className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-700 transition-all shadow-sm"
-        title="패널 닫기"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-          className="w-4 h-4"
+      {/* 상단 닫기 버튼 */}
+      <div className="absolute top-2 right-3 z-20">
+        <button
+          onClick={onClose}
+          className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-700 transition-all shadow-sm"
+          title="패널 닫기"
         >
-          <path
-            fillRule="evenodd"
-            d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.94l3.71-3.71a.75.75 0 1 1 1.06 1.06L11.06 12l3.71 3.71a.75.75 0 1 1-1.06 1.06L10 13.06l-3.71 3.71a.75.75 0 1 1-1.06-1.06L8.94 12 5.23 8.29a.75.75 0 0 1 .02-1.08z"
-            clipRule="evenodd"
-          />
-        </svg>
-      </button>
-    </div>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="w-4 h-4"
+          >
+            <path
+              fillRule="evenodd"
+              d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.94l3.71-3.71a.75.75 0 1 1 1.06 1.06L11.06 12l3.71 3.71a.75.75 0 1 1-1.06 1.06L10 13.06l-3.71 3.71a.75.75 0 1 1-1.06-1.06L8.94 12 5.23 8.29a.75.75 0 0 1 .02-1.08z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </button>
+      </div>
 
       {/* 상단 탭 */}
       <div className="flex-shrink-0 px-6 pt-6 pb-4 border-b border-gray-100">
@@ -325,22 +400,22 @@ export default function RightPanel({ boardId, memoId, tabs = ["memo", "gpt"], on
                   </div>
                 </motion.div>
               ))}
-                {loading && (
-                    <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="flex justify-start"
-                    >
-                        <div className="bg-gray-100 text-gray-500 rounded-2xl px-4 py-2 text-sm shadow-sm flex items-center gap-2">
-                            <div className="flex gap-1">
-                                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                                <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></span>
-                            </div>
-                            <span>테리가 생각 중이에요!</span>
-                        </div>
-                    </motion.div>
-                )}
+              {loading && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex justify-start"
+                >
+                  <div className="bg-gray-100 text-gray-500 rounded-2xl px-4 py-2 text-sm shadow-sm flex items-center gap-2">
+                    <div className="flex gap-1">
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></span>
+                    </div>
+                    <span>테리가 생각 중이에요!</span>
+                  </div>
+                </motion.div>
+              )}
             </div>
 
             {/* 입력창 */}

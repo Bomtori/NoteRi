@@ -7,14 +7,10 @@ import UserSignupTrend from "../components/dashboard/userDashBoard/UserSignupTre
 import UserAway from "../components/dashboard/userDashBoard/UserAway";
 import UserByAge from "../components/dashboard/userDashBoard/UserByAge";
 import { Card, CardContent } from "../components/ui/card";
+import apiClient from "../api/apiClient";
 
 type Range = "today" | "7d" | "month" | "year";
 type ProviderCounts = Record<string, number>;
-
-const API_BASE_URL =
-  (import.meta as any).env?.VITE_API_BASE ??
-  (import.meta as any).env?.API_BASE_URL ??
-  "http://127.0.0.1:8000";
 
 const CARD =
   "bg-white rounded-2xl shadow-sm transition-all duration-200 hover:-translate-y-0.1 hover:shadow-lg";
@@ -52,7 +48,7 @@ export default function UserCards() {
   const [growthRate, setGrowthRate] = useState(0);
 
   // 기간별 가입자 수
-  useEffect(() => {
+    useEffect(() => {
     const ac = new AbortController();
     const endpoint =
       {
@@ -64,15 +60,15 @@ export default function UserCards() {
 
     (async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}${endpoint}`, { signal: ac.signal });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        const { data } = await apiClient.get(endpoint, { signal: ac.signal });  // ✅ 변경
         if (range === "today") setTodaySignupUsers(Number(data.total ?? 0));
         if (range === "7d") setLast7dSignupUsers(Number(data.total ?? 0));
         if (range === "month") setLastMonthSignupUsers(Number(data.total ?? 0));
         if (range === "year") setLastYearSignupUsers(Number(data.total ?? 0));
       } catch (e: any) {
-        if (e?.name !== "AbortError") setError("불러오기 실패");
+        if (e?.name !== "AbortError" && e?.code !== "ERR_CANCELED") {
+          setError("불러오기 실패");
+        }
       }
     })();
 
@@ -94,12 +90,12 @@ export default function UserCards() {
       try {
         setLoading(true);
         setError(null);
-        const gr = await fetch(`${API_BASE_URL}${growthEndpoint}`, { signal: ac.signal });
-        if (!gr.ok) throw new Error(`HTTP ${gr.status}`);
-        const growthJson = await gr.json();
-        setGrowthRate(pickGrowthRate(growthJson));
+        const { data } = await apiClient.get(growthEndpoint, { signal: ac.signal });  // ✅ 변경
+        setGrowthRate(pickGrowthRate(data));
       } catch (e: any) {
-        if (e?.name !== "AbortError") setError("불러오기 실패");
+        if (e?.name !== "AbortError" && e?.code !== "ERR_CANCELED") {
+          setError("불러오기 실패");
+        }
         setGrowthRate(0);
       } finally {
         setLoading(false);
@@ -116,12 +112,10 @@ export default function UserCards() {
       try {
         setLoading(true);
         setError(null);
-        const res = await fetch(`${API_BASE_URL}/users/count/provider`, { signal: ac.signal });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = (await res.json()) as ProviderCounts;
+        const { data } = await apiClient.get("/users/count/provider", { signal: ac.signal });  // ✅ 변경
         setProviderCounts(data || {});
       } catch (e: any) {
-        if (e?.name !== "AbortError") {
+        if (e?.name !== "AbortError" && e?.code !== "ERR_CANCELED") {
           setError("사용자 수를 불러오지 못했습니다.");
           setProviderCounts({});
         }
@@ -138,12 +132,10 @@ export default function UserCards() {
       try {
         setLoading(true);
         setError(null);
-        const res = await fetch(`${API_BASE_URL}/users/count`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        const { data } = await apiClient.get("/users/count");  // ✅ 변경
         setTotalUsers(Number(data.total_users ?? 0));
       } catch (e: any) {
-        if (e?.name !== "AbortError") setError("사용자 수를 불러오지 못했습니다.");
+        setError("사용자 수를 불러오지 못했습니다.");
       } finally {
         setLoading(false);
       }
@@ -151,17 +143,15 @@ export default function UserCards() {
   }, []);
 
   // 비활성 유저 수
-  useEffect(() => {
+ useEffect(() => {
     (async () => {
       try {
         setLoading(true);
         setError(null);
-        const res = await fetch(`${API_BASE_URL}/users/count/noactive`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        const { data } = await apiClient.get("/users/count/noactive");  // ✅ 변경
         setNoActiveUsers(Number(data.no_active_users ?? 0));
       } catch (e: any) {
-        if (e?.name !== "AbortError") setError("사용자 수를 불러오지 못했습니다.");
+        setError("사용자 수를 불러오지 못했습니다.");
       } finally {
         setLoading(false);
       }

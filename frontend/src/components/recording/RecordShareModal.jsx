@@ -3,121 +3,140 @@ import { motion, AnimatePresence } from "framer-motion";
 import { FaLink, FaUserPlus, FaLock, FaUnlock, FaTimes, FaUsers } from "react-icons/fa";
 import { useToast } from "../../hooks/useToast";
 import apiClient from "../../api/apiClient";
+// import { useRef, useEffect, useState } from "react";
+// import { motion, AnimatePresence } from "framer-motion";
+// import { FaLink, FaUserPlus, FaLock, FaUnlock, FaTimes, FaUsers } from "react-icons/fa";
+// import { useToast } from "../../hooks/useToast";
+// import apiClient from "../../api/apiClient";
 
 export default function RecordShareModal({
-    isOpen,
-    onClose,
-    boardId = null,
-    boardTitle = "",
-    summaries = [],
-    refinedScript = [],
-    memo = null,
-    // 레코드(세션) 객체가 있다면 전달됨 (없어도 동작)
-    record = null,
-    }) {
-    const ref = useRef(null);
-    const [activeTab, setActiveTab] = useState("link");
-    const [inviteEmail, setInviteEmail] = useState("");
-    const [invited, setInvited] = useState([]); // 로컬 추가만 (아직 저장 안됨)
-    const [sharedUsers, setSharedUsers] = useState([]); // 실제 공유된 사용자 목록
-    const [pin, setPin] = useState("");
-    const [hasPassword, setHasPassword] = useState(false);
-    const { showToast } = useToast();
+  isOpen,
+  onClose,
+  boardId = null,
+  boardTitle = "",
+  summaries = [],
+  refinedScript = [],
+  memo = null,
+  record = null,
+  boardOwnerId,
+  barCenter, // ⭐ 추가
+}) {
+  const ref = useRef(null);
+  const [activeTab, setActiveTab] = useState("link");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [invited, setInvited] = useState([]);
+  const [sharedUsers, setSharedUsers] = useState([]);
+  const [pin, setPin] = useState("");
+  const [hasPassword, setHasPassword] = useState(false);
+  const { showToast } = useToast();
+  const isMobile = window.innerWidth < 1024;
 
-    // =========================
-    // Notion 관련 상태 & UI
-    // =========================
-    const [databases, setDatabases] = useState([]);
-    const [selectedDB, setSelectedDB] = useState("");
-    const [notionStatus, setNotionStatus] = useState({
-        connected: false,
-        workspace_name: null,
-    });
+  
+  const currentUser = JSON.parse(localStorage.getItem("user"));
+  const myInfo = sharedUsers.find(s => s.user_id === currentUser?.id);
+  let myRole = "guest";
+  if (boardOwnerId === currentUser?.id) {
+    myRole = "owner";
+  } else if (myInfo) {
+    myRole = myInfo.role;
+  }
 
-    // 템플릿 선택/미리보기/업로드
-    // 백엔드 map_ui_to_template 에 맞춰 "회의기록/스크립트/전체요약"으로 보낼 것이므로
-    // 내부 상태는 'minutes/script/final'로 들고가고, 전송 직전에 매핑해서 보냄.
-    const [templateType, setTemplateType] = useState("final"); // 'minutes' | 'script' | 'final'
-    const [previewDoc, setPreviewDoc] = useState(null); // { title, content } (Markdown)
-    const [isRendering, setIsRendering] = useState(false);
-    const [isUploading, setIsUploading] = useState(false);
-    const [pageTitle, setPageTitle] = useState("");
+  // Notion 관련 상태
+  const [databases, setDatabases] = useState([]);
+  const [selectedDB, setSelectedDB] = useState("");
+  const [notionStatus, setNotionStatus] = useState({
+    connected: false,
+    workspace_name: null,
+  });
+  const [templateType, setTemplateType] = useState("final");
+  const [previewDoc, setPreviewDoc] = useState(null);
+  const [isRendering, setIsRendering] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [pageTitle, setPageTitle] = useState("");
 
-    // sessionId/boardId 효과적으로 잡기
-    const sessionId =
-        record?.session_id ?? record?.id ?? null; // record에 session_id가 있으면 우선, 없으면 id 사용
-    const effectiveBoardId = boardId ?? record?.board_id ?? null;
+  const sessionId = record?.session_id ?? record?.id ?? null;
+  const effectiveBoardId = boardId ?? record?.board_id ?? null;
+  const baseUrl = `${window.location.origin}/record/${effectiveBoardId || ""}`;
+  const shareUrl = hasPassword ? `${baseUrl}?protected=true` : baseUrl;
+  const API_BASE_URL =
+    import.meta.env?.VITE_API_URL ??
+    import.meta.env?.VITE_API_BASE ??
+    window.location.origin;
 
-    const baseUrl = `${window.location.origin}/record/${effectiveBoardId || ""}`;
-    const shareUrl = hasPassword ? `${baseUrl}?protected=true` : baseUrl;
+  const mapTemplateToUiType = (tpl) => {
+    if (tpl === "minutes") return "회의기록";
+    if (tpl === "script") return "스크립트";
+    return "전체요약";
+  };
 
-    // "minutes/script/final" -> "회의기록/스크립트/전체요약"
-    const mapTemplateToUiType = (tpl) => {
-        if (tpl === "minutes") return "회의기록";
-        if (tpl === "script") return "스크립트";
-        return "전체요약";
-    };
-
-    // 노션 DB 목록
-    useEffect(() => {
+  // 노션 DB 목록
+  useEffect(() => {
     if (activeTab !== "notion") return;
-    if (databases.length > 0) return; // 이미 불러왔으면 재호출 안함
+    if (databases.length > 0) return;
 
     (async () => {
-        try {
+      try {
         const res = await apiClient.get("/notion/databases");
         setDatabases(res.data || []);
-        } catch (err) {
+      } catch (err) {
         console.error("노션 DB 목록 불러오기 실패:", err);
         showToast("❌ 노션 DB 목록을 가져오지 못했습니다.");
-        }
+      }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeTab]);
+  }, [activeTab]);
 
-    // 노션 연결 상태
-    useEffect(() => {
+  // 노션 연결 상태
+  useEffect(() => {
     if (activeTab !== "notion") return;
-    if (notionStatus.connected) return; // 이미 연결된 상태면 재요청 안함
+    if (notionStatus.connected) return;
 
     (async () => {
-        try {
+      try {
         const token = localStorage.getItem("access_token");
         if (!token) return;
         const res = await apiClient.get("/notion/status", {
-            headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${token}` },
         });
         setNotionStatus(res.data);
-        } catch (err) {
+      } catch (err) {
         console.error("노션 상태 확인 실패:", err);
         setNotionStatus({ connected: false });
-        }
+      }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeTab]);
-
+  }, [activeTab]);
 
   // 모달 외부 클릭 닫기
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) onClose();
+      // share-button 클릭은 무시
+      if (e.target.closest('.share-button')) return;
+      if (ref.current && !ref.current.contains(e.target)) {
+        onClose();
+      }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [onClose]);
+    
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [isOpen, onClose]);
 
   // 비밀번호 상태 확인
   useEffect(() => {
-    if (!effectiveBoardId) return;
+    if (!effectiveBoardId || !isOpen) return;
+
     (async () => {
       try {
-        const res = await apiClient.get(`/boards/${effectiveBoardId}`);
-        if (res.data?.is_protected) setHasPassword(true);
+        const res = await apiClient.get(`/boards/${effectiveBoardId}/full`);
+        const board = res.data?.board ?? res.data;
+        const protectedFlag = !!board?.is_protected;
+        setHasPassword(protectedFlag);
       } catch (err) {
-        console.warn("비밀번호 상태 확인 실패:", err);
+        console.warn("비밀번호 상태 확인 실패:", err?.response || err);
+        setHasPassword(false);
       }
     })();
-  }, [effectiveBoardId]);
+  }, [effectiveBoardId, isOpen]);
 
   // 공유된 사용자 목록 불러오기
   useEffect(() => {
@@ -146,26 +165,45 @@ export default function RecordShareModal({
       showToast("⚠️ 4자리 숫자를 입력해주세요.");
       return;
     }
+
     try {
-      await apiClient.patch(`/boards/${effectiveBoardId}`, { password: pin });
+      await apiClient.patch(`/boards/${effectiveBoardId}/password`, {
+        password: pin,
+      });
       setHasPassword(true);
       showToast("🔒 비밀번호가 설정되었습니다!");
     } catch (err) {
       console.error("비밀번호 설정 실패:", err);
-      showToast("❌ 비밀번호 설정 중 오류가 발생했습니다.");
+      const status = err?.response?.status;
+      if (status === 400) {
+        showToast("❌ 비밀번호 형식이 올바르지 않습니다.");
+      } else if (status === 404) {
+        showToast("❌ 보드를 찾을 수 없습니다.");
+      } else if (status === 403) {
+        showToast("❌ 비밀번호를 설정할 권한이 없습니다.");
+      } else {
+        showToast("❌ 비밀번호 설정 중 오류가 발생했습니다.");
+      }
     }
   };
 
   // 비밀번호 해제
   const handleClearPassword = async () => {
     try {
-      await apiClient.patch(`/boards/${effectiveBoardId}`, { password: null });
+      await apiClient.delete(`/boards/${effectiveBoardId}/password`);
       setHasPassword(false);
       setPin("");
       showToast("🔓 비밀번호가 제거되었습니다.");
     } catch (err) {
       console.error("비밀번호 제거 실패:", err);
-      showToast("❌ 비밀번호 제거 중 오류가 발생했습니다.");
+      const status = err?.response?.status;
+      if (status === 404) {
+        showToast("❌ 보드를 찾을 수 없습니다.");
+      } else if (status === 403) {
+        showToast("❌ 비밀번호를 제거할 권한이 없습니다.");
+      } else {
+        showToast("❌ 비밀번호 제거 중 오류가 발생했습니다.");
+      }
     }
   };
 
@@ -179,9 +217,8 @@ export default function RecordShareModal({
     try {
       await apiClient.post(`/boards/${effectiveBoardId}/shares`, {
         email: inviteEmail,
-        role: "viewer", // 기본값
+        role: "viewer",
       });
-
       setInvited((prev) => [...prev, inviteEmail]);
       setInviteEmail("");
       showToast("팀원에게 공유되었습니다!");
@@ -206,8 +243,6 @@ export default function RecordShareModal({
         role: newRole,
       });
       showToast(`권한이 ${newRole === "editor" ? "편집" : "보기"}으로 변경되었습니다!`);
-
-      // 목록 갱신
       const res = await apiClient.get(`/boards/${effectiveBoardId}/shares`);
       setSharedUsers(res.data || []);
     } catch (err) {
@@ -223,8 +258,6 @@ export default function RecordShareModal({
     try {
       await apiClient.delete(`/boards/${effectiveBoardId}/shares/${targetUserId}`);
       showToast("공유가 해제되었습니다.");
-
-      // 목록 갱신
       const res = await apiClient.get(`/boards/${effectiveBoardId}/shares`);
       setSharedUsers(res.data || []);
     } catch (err) {
@@ -233,9 +266,7 @@ export default function RecordShareModal({
     }
   };
 
-  // =========================
-  // Notion: 미리보기/업로드
-  // =========================
+  // Notion 미리보기
   const handleRenderPreview = async () => {
     if (!sessionId && !effectiveBoardId) {
       showToast("세션/보드 정보가 없습니다.");
@@ -246,12 +277,11 @@ export default function RecordShareModal({
     try {
       const ui_type = mapTemplateToUiType(templateType);
       const { data } = await apiClient.post("/notion/render", {
-        session_id: sessionId,         // 있으면 사용
-        board_id: effectiveBoardId,    // 없으면 서버가 board_id 기준 최신 세션 선택
-        ui_type,                       // "회의기록" | "스크립트" | "전체요약"
+        session_id: sessionId,
+        board_id: effectiveBoardId,
+        ui_type,
       });
 
-      // 백엔드 응답: { ok, title, content_markdown, content_markdown_raw, content_json, ... }
       setPreviewDoc({
         title: data.title,
         content: data.content_markdown || data.content_markdown_raw || "",
@@ -265,6 +295,7 @@ export default function RecordShareModal({
     }
   };
 
+  // Notion 업로드
   const handleUploadToNotion = async () => {
     if (!notionStatus.connected) {
       showToast("⚠️ 먼저 노션 계정을 연결하세요.");
@@ -281,7 +312,6 @@ export default function RecordShareModal({
 
     setIsUploading(true);
     try {
-      // 미리보기가 없으면 즉석 생성
       let doc = previewDoc;
       if (!doc) {
         const ui_type = mapTemplateToUiType(templateType);
@@ -305,7 +335,7 @@ export default function RecordShareModal({
         parent_id: selectedDB,
         parent_type: "database",
         page_title: pageTitle || boardTitle || doc.title || "회의 템플릿",
-        content_override: doc.content, // 미리보기 markdown 그대로 업로드
+        content_override: doc.content,
       });
 
       showToast("노션 업로드 완료!");
@@ -318,6 +348,8 @@ export default function RecordShareModal({
     }
   };
 
+  // const isMobile = typeof window !== "undefined" ? window.innerWidth < 1024 : false;
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -327,38 +359,59 @@ export default function RecordShareModal({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 40 }}
           transition={{ type: "spring", stiffness: 250, damping: 25 }}
-          className="fixed bottom-[90px] left-1/2 -translate-x-1/2 z-[100]"
+          className={`
+            fixed inset-0 z-[100]
+            ${!isMobile ? "flex justify-center" : "flex items-center justify-center"}
+          `}          
         >
           <motion.div
             ref={ref}
             layout
             transition={{ type: "spring", stiffness: 280, damping: 26 }}
-            className="bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.1)] w-[400px] p-5 border border-gray-100 overflow-hidden"
+            className={`
+              bg-white rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.1)]
+              w-[400px] max-w-[calc(100vw-32px)]
+              p-5 border shrink-0
+
+              ${!isMobile ? "absolute bottom-[100px] left-1/2 -translate-x-1/2" : ""}
+              /* ⭐ PC: RecordBar 위로 정확하게 띄우기 */
+            `}
           >
             {/* 탭 */}
-            <div className="relative flex bg-gray-100 rounded-full p-1 mb-5">
-              {["link", "invite", "notion"].map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`relative z-10 flex items-center gap-1 px-4 py-1.5 text-sm font-medium rounded-full transition-colors ${
-                    activeTab === tab ? "text-[#7E37F9]" : "text-gray-600 hover:text-gray-800"
-                  }`}
-                >
-                  {activeTab === tab && (
-                    <motion.div
-                      layoutId="active-share-pill"
-                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                      className="absolute inset-0 bg-white shadow-sm rounded-full"
-                    />
-                  )}
-                  <span className="relative z-10 flex items-center gap-1">
-                    {tab === "link" ? <FaLink /> : <FaUserPlus />}
-                    {tab === "link" ? "링크 공유" : tab === "invite" ? "팀원 초대" : "노션 공유"}
-                  </span>
-                </button>
-              ))}
-            </div>
+            <div className="relative inline-flex  /* flex → inline-flex */
+  bg-gray-100 rounded-full p-1 mb-5
+  overflow-hidden
+  mx-auto ">
+  {["link", "invite", "notion"].map((tab) => (
+    <button
+      key={tab}
+      onClick={() => setActiveTab(tab)}
+      className={`relative z-10 flex items-center gap-1 px-4 py-1.5 text-sm font-medium rounded-full transition-colors shrink-0 whitespace-nowrap
+        ${
+          activeTab === tab
+            ? "text-[#7E37F9]"
+            : "text-gray-600 hover:text-gray-800"
+        }`}
+    >
+      {activeTab === tab && (
+        <motion.div
+          layoutId="active-share-pill"
+          transition={{ type: "spring", stiffness: 400, damping: 30 }}
+          className="absolute inset-0 bg-white shadow-sm rounded-full"
+        />
+      )}
+
+      <span className="relative z-10 flex items-center gap-1">
+        {tab === "link" ? <FaLink /> : <FaUserPlus />}
+        {tab === "link"
+          ? "링크 공유"
+          : tab === "invite"
+          ? "팀원 초대"
+          : "노션 공유"}
+      </span>
+    </button>
+  ))}
+</div>
 
             {/* 탭 콘텐츠 */}
             <motion.div layout>
@@ -440,6 +493,7 @@ export default function RecordShareModal({
                     {/* 이메일 입력 */}
                     <div className="flex items-center gap-2">
                       <input
+                        disabled={myRole !== "owner" && myRole !== "editor"}
                         value={inviteEmail}
                         onChange={(e) => setInviteEmail(e.target.value)}
                         onKeyDown={(e) => {
@@ -452,58 +506,106 @@ export default function RecordShareModal({
                         className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-[#7E37F9]"
                       />
                       <button
-                        onClick={handleInvite}
-                        className="px-3 py-2 bg-[#7E37F9] text-white rounded-lg hover:bg-[#692ed9] text-sm transition"
+                        disabled={myRole !== "owner" && myRole !== "editor"}
+                        onClick={handleInvite}    
+                        className={`
+                          px-3 py-2 text-sm rounded-lg transition
+                          ${myRole !== "owner" && myRole !== "editor"
+                            ? "bg-gray-300 cursor-not-allowed"
+                            : "bg-[#7E37F9] text-white hover:bg-[#692ed9]"}
+                        `}
                       >
                         추가
                       </button>
+
                     </div>
 
                     {/* 공유 중인 멤버 목록 */}
                     <div className="mt-4 border-t pt-4">
-                      <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                        <FaUsers />
-                        공유 중인 팀원 ({sharedUsers.length})
-                      </h3>
+  <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
+    <FaUsers />
+    공유 중인 팀원 ({sharedUsers.length})
+  </h3>
 
-                      {sharedUsers.length === 0 ? (
-                        <p className="text-xs text-gray-400 text-center py-3">아직 공유한 팀원이 없습니다.</p>
-                      ) : (
-                        <ul className="space-y-2 max-h-[200px] overflow-y-auto">
-                          {sharedUsers.map((share) => (
-                            <li key={share.id || share.user_id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
-                              <div className="flex items-center gap-2">
-                                <img
-                                  src={share.user_picture || "/default-avatar.png"}
-                                  alt={share.user_name}
-                                  className="w-8 h-8 rounded-full"
-                                />
-                                <div>
-                                  <p className="text-sm font-medium">{share.user_name}</p>
-                                  <p className="text-xs text-gray-500">{share.user_email}</p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <select
-                                  value={share.role}
-                                  onChange={(e) => handleChangeRole(share.user_id, e.target.value)}
-                                  className="text-xs border rounded px-2 py-1"
-                                >
-                                  <option value="viewer">보기</option>
-                                  <option value="editor">편집</option>
-                                </select>
-                                <button
-                                  onClick={() => handleRemoveShare(share.user_id, share.user_email)}
-                                  className="text-red-500 hover:text-red-700"
-                                >
-                                  <FaTimes size={12} />
-                                </button>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
+  {sharedUsers.length === 0 ? (
+    <p className="text-xs text-gray-400 text-center py-3">
+      아직 공유한 팀원이 없습니다.
+    </p>
+  ) : (
+    <ul className="space-y-2 max-h-[200px] overflow-y-auto">
+      {sharedUsers.map((share) => {
+        // ✅ 타입 표기 없이 JS로만 작성
+        let avatarSrc;
+
+        if (share.user_picture) {
+          if (share.user_picture.startsWith("http")) {
+            // 이미 절대 URL이면 그대로 사용
+            avatarSrc = share.user_picture;
+          } else {
+            // "/static/..." 또는 "static/..." 같은 상대 경로면 백엔드 도메인 붙이기
+            const path = share.user_picture.startsWith("/")
+              ? share.user_picture
+              : `/${share.user_picture}`;
+            avatarSrc = `${API_BASE_URL}${path}`;
+          }
+        } else {
+          // 값이 없으면 기본 프로필
+          avatarSrc = `${API_BASE_URL}/static/uploads/Group_49.png`;
+        }
+
+        return (
+          <li
+            key={share.id || share.user_id}
+            className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2"
+          >
+            <div className="flex items-center gap-2">
+              <img
+                src={avatarSrc}
+                alt={share.user_name}
+                className="w-8 h-8 rounded-full"
+                onError={(e) => {
+                  // 로딩 실패 시 기본 이미지로 교체 (무한 루프 방지)
+                  const fallback = `${API_BASE_URL}/static/uploads/Group_49.png`;
+                  if (e.currentTarget.src !== fallback) {
+                    e.currentTarget.src = fallback;
+                  }
+                }}
+              />
+              <div>
+                <p className="text-sm font-medium">{share.user_name}</p>
+                <p className="text-xs text-gray-500">{share.user_email}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {myRole === "owner" && (
+                <select
+                  value={share.role}
+                  onChange={(e) =>
+                    handleChangeRole(share.user_id, e.target.value)
+                  }
+                  className="text-xs border rounded px-2 py-1"
+                >
+                  <option value="viewer">보기</option>
+                  <option value="editor">편집</option>
+                </select>
+              )}
+              {myRole === "owner" && (
+                <button
+                  onClick={() =>
+                    handleRemoveShare(share.user_id, share.user_email)
+                  }
+                  className="text-red-500 hover:text-red-700"
+                >
+                  <FaTimes size={12} />
+                </button>
+              )}
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  )}
+</div>
                   </motion.div>
                 ) : (
                   // 노션 공유 탭

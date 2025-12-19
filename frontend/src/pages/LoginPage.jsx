@@ -18,7 +18,7 @@ export default function LoginPage() {
         });
       } catch (e) {
         if (!cancelled) {
-          setWarmupError("세션 웜업에 실패했어요. 그래도 로그인은 시도할 수 있어요.");
+          // setWarmupError("세션 웜업에 실패했어요. 그래도 로그인은 시도할 수 있어요.");
         }
       } finally {
         if (!cancelled) setWarming(false);

@@ -24,10 +24,10 @@ export default function MeetingPage() {
 
     // idle | recording | paused
     const [recordingState, setRecordingState] = useState("idle");
-    const [pendingMapping, setPendingMapping] = useState(false); // ✅ 세션 매핑 대기 표시
+    const [pendingMapping, setPendingMapping] = useState(false); // 세션 매핑 대기 표시
 
     const wsRef = useRef(null);
-    const sidRef = useRef(null); // ✅ 서버가 준 세션 SID 저장
+    const sidRef = useRef(null); // 서버가 준 세션 SID 저장
     const audioContextRef = useRef(null);
     const processorRef = useRef(null);
     const streamRef = useRef(null);
@@ -74,7 +74,7 @@ export default function MeetingPage() {
         wsRef.current = new WebSocket(WS_URL);
         wsRef.current.binaryType = "arraybuffer";
         wsRef.current.onopen = () => {
-            console.log("✅ WS connected:", WS_URL);
+            console.log("WS connected:", WS_URL);
         };
         wsRef.current.onmessage = (event) => {
             try {
@@ -193,11 +193,11 @@ export default function MeetingPage() {
                         // pending: 계속 대기
                     } else if (res.ok) {
                         const data = await res.json();
-                        console.log("✅ 세션 매핑 완료:", data.id);
+                        console.log("세션 매핑 완료:", data.id);
                         setSessionId(data.id);
                         setPendingMapping(false);
 
-                        // ✅ [1단계] 프론트 보유 확정 문장(history)으로 전체 요약 생성 & 저장
+                        // [1단계] 프론트 보유 확정 문장(history)으로 전체 요약 생성 & 저장
                         try {
                             if (history.length > 0) {
                                 console.log("🧾 Generating final summary from frontend history…");
@@ -221,7 +221,7 @@ export default function MeetingPage() {
                             console.warn("⚠️ finalize-summary error:", err);
                         }
 
-                        // ✅ [2단계] 백엔드 저장된 전체 요약 다시 확인 (보정용)
+                        // [2단계] 백엔드 저장된 전체 요약 다시 확인 (보정용)
                         try {
                             const summaryRes = await fetch(`${API_BASE}/sessions/final-summaries/by-session/${data.id}`);
                             if (summaryRes.ok) {
@@ -383,7 +383,7 @@ export default function MeetingPage() {
                         {summaries.map((s, i) => (
                             <div key={i} className="bg-gray-50 p-3 rounded">
                                 {s.paragraph ? <p className="text-xs text-gray-500 mb-1">원문: {s.paragraph}</p> : null}
-                                <p className="text-gray-900">✅ {s.summary}</p>
+                                <p className="text-gray-900">{s.summary}</p>
                             </div>
                         ))}
                         <div ref={summaryEndRef} />

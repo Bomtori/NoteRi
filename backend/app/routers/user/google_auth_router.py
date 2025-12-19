@@ -13,7 +13,7 @@ from backend.app.util.auth import create_access_token, create_refresh_token, ver
 from backend.app.db import get_db
 from backend.app.model import User
 from backend.app.util.errors import OAuthProviderConflict
-
+from backend.app.crud.auth_crud import _cookie_options  
 router = APIRouter(prefix="/auth/google", tags=["GoogleAuth"])
 
 oauth = OAuth()
@@ -95,13 +95,6 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
         print("🔥 GOOGLE OAUTH ERROR:", e)
         return RedirectResponse(f"{FRONTEND_URL}/auth/callback?error=internal_error", status_code=302)
 
-    # 3) 비활성(탈퇴) 계정 처리
-    if db_user and not db_user.is_active:
-        return RedirectResponse(
-            f"{FRONTEND_URL}/auth/callback?error=deactivated&email={quote(email)}",
-            status_code=302,
-        )
-
     # 4) 성공 → 토큰 발급 후 리다이렉트
     access_token = create_access_token({"sub": str(db_user.id), "email": db_user.email})
     refresh_token = create_refresh_token({"sub": str(db_user.id), "email": db_user.email})
@@ -109,26 +102,28 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
     redirect_to = f"{FRONTEND_URL}/auth/callback?access_token={quote(access_token)}"
     resp = RedirectResponse(url=redirect_to, status_code=status.HTTP_302_FOUND)
 
+    # (선택) access_token 쿠키는 어차피 localStorage를 쓰니까 없어도 무방
     resp.set_cookie(
         key="access_token",
         value=access_token,
-        httponly=False, 
-        secure=False,  
+        httponly=False,
+        secure=False,
         samesite="lax",
         domain=None,
         max_age=ACCESS_TOKEN_MAX_AGE,
         path="/",
     )
-    
+
+    # ✅ 여기서 중요: refresh_token 쿠키 옵션 통일
+    cookie_opts = _cookie_options()  # FRONTEND_URL 기반으로 local/prod 구분
+
     resp.set_cookie(
         key="refresh_token",
         value=refresh_token,
-        httponly=True, 
-        secure=False, 
-        samesite="lax",
-        domain=None,
+        httponly=True,
         max_age=REFRESH_MAX_AGE,
-        path="/",
+        path="/",          # ✔ /auth/refresh 에도 항상 붙게
+        **cookie_opts,     # ✔ localhost면 Lax/False, 배포면 None/True
     )
 
     return resp

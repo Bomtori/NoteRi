@@ -14,6 +14,7 @@ from backend.app.deps.auth import get_current_user
 from backend.app.crud.auth_crud import get_or_create_user, assert_login_allowed
 from backend.app.util.auth import create_access_token, create_refresh_token, verify_token
 from backend.app.util.errors import OAuthProviderConflict
+from backend.app.crud.auth_crud import _cookie_options
 
 router = APIRouter(prefix="/auth/naver", tags=["NaverAuth"])
 
@@ -43,10 +44,10 @@ async def login_naver(request: Request):
 
 @router.get("/callback", name="naver_callback", summary="네이버 콜백")
 async def naver_callback(request: Request, db: Session = Depends(get_db)):
-    # 1) 토큰 교환
+    # 0) 토큰 교환
     token = await oauth.naver.authorize_access_token(request)
 
-    # 2) 사용자 정보
+    # 1) 사용자 정보
     resp = await oauth.naver.get("me", token=token)
     payload = resp.json() or {}
     user_info = payload.get("response")
@@ -59,7 +60,14 @@ async def naver_callback(request: Request, db: Session = Depends(get_db)):
     provider = "naver"
     naver_id = str(user_info.get("id") or "")
     email = user_info.get("email")
-    if not email and naver_id:
+
+    # 필수 정보 방어: id / email
+    if not naver_id:
+        return RedirectResponse(
+            f"{FRONTEND_URL}/auth/callback?error=naver_login_failed",
+            status_code=302,
+        )
+    if not email:
         return RedirectResponse(
             f"{FRONTEND_URL}/auth/callback?error=missing_email&provider={provider}",
             status_code=302,
@@ -69,7 +77,7 @@ async def naver_callback(request: Request, db: Session = Depends(get_db)):
     nickname = user_info.get("nickname") or name
     picture = user_info.get("profile_image") or ""
 
-    # 3) DB 처리 + provider 충돌 대응
+    # 2) DB 처리 + provider 충돌 대응
     try:
         db_user = get_or_create_user(
             db=db,
@@ -90,56 +98,64 @@ async def naver_callback(request: Request, db: Session = Depends(get_db)):
             status_code=302,
         )
     except HTTPException as e:
-        if e.status_code == 403 and isinstance(e.detail, dict) and e.detail.get("error") == "banned_account":
+        # 🔒 밴 계정 처리 (google/kakao와 동일)
+        if (
+            e.status_code == 403
+            and isinstance(e.detail, dict)
+            and e.detail.get("error") == "banned_account"
+        ):
             reason = quote(e.detail.get("reason", "관리자 조치"))
             until = quote(e.detail.get("until", "영구"))
             return RedirectResponse(
-                f"{FRONTEND_URL}/auth/callback?error=banned_account&reason={reason}&until={until}&email={quote(email or '')}",
+                f"{FRONTEND_URL}/auth/callback"
+                f"?error=banned_account&reason={reason}&until={until}&email={quote(email or '')}",
                 status_code=302,
             )
+        # 그 외 HTTPException은 내부 에러로 처리
+        traceback.print_exc()
+        print("🔥 NAVER OAUTH HTTP ERROR:", e)
+        return RedirectResponse(
+            f"{FRONTEND_URL}/auth/callback?error=internal_error",
+            status_code=302,
+        )
     except Exception as e:
         traceback.print_exc()
-        print("NAVER OAUTH ERROR:", e)
-        return RedirectResponse(f"{FRONTEND_URL}/auth/callback?error=internal_error", status_code=302)
-
-
-    # 4) 탈퇴 계정
-    if db_user and not db_user.is_active:
+        print("🔥 NAVER OAUTH ERROR:", e)
         return RedirectResponse(
-            f"{FRONTEND_URL}/auth/callback?error=deactivated&email={quote(email)}",
+            f"{FRONTEND_URL}/auth/callback?error=internal_error",
             status_code=302,
         )
 
-    # 5) 성공 → 토큰 발급 후 리다이렉트
+    # 4) 성공 → 토큰 발급 후 리다이렉트
     access_token = create_access_token({"sub": str(db_user.id), "email": db_user.email})
     refresh_token = create_refresh_token({"sub": str(db_user.id), "email": db_user.email})
 
     # access_token을 URL 쿼리에 포함하여 전달
     redirect_to = f"{FRONTEND_URL}/auth/callback?access_token={quote(access_token)}"
     resp = RedirectResponse(url=redirect_to, status_code=status.HTTP_302_FOUND)
-    
-    # access_token도 쿠키로 설정 (프론트엔드가 자동으로 사용 가능)
+
+    # (선택) access_token 쿠키는 어차피 localStorage를 쓰니까 없어도 되지만, google/kakao와 맞춰둠
     resp.set_cookie(
         key="access_token",
         value=access_token,
         httponly=False,
-        secure=False,    
+        secure=False,
         samesite="lax",
         domain=None,
         max_age=ACCESS_TOKEN_MAX_AGE,
         path="/",
     )
-    
-    # refresh_token 쿠키 설정
+
+    # ✅ refresh_token 쿠키 옵션 통일
+    cookie_opts = _cookie_options()  # FRONTEND_URL 기반(local/prod)에 따라 secure/samesite/domain 설정
+
     resp.set_cookie(
         key="refresh_token",
         value=refresh_token,
-        httponly=True, 
-        secure=False, 
-        samesite="lax",
-        domain=None,
+        httponly=True,
         max_age=REFRESH_MAX_AGE,
-        path="/",
+        path="/",          # ✔ /auth/refresh 에도 항상 붙도록
+        **cookie_opts,
     )
 
     return resp

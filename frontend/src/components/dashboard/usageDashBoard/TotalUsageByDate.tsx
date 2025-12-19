@@ -2,14 +2,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "../../ui/card";
 import AdminToggleTabs from "../../admin/AdminToggleTabs";
+import apiClient from "../../../api/apiClient";
 
 type Range = "today" | "7d" | "month" | "year";
 type Props = { frameless?: boolean };
-
-const API_BASE_URL =
-  (import.meta as any).env?.VITE_API_BASE ??
-  (import.meta as any).env?.API_BASE_URL ??
-  "http://127.0.0.1:8000";
 
 const toNum = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
@@ -66,65 +62,75 @@ const TotalUsageByDate: React.FC<Props> = ({ frameless = false }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const ac = new AbortController();
-    const endpoint =
-      {
-        today: "/recordings/usage/total/today",
-        "7d": "/recordings/usage/total/7d",
-        month: "/recordings/usage/total/month",
-        year: "/recordings/usage/total/year",
-      }[range] ?? "/recordings/usage/total/today";
+ useEffect(() => {
+  const ac = new AbortController();
 
-    (async () => {
-      try {
-        const res = await fetch(`${API_BASE_URL}${endpoint}`, { signal: ac.signal });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        const minutes =
-          pickMinutes(data) ||
-          pickMinutes(data?.today) ||
-          pickMinutes(data?.last_7_days) ||
-          pickMinutes(data?.month) ||
-          pickMinutes(data?.year);
+  const endpoint =
+    ({
+      today: "/recordings/usage/total/today",
+      "7d": "/recordings/usage/total/7d",
+      month: "/recordings/usage/total/month",
+      year: "/recordings/usage/total/year",
+    } as const)[range] ?? "/recordings/usage/total/today";
 
-        if (range === "today") setTodayUsageTotal(minutes);
-        if (range === "7d") setWeekUsageTotal(minutes);
-        if (range === "month") setMonthUsageTotal(minutes);
-        if (range === "year") setYearUsageTotal(minutes);
-      } catch (e: any) {
-        if (e?.name !== "AbortError") setError("불러오기 실패");
+  (async () => {
+    try {
+      const { data } = await apiClient.get(endpoint, { signal: ac.signal });
+
+      const minutes =
+        pickMinutes(data) ||
+        pickMinutes(data?.today) ||
+        pickMinutes(data?.last_7_days) ||
+        pickMinutes(data?.month) ||
+        pickMinutes(data?.year);
+
+      if (range === "today") setTodayUsageTotal(minutes);
+      if (range === "7d") setWeekUsageTotal(minutes);
+      if (range === "month") setMonthUsageTotal(minutes);
+      if (range === "year") setYearUsageTotal(minutes);
+    } catch (e: any) {
+      if (e?.name !== "CanceledError" && e?.code !== "ERR_CANCELED") {
+        setError("불러오기 실패");
       }
-    })();
+    }
+  })();
 
-    return () => ac.abort();
-  }, [range]);
+  return () => ac.abort();
+}, [range]);
 
-  useEffect(() => {
-    const ac = new AbortController();
-    (async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const res = await fetch(`${API_BASE_URL}/recordings/usage/compare`, { signal: ac.signal });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        const pctMap: Record<Range, number | undefined> = {
-          today: data?.day?.pct,
-          "7d": data?.week?.pct,
-          month: data?.month?.pct,
-          year: data?.year?.pct,
-        };
-        setGrowthRate(toNum(pctMap[range]));
-      } catch (e: any) {
-        if (e?.name !== "AbortError") setError("불러오기 실패");
+// ✅ 비교(증감률) 가져오기
+useEffect(() => {
+  const ac = new AbortController();
+
+  (async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { data } = await apiClient.get("/recordings/usage/compare", {
+        signal: ac.signal,
+      });
+
+      const pctMap: Record<Range, number | undefined> = {
+        today: data?.day?.pct,
+        "7d": data?.week?.pct,
+        month: data?.month?.pct,
+        year: data?.year?.pct,
+      };
+
+      setGrowthRate(toNum(pctMap[range]));
+    } catch (e: any) {
+      if (e?.name !== "CanceledError" && e?.code !== "ERR_CANCELED") {
+        setError("불러오기 실패");
         setGrowthRate(0);
-      } finally {
-        setLoading(false);
       }
-    })();
-    return () => ac.abort();
-  }, [range]);
+    } finally {
+      setLoading(false);
+    }
+  })();
+
+  return () => ac.abort();
+}, [range]);
 
   const value = useMemo(() => {
     switch (range) {

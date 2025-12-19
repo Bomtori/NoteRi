@@ -47,14 +47,7 @@ export default function AuthCallbackPage() {
 
       if (error === "missing_email") {
         console.error("❌ 이메일 누락");
-        alert("⚠️ 카카오 계정에서 이메일 제공 동의가 필요합니다.");
-        navigate("/login", { replace: true });
-        return;
-      }
-
-      if (error === "deactivated") {
-        console.error("❌ 비활성 계정");
-        alert("⚠️ 탈퇴한 계정입니다. 재가입이 필요합니다.");
+        alert("⚠️ 소셜 계정에서 이메일 제공 동의가 필요합니다.");
         navigate("/login", { replace: true });
         return;
       }
@@ -63,7 +56,18 @@ export default function AuthCallbackPage() {
         const until = params.get("until") || "영구";
         console.warn("🚫 밴 계정 로그인 시도:", { emailParam, reason, until });
 
-        alert(`🚫 차단된 계정입니다.\n사유: ${decodeURIComponent(reason)}\n해제일: ${decodeURIComponent(until)}`);
+        const untilLabel =
+          until === "영구"
+            ? "영구"
+            : new Date(until).toLocaleString("ko-KR", {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+
+        alert(`🚫 차단된 계정입니다.\n사유: ${reason}\n해제일: ${untilLabel}`);
         navigate("/login", { replace: true });
         return;
       }
@@ -92,22 +96,59 @@ export default function AuthCallbackPage() {
           const { data: user } = await apiClient.get("/users/me", { withCredentials: true });
           console.log("✅ 사용자 정보 조회 성공:", user);
 
-          // 차단된 계정 체크
+          // 🔻 비활성(탈퇴) 계정 → provider별 /auth/{provider}/rejoin 호출
           if (!user.is_active) {
             console.warn("⚠️ 비활성 계정:", user);
-            alert(
-              `🚫 차단된 계정입니다.\n사유: ${user.banned_reason || "관리자 조치"}\n해제일: ${user.banned_until || "영구"}`
+
+            const provider = user.oauth_provider || user.provider || null;
+            if (!provider) {
+              alert("⚠️ 탈퇴한 계정입니다. 재가입을 위해 다시 로그인해주세요.");
+              localStorage.removeItem("access_token");
+              delete apiClient.defaults.headers.common["Authorization"];
+              navigate("/login", { replace: true });
+              return;
+            }
+
+            const ok = window.confirm(
+              `탈퇴한 계정입니다.\n\n${provider} 계정으로 다시 가입하시겠습니까?`
             );
-            localStorage.removeItem("access_token");
-            delete apiClient.defaults.headers.common["Authorization"];
-            navigate("/login", { replace: true });
-            return;
+            if (!ok) {
+              localStorage.removeItem("access_token");
+              delete apiClient.defaults.headers.common["Authorization"];
+              navigate("/login", { replace: true });
+              return;
+            }
+
+            try {
+              const { data: rejoinRes } = await apiClient.post(
+                `/auth/${provider}/rejoin`,
+                null,
+                { withCredentials: true }
+              );
+
+              const newToken = rejoinRes.access_token;
+              const newUser = rejoinRes.user;
+
+              localStorage.setItem("access_token", newToken);
+              apiClient.defaults.headers.common["Authorization"] = `Bearer ${newToken}`;
+              dispatch(setCredentials({ user: newUser, token: newToken }));
+
+              alert("✅ 계정이 재활성화되었습니다.");
+              navigate("/user", { replace: true });
+              return;
+            } catch (err) {
+              console.error("❌ 재가입 실패:", err);
+              alert("⚠️ 재가입에 실패했습니다. 다시 로그인해주세요.");
+              localStorage.removeItem("access_token");
+              delete apiClient.defaults.headers.common["Authorization"];
+              navigate("/login", { replace: true });
+              return;
+            }
           }
 
-          // Redux에 저장
+          // 여기까지 왔으면 활성 계정 → 정상 로그인
           dispatch(setCredentials({ user, token: accessToken }));
           console.log("✅ Redux 저장 완료, /user로 이동");
-          
           navigate("/user", { replace: true });
           return;
         }
@@ -117,40 +158,90 @@ export default function AuthCallbackPage() {
         if (saved) {
           console.log("✅ LocalStorage에 저장된 토큰 발견, 자동 로그인 시도");
           apiClient.defaults.headers.common["Authorization"] = `Bearer ${saved}`;
-          
+
           const { data: user } = await apiClient.get("/users/me", { withCredentials: true });
           console.log("✅ 저장된 토큰으로 사용자 정보 조회 성공:", user);
 
-          // 차단된 계정 체크
+          // 🔻 자동 로그인 경로에서도 동일하게 재가입 처리
           if (!user.is_active) {
             console.warn("⚠️ 비활성 계정:", user);
-            alert(
-              `🚫 차단된 계정입니다.\n사유: ${user.banned_reason || "관리자 조치"}\n해제일: ${user.banned_until || "영구"}`
+
+            const provider = user.oauth_provider || user.provider || null;
+            if (!provider) {
+              alert("⚠️ 탈퇴한 계정입니다. 재가입을 위해 다시 로그인해주세요.");
+              localStorage.removeItem("access_token");
+              delete apiClient.defaults.headers.common["Authorization"];
+              navigate("/login", { replace: true });
+              return;
+            }
+
+            const ok = window.confirm(
+              `탈퇴한 계정입니다.\n\n${provider} 계정으로 다시 가입하시겠습니까?`
             );
-            localStorage.removeItem("access_token");
-            delete apiClient.defaults.headers.common["Authorization"];
-            navigate("/login", { replace: true });
-            return;
+            if (!ok) {
+              localStorage.removeItem("access_token");
+              delete apiClient.defaults.headers.common["Authorization"];
+              navigate("/login", { replace: true });
+              return;
+            }
+
+            try {
+              const { data: rejoinRes } = await apiClient.post(
+                `/auth/${provider}/rejoin`,
+                null,
+                { withCredentials: true }
+              );
+
+              const newToken = rejoinRes.access_token;
+              const newUser = rejoinRes.user;
+
+              localStorage.setItem("access_token", newToken);
+              apiClient.defaults.headers.common["Authorization"] = `Bearer ${newToken}`;
+              dispatch(setCredentials({ user: newUser, token: newToken }));
+
+              alert("✅ 계정이 재활성화되었습니다.");
+              navigate("/user", { replace: true });
+              return;
+            } catch (err) {
+              console.error("❌ 재가입 실패:", err);
+              alert("⚠️ 재가입에 실패했습니다. 다시 로그인해주세요.");
+              localStorage.removeItem("access_token");
+              delete apiClient.defaults.headers.common["Authorization"];
+              navigate("/login", { replace: true });
+              return;
+            }
           }
 
           dispatch(setCredentials({ user, token: saved }));
           console.log("✅ Redux 저장 완료, /user로 이동");
-          
           navigate("/user", { replace: true });
           return;
         }
 
         console.warn("⚠️ 토큰이 없음, 로그인 페이지로 이동");
+        navigate("/login", { replace: true });
       } catch (e) {
         console.error("❌ Auth callback 실패:", e);
-        // 토큰이 있지만 만료/검증 실패 시 정리
-        localStorage.removeItem("access_token");
-        delete apiClient.defaults.headers.common["Authorization"];
-        alert("⚠️ 인증에 실패했습니다. 다시 로그인해주세요.");
-      }
 
-      // 4) 그 외엔 로그인으로
-      navigate("/login", { replace: true });
+        const status = e?.response?.status;
+        const detail = e?.response?.data?.detail;
+
+        const isAuthError =
+          status === 401 ||
+          detail === "Invalid or expired token" ||
+          detail === "Refresh token missing";
+
+        localStorage.removeItem("access_token");
+        delete (apiClient.defaults.headers).common?.["Authorization"];
+
+        if (isAuthError) {
+          navigate("/login", { replace: true });
+          return;
+        }
+
+        alert("⚠️ 인증에 실패했습니다. 다시 로그인해주세요.");
+        navigate("/login", { replace: true });
+      }
     })();
   }, [navigate, dispatch]);
 

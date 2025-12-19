@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { FaPause, FaStop, FaPlay, FaShareAlt } from "react-icons/fa";
-import { FaBars } from "react-icons/fa6";
 import { BsRecordCircle } from "react-icons/bs";
 import RecordShareModal from "./RecordShareModal";
 
